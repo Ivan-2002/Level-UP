@@ -2,7 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
-  "@prisma/engines": false
-  esbuild: false
-  prisma: false
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
 nodeLinker: hoisted
