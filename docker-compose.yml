@@ -1,0 +1,17 @@
+# Local development database only. Production uses a managed Postgres.
+services:
+  db:
+    image: postgres:17
+    container_name: levelup-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-levelup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-levelup_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-levelup}
+    ports:
+      - "5432:5432"
+    volumes:
+      - levelup-db-data:/var/lib/postgresql/data
+
+volumes:
+  levelup-db-data:

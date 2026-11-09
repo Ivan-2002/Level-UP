@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Environment files (secrets) — commit .env.example instead
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+coverage/
+
+# Expo / React Native
+.expo/
+apps/mobile/ios/
+apps/mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.log
