@@ -1,0 +1,13 @@
+{
+  "name": "@levelup/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Types and pure functions shared by the LevelUp app and API.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

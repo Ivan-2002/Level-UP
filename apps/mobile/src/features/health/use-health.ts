@@ -1,15 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import type { HealthResponse } from "@levelup/shared";
 import { apiGet } from "@/lib/api";
 
-// Shape of GET /health. This type moves to packages/shared later,
-// so the API and the app share one definition.
-export type HealthResponse = {
-  status: "ok" | "degraded";
-  database: "up" | "down";
-  uptimeSeconds: number;
-  timestamp: string;
-};
-
+// The response type comes from @levelup/shared, so if the API's /health
+// response ever changes shape, TypeScript flags this file too.
 export function useHealth() {
   return useQuery({
     queryKey: ["health"],
