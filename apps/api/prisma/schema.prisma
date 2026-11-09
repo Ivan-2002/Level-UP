@@ -1,0 +1,11 @@
+// The LevelUp database schema. Models (profile, exercise, workout, ...) are added
+// milestone by milestone, each with its own migration. See docs/ARCHITECTURE.md.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -1,8 +1,22 @@
 import { env } from "./config/env.js";
 import { createApp } from "./app.js";
+import { prisma } from "./lib/prisma.js";
 
 const app = createApp();
 
-app.listen(env.PORT, () => {
+const server = app.listen(env.PORT, () => {
   console.log(`LevelUp API listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
 });
+
+// Graceful shutdown: when the process is asked to stop (Ctrl+C, or a host redeploying),
+// stop accepting requests, let current ones finish, then close database connections.
+function shutdown(signal: string) {
+  console.log(`${signal} received, shutting down...`);
+  server.close(async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
