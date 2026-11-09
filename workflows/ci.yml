@@ -1,1 +1,45 @@
+# Runs on every push to main and every pull request.
+# A red X on GitHub means something below failed: open the run to see which step.
+name: CI
 
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # Prisma needs a URL to generate its client; CI never connects to it.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # The mobile app refuses to start without this; CI only type-checks it.
+      EXPO_PUBLIC_API_URL: http://localhost:3000
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      - name: Install pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node (version from .nvmrc)
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies exactly as locked
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        run: pnpm --filter api db:generate
+
+      - name: Type-check every package
+        run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint
