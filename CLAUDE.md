@@ -35,4 +35,7 @@ I'm a software engineering student and this project is how I learn. Act as a sen
 
 ## Current status
 
-Milestone 1 (design core screens) / Milestone 2 (foundation) — the repo is freshly created and has no app code yet. See the roadmap in `docs/ARCHITECTURE.md`.
+- Milestone 2 (Foundation) is done: monorepo, Docker Postgres, Prisma 7, Express API with `/health`, Expo app with a system-check screen, `@levelup/shared` (health contract + XP formula, tested), GitHub Actions CI.
+- Milestone 3 (Authentication) is in progress: Better Auth (email + password) on the API, then sign-up/sign-in screens and the "Create your character" profile step in the app.
+
+See the roadmap in `docs/ARCHITECTURE.md`.

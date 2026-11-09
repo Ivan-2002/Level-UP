@@ -15,13 +15,19 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().url(),
+  // Signs session cookies/tokens. Anyone who knows it can forge logins: keep it secret.
+  BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters"),
+  // The public URL of this API (Better Auth builds links and checks origins with it).
+  BETTER_AUTH_URL: z.string().url(),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   console.error("Invalid environment variables:");
-  console.error(parsed.error.flatten().fieldErrors);
+  for (const issue of parsed.error.issues) {
+    console.error(`  ${issue.path.join(".")}: ${issue.message}`);
+  }
   process.exit(1);
 }
 

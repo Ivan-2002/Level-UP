@@ -1,5 +1,5 @@
-// The LevelUp database schema. Models (profile, exercise, workout, ...) are added
-// milestone by milestone, each with its own migration. See docs/ARCHITECTURE.md.
+// The LevelUp database schema. Models are added milestone by milestone,
+// each with its own migration. See docs/ARCHITECTURE.md.
 
 generator client {
   provider = "prisma-client"
@@ -8,4 +8,90 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Authentication tables: OWNED BY BETTER AUTH.
+// Field names must match what Better Auth expects. Don't add game data here;
+// game data lives in Profile, so auth and the game stay separate.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  profile       Profile?
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // a HASH, never the real password
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Game identity: OWNED BY US. Created on the "Create your character" screen.
+// ---------------------------------------------------------------------------
+
+model Profile {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username     String   @unique
+  bodyweightKg Decimal? @db.Decimal(5, 1)
+  weeklyTarget Int      @default(3)
+  totalXp      Int      @default(0) // cached sum of the XP ledger (added in Milestone 5)
+  streakWeeks  Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("profile")
 }
