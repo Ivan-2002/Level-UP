@@ -1,6 +1,6 @@
 # Level Up — Project Context & Architecture
 
-_Last updated: 2026-11-08 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
+_Last updated: 2026-11-10 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
 
 ## Vision & MVP scope
 
@@ -80,7 +80,7 @@ The Progression module is the only place XP is calculated; the app and API share
 5. **Proven auth, not home-made.** Better Auth handles password hashing, sessions and resets inside our own API.
 6. **Cosmetics are data, not code.** Avatar stages and items live in the database with their unlock rules, so new content needs no app release.
 
-Each API module follows the same layering: route → controller (HTTP in/out) → service (business rules) → repository (Prisma queries) → Postgres. Controllers never hold rules; services never know about HTTP.
+Each API module follows the same layering: route → controller (HTTP in/out) → service (business rules) → repository (Prisma queries) → Postgres. Controllers never hold rules; services never know about HTTP. Services report expected failures by throwing an `AppError` with a domain `kind` (`not_found`, `conflict`) and a stable `code` (e.g. `UsernameTaken`); the one error handler maps it to a status code, and every error response has the shape `{ error, message, issues? }`. Request bodies are checked by a `validateBody(schema)` middleware using the shared Zod schemas.
 
 ## Repository structure
 
@@ -93,7 +93,7 @@ Level-UP/
 │   │   ├── app/                # Expo Router screens: (auth)/, (app)/
 │   │   └── src/
 │   │       ├── components/     # reusable UI (Button, XpBar, Avatar)
-│   │       ├── features/       # auth, workouts, exercises, progression, avatar
+│   │       ├── features/       # auth, profile, workouts, exercises, progression, avatar
 │   │       ├── lib/            # API client, query client, storage
 │   │       └── stores/         # Zustand stores (active workout)
 │   └── api/                    # Express API
@@ -120,7 +120,7 @@ Eight tables cover the MVP. Better Auth creates and owns its own user, session a
 
 | Table | Key fields | Purpose |
 | --- | --- | --- |
-| profile | user_id, username, total_xp (cached), avatar_stage, bodyweight_kg, weekly_target, streak_weeks, created_at | Game identity for each user |
+| profile | user_id, username (citext: unique ignoring case), total_xp (cached), avatar_stage, bodyweight_kg, weekly_target, streak_weeks, created_at | Game identity for each user |
 | exercise | id, name, muscle_group, body_part, category, load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library now; custom exercises later via owner_id |
 | workout | id, user_id, client_id (unique), started_at, finished_at | One gym session; client_id makes "Finish" safe to retry |
 | workout_exercise | id, workout_id, exercise_id, order | Which exercises were done, in order |
@@ -219,6 +219,8 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-10 | Usernames unique ignoring case (Postgres `citext`), letters, digits and `_` only | Postgres-specific column type; no impersonation by case or look-alike characters |
+| 2026-11-10 | Services throw `AppError` (kind + code); one error handler maps it to HTTP | One more small abstraction; services stay HTTP-free and the app branches on stable codes |
 | 2026-11-08 | Each body part grows from its own XP | More data to track; avatar reflects real training balance |
 | 2026-11-08 | Daily XP soft cap and per-set plausibility checks | Rare genuine huge days earn less; fake workouts stop paying off |
 | 2026-11-08 | XP from volume with per-exercise load_factor and bodyweight_ratio, plus weekly streak bonus | Per-exercise tuning work; no exercise is penalised for its natural load |
