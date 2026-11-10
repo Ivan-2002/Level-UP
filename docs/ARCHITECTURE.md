@@ -183,7 +183,7 @@ These are designed in from day one but switched on when the milestone needs them
 | --- | --- | --- |
 | Code quality | ESLint, Prettier, strict TypeScript | Milestone 1.5 |
 | CI | GitHub Actions: type check, lint and tests on every push | Milestone 1.5 |
-| Tests | Vitest unit tests for services and the XP formula; Supertest for API routes | From Milestone 2 |
+| Tests | Vitest unit tests for pure logic (XP formula, shared schemas); API integration tests with Supertest against a real Postgres test database (`levelup_test`, wiped before each test; CI uses a Postgres service container) | From Milestone 2 |
 | Config and secrets | `.env` files validated at startup with Zod; never committed | Milestone 1.5 |
 | Errors and crashes | Sentry in the app and the API | Before beta |
 | Hosting | API in a Docker container on a managed host; managed Postgres with backups | Before beta |
@@ -219,6 +219,7 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-10 | API tests run against a real Postgres test database, no Prisma mocks; test files run one at a time | Slower tests that need Docker; they catch real SQL, constraint and migration bugs that mocks would hide |
 | 2026-11-10 | Usernames unique ignoring case (Postgres `citext`), letters, digits and `_` only | Postgres-specific column type; no impersonation by case or look-alike characters |
 | 2026-11-10 | Services throw `AppError` (kind + code); one error handler maps it to HTTP | One more small abstraction; services stay HTTP-free and the app branches on stable codes |
 | 2026-11-08 | Each body part grows from its own XP | More data to track; avatar reflects real training balance |
