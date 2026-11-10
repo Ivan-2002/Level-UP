@@ -17,6 +17,9 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number | null, // null = never reached the server
+    // The API's stable error code (e.g. "UsernameTaken"). Branch on this, never on
+    // `message`: messages are for humans and may be reworded at any time.
+    public readonly code: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -54,6 +57,7 @@ async function request<T>(
       throw new ApiError(
         json?.message ?? `Request failed (${response.status})`,
         response.status,
+        typeof json?.error === "string" ? json.error : null,
       );
     }
     return json as T;
