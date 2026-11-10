@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export * from "./profile.js";
+export * from "./workouts.js";
 
 /** Response of GET /health. */
 export type HealthResponse = {
