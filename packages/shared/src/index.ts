@@ -10,6 +10,8 @@
 // API contracts
 // ---------------------------------------------------------------------------
 
+export * from "./profile.js";
+
 /** Response of GET /health. */
 export type HealthResponse = {
   status: "ok" | "degraded";
