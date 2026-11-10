@@ -85,7 +85,7 @@ model Verification {
 model Profile {
   userId       String   @id
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  username     String   @unique
+  username     String   @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
   bodyweightKg Decimal? @db.Decimal(5, 1)
   weeklyTarget Int      @default(3)
   totalXp      Int      @default(0) // cached sum of the XP ledger (added in Milestone 5)
