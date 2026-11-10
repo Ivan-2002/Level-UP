@@ -3,7 +3,9 @@
 // the error handler decides how that looks on the wire (status code, JSON).
 // That keeps services reusable from anywhere: a route, a script, a test or a queue job.
 
-export type AppErrorKind = "not_found" | "conflict";
+// invalid = the request is well-formed but refers to something unusable (e.g. an
+// exercise id that doesn't exist): checks the schema alone can't make.
+export type AppErrorKind = "invalid" | "not_found" | "conflict";
 
 export class AppError extends Error {
   constructor(

@@ -76,7 +76,7 @@ The Progression module is the only place XP is calculated; the app and API share
 1. **Modular monolith.** One API, split into modules (auth, users, exercises, workouts, progression, avatar). Each module owns its routes, service and data access. Modules talk through service functions, never each other's tables. One Node server plus Postgres can serve tens of thousands of users; a module can be split out later if it ever needs to be.
 2. **The server owns the game rules.** The app sends what was lifted, never how much XP to award. This blocks cheating before leaderboards exist, and lets us rebalance progression without an app update.
 3. **XP is a ledger.** Every XP gain is its own row. Total XP is the sum; level is calculated from total XP. A cached total on the user keeps reads fast, but the ledger is the source of truth.
-4. **Offline-tolerant logging.** The in-progress workout lives on the phone. "Finish" sends it with a client-generated ID, so a retry on bad signal cannot count the workout twice (an idempotent request).
+4. **Offline-tolerant logging.** The in-progress workout lives on the phone. "Finish" sends the whole workout in one request with a client-generated ID (`clientId`, unique per user), so a retry on bad signal cannot count the workout twice (an idempotent request): the first call returns 201, any repeat returns 200 with the workout already saved.
 5. **Proven auth, not home-made.** Better Auth handles password hashing, sessions and resets inside our own API.
 6. **Cosmetics are data, not code.** Avatar stages and items live in the database with their unlock rules, so new content needs no app release.
 
@@ -121,10 +121,10 @@ Eight tables cover the MVP. Better Auth creates and owns its own user, session a
 | Table | Key fields | Purpose |
 | --- | --- | --- |
 | profile | user_id, username (citext: unique ignoring case), total_xp (cached), avatar_stage, bodyweight_kg, weekly_target, streak_weeks, created_at | Game identity for each user |
-| exercise | id, name, muscle_group, body_part, category, load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library now; custom exercises later via owner_id |
-| workout | id, user_id, client_id (unique), started_at, finished_at | One gym session; client_id makes "Finish" safe to retry |
-| workout_exercise | id, workout_id, exercise_id, order | Which exercises were done, in order |
-| workout_set | id, workout_exercise_id, reps, weight_kg, set_order | Each set performed |
+| exercise | id, slug, name, muscle_group, body_part, equipment, load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises later via owner_id. Tuning values never leave the server |
+| workout | id, user_id, client_id (unique per user), name, started_at, finished_at | One gym session; client_id makes "Finish" safe to retry. History is ordered by started_at |
+| workout_exercise | id, workout_id, exercise_id, order | Which exercises were done, in order (exercises in history can't be deleted) |
+| workout_set | id, workout_exercise_id, reps, weight_kg, set_order | Each set performed. weight_kg is per dumbbell for dumbbell lifts and added weight for bodyweight exercises; plank logs seconds in reps for now |
 | xp_event | id, user_id, amount, source, source_id, body_part, created_at | The XP ledger: one row per XP gain |
 | avatar_stage | level_required, name, asset_key | Growth stages of the avatar, stored as data |
 | cosmetic | id, slot, name, unlock_rule | Later: unlockable items (hair, outfit, pose) |
@@ -219,6 +219,12 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-10 | Send the whole workout once, at Finish (not set by set) | Nothing reaches the server until Finish, so a lost phone loses the session in progress; in exchange, one simple request, no half-saved workouts and no sync protocol |
+| 2026-11-10 | Finish is idempotent by `clientId`, unique per user; a repeat returns 200 with the first saved version | A retry carrying edited data is ignored; a global key would have let one user's retry return another user's workout |
+| 2026-11-10 | Personal records (best set, estimated 1RM) are calculated on read from logged sets, never stored | Reads do more work as history grows (cache it later if needed); records can never drift from the sets, and changing a formula needs no data migration |
+| 2026-11-10 | Workout history uses keyset (cursor) pagination on (started_at, id), newest first | Can't jump to "page 7"; pages never shift or repeat when late-synced workouts arrive, and stay fast at any depth |
+| 2026-11-10 | Built-in exercises live in code (`exercise-catalog.ts`) and are seeded by slug upsert; `loadFactor`/`bodyweightRatio` are server-only | Retuning needs a deploy + seed run (not an admin UI yet); values are reviewed in Git and never exposed to clients |
+| 2026-11-10 | Modules use each other's services, never tables (workouts asks exercises.service to check exercise ids) | One extra query when reading a workout; modules keep their storage private |
 | 2026-11-10 | API tests run against a real Postgres test database, no Prisma mocks; test files run one at a time | Slower tests that need Docker; they catch real SQL, constraint and migration bugs that mocks would hide |
 | 2026-11-10 | Usernames unique ignoring case (Postgres `citext`), letters, digits and `_` only | Postgres-specific column type; no impersonation by case or look-alike characters |
 | 2026-11-10 | Services throw `AppError` (kind + code); one error handler maps it to HTTP | One more small abstraction; services stay HTTP-free and the app branches on stable codes |

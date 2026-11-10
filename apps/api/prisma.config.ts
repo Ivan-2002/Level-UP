@@ -13,6 +13,8 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // `pnpm db:seed`: loads the built-in exercise library (safe to re-run).
+    seed: "tsx src/scripts/seed.ts",
   },
   datasource: {
     url: env("DATABASE_URL"),

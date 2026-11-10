@@ -5,6 +5,7 @@ import { AppError, type AppErrorKind } from "../lib/errors.js";
 
 // The ONE place where business errors become HTTP responses.
 const statusByKind: Record<AppErrorKind, number> = {
+  invalid: 400,
   not_found: 404,
   conflict: 409,
 };
