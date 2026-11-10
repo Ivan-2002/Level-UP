@@ -4,6 +4,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import { healthRouter } from "./modules/health/health.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
+import { exercisesRouter } from "./modules/exercises/exercises.routes.js";
 import { notFound } from "./middleware/not-found.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
@@ -24,6 +25,7 @@ export function createApp() {
 
   app.use("/health", healthRouter);
   app.use(usersRouter);
+  app.use(exercisesRouter);
 
   app.use(notFound); // after all routes
   app.use(errorHandler); // always last

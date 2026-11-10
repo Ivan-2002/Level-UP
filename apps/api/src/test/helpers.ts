@@ -1,5 +1,8 @@
 import request from "supertest";
 import { createApp } from "../app.js";
+import { prisma } from "../lib/prisma.js";
+import { EXERCISE_CATALOG } from "../modules/exercises/exercise-catalog.js";
+import { upsertCatalog } from "../modules/exercises/exercises.repository.js";
 
 // The real Express app, without app.listen(). Supertest feeds requests straight into it:
 // no port, no running server, and nothing to clean up between tests.
@@ -42,4 +45,14 @@ export async function signUpUser(overrides: { email?: string; password?: string 
 function sessionCookie(setCookie: string[] | undefined): string {
   if (!setCookie?.length) throw new Error("Sign-up response had no Set-Cookie header");
   return setCookie.map((header) => header.split(";")[0]).join("; ");
+}
+
+/**
+ * Loads the REAL exercise catalog (the same upsert `pnpm db:seed` uses) and returns
+ * slug -> id. Tables are wiped before every test, so call this in a beforeEach.
+ */
+export async function seedExercises(): Promise<Record<string, string>> {
+  await upsertCatalog(EXERCISE_CATALOG);
+  const rows = await prisma.exercise.findMany({ select: { id: true, slug: true } });
+  return Object.fromEntries(rows.map((r) => [r.slug!, r.id]));
 }
