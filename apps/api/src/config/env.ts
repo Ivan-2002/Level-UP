@@ -19,7 +19,21 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters"),
   // The public URL of this API (Better Auth builds links and checks origins with it).
   BETTER_AUTH_URL: z.string().url(),
-});
+})
+  // Safety net: under test, the API refuses to start unless it's pointed at a database whose
+  // name ends in "_test". Tests truncate every table, so this makes it impossible for
+  // a misconfigured test run to wipe the dev database.
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV !== "test") return;
+    const name = new URL(env.DATABASE_URL).pathname.slice(1);
+    if (!name.endsWith("_test")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["DATABASE_URL"],
+        message: `tests must use a database whose name ends in "_test" (got "${name}")`,
+      });
+    }
+  });
 
 const parsed = envSchema.safeParse(process.env);
 

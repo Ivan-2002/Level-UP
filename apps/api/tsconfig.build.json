@@ -1,0 +1,7 @@
+{
+  // Used by `pnpm build`: the same settings, minus tests and test helpers,
+  // so they never end up in dist/ (the code that ships). tsconfig.json still
+  // includes them, so `pnpm typecheck` and the editor check the tests too.
+  "extends": "./tsconfig.json",
+  "exclude": ["src/**/*.test.ts", "src/test"]
+}
