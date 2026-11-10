@@ -27,6 +27,15 @@ describe("GET /exercises", () => {
     expect(items).toContainEqual(expect.objectContaining({ name: "Push-up", bodyPart: "chest", equipment: "bodyweight" }));
   });
 
+  it("marks plank as timed (seconds) and everything else as counted reps", async () => {
+    const user = await signUpUser();
+
+    const res = await request(app).get("/exercises").set("Cookie", user.cookie);
+
+    const timed = res.body.items.filter((e: { repsUnit: string }) => e.repsUnit === "seconds");
+    expect(timed.map((e: { name: string }) => e.name)).toEqual(["Plank"]);
+  });
+
   it("keeps XP tuning values on the server", async () => {
     const user = await signUpUser();
 
