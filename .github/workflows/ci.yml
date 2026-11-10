@@ -10,9 +10,33 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    # A throwaway Postgres for the API integration tests. GitHub starts it before the
+    # steps, waits until the health check passes, and deletes it when the job ends.
+    services:
+      postgres:
+        image: postgres:17 # same version as docker-compose.yml
+        env:
+          POSTGRES_USER: levelup
+          POSTGRES_PASSWORD: levelup
+          POSTGRES_DB: levelup_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U levelup"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
-      # Prisma needs a URL to generate its client; CI never connects to it.
+      # Prisma needs a URL to generate its client; nothing connects to this one.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # The database the API tests use (the name must end in "_test", or tests refuse to run).
+      TEST_DATABASE_URL: postgresql://levelup:levelup@localhost:5432/levelup_test
+      # The API refuses to start without these. CI-only values, not real secrets:
+      # nothing outside this short-lived job ever trusts a session signed with them.
+      BETTER_AUTH_SECRET: ci-only-not-a-secret-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3000
       # The mobile app refuses to start without this; CI only type-checks it.
       EXPO_PUBLIC_API_URL: http://localhost:3000
 
@@ -38,7 +62,14 @@ jobs:
       - name: Type-check every package
         run: pnpm typecheck
 
-      - name: Run tests
+      # Its own step so a broken migration shows up as "Migrate" failing, not as a
+      # confusing test failure. (The tests' global setup runs it again: a quick no-op.)
+      - name: Migrate the test database
+        run: pnpm --filter api exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Run tests (shared unit tests + API integration tests)
         run: pnpm test
 
       - name: Lint
