@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { REST_MAX_SEC, REST_MIN_SEC, REST_STEP_SEC } from "./progression.js";
+import { restSecSchema } from "./progression.js";
 import { exerciseSchema, REPS_MAX } from "./workouts.js";
 
 // ---------------------------------------------------------------------------
@@ -10,13 +10,6 @@ import { exerciseSchema, REPS_MAX } from "./workouts.js";
 export const ROUTINE_NAME_MAX = 60;
 export const ROUTINE_MAX_EXERCISES = 20;
 export const TARGET_SETS_MAX = 10;
-
-export const restSecSchema = z
-  .number({ error: "Rest must be a number of seconds." })
-  .int()
-  .min(REST_MIN_SEC, `Rest must be at least ${REST_MIN_SEC} seconds.`)
-  .max(REST_MAX_SEC, `Rest must be at most ${REST_MAX_SEC / 60} minutes.`)
-  .multipleOf(REST_STEP_SEC, `Rest goes up in steps of ${REST_STEP_SEC} seconds.`);
 
 export const routineExerciseInputSchema = z.object({
   exerciseId: z.uuid("Unknown exercise."),

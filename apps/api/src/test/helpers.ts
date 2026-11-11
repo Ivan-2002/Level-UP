@@ -38,6 +38,23 @@ export async function signUpUser(overrides: { email?: string; password?: string 
   return { userId: res.body.user.id, email, password, cookie: sessionCookie(res.get("Set-Cookie")) };
 }
 
+let playerCount = 0;
+
+/**
+ * A signed-up user WITH a character (profile), like every real player who logs workouts.
+ * Bodyweight is optional, as on the "Create your character" screen.
+ */
+export async function signUpPlayer(options: { bodyweightKg?: number; weeklyTarget?: number } = {}): Promise<TestUser> {
+  const user = await signUpUser();
+  playerCount += 1;
+  const res = await request(app)
+    .post("/profile")
+    .set("Cookie", user.cookie)
+    .send({ username: `player_${playerCount}`, weeklyTarget: options.weeklyTarget ?? 3, bodyweightKg: options.bodyweightKg });
+  if (res.status !== 201) throw new Error(`Test profile failed (${res.status}): ${res.text}`);
+  return user;
+}
+
 /**
  * Set-Cookie headers carry attributes meant for the client ("Path=/; HttpOnly; ...").
  * A Cookie request header only sends the name=value pairs, so keep just those.

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { workoutDetailSchema, workoutPageSchema, type FinishWorkoutInput } from "@levelup/shared";
+import { finishWorkoutResponseSchema, workoutPageSchema, type FinishWorkoutInput } from "@levelup/shared";
 import { prisma } from "../../lib/prisma.js";
-import { app, seedExercises, signUpUser, type TestUser } from "../../test/helpers.js";
+import { app, seedExercises, signUpPlayer, signUpUser, type TestUser } from "../../test/helpers.js";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -14,7 +14,7 @@ let user: TestUser;
 
 beforeEach(async () => {
   exerciseIds = await seedExercises();
-  user = await signUpUser();
+  user = await signUpPlayer();
 });
 
 /** A valid workout that finished 5 minutes ago and lasted an hour: bench, then pull-ups. */
@@ -66,6 +66,18 @@ describe("workout routes without a session", () => {
   });
 });
 
+describe("POST /workouts without a character", () => {
+  it("returns 409 ProfileRequired: XP needs a character to go to", async () => {
+    const noCharacter = await signUpUser();
+
+    const res = await finish(noCharacter, validWorkout());
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("ProfileRequired");
+    expect(await prisma.workout.count()).toBe(0);
+  });
+});
+
 describe("POST /workouts", () => {
   it("saves the whole workout and returns it in the shared contract shape", async () => {
     const input = validWorkout();
@@ -73,7 +85,7 @@ describe("POST /workouts", () => {
     const res = await finish(user, input);
 
     expect(res.status).toBe(201);
-    const workout = workoutDetailSchema.parse(res.body); // throws if the contract drifted
+    const { workout } = finishWorkoutResponseSchema.parse(res.body); // throws if the contract drifted
     expect(workout).toMatchObject({ clientId: input.clientId, name: "Push & pull", startedAt: input.startedAt });
     // Orders come from array positions: 0, 1 for exercises; 0, 1, 2 for sets.
     expect(workout.exercises.map((e) => [e.order, e.exercise.name])).toEqual([
@@ -90,10 +102,10 @@ describe("POST /workouts", () => {
   it("can be read back with GET /workouts/:id", async () => {
     const created = await finish(user, validWorkout());
 
-    const res = await request(app).get(`/workouts/${created.body.id}`).set("Cookie", user.cookie);
+    const res = await request(app).get(`/workouts/${created.body.workout.id}`).set("Cookie", user.cookie);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual(created.body);
+    expect(res.body).toEqual(created.body.workout);
   });
 
   it("allows an unnamed workout", async () => {
@@ -102,7 +114,7 @@ describe("POST /workouts", () => {
     const res = await finish(user, unnamed);
 
     expect(res.status).toBe(201);
-    expect(res.body.name).toBeNull();
+    expect(res.body.workout.name).toBeNull();
   });
 });
 
@@ -127,7 +139,7 @@ describe("POST /workouts idempotency (clientId)", () => {
     const repeat = await finish(user, { ...input, name: "Edited on retry" });
 
     expect(repeat.status).toBe(200);
-    expect(repeat.body.name).toBe("Push & pull");
+    expect(repeat.body.workout.name).toBe("Push & pull");
   });
 
   it("saves exactly one workout when two identical requests race", async () => {
@@ -136,19 +148,19 @@ describe("POST /workouts idempotency (clientId)", () => {
     const results = await Promise.all([finish(user, input), finish(user, input)]);
 
     expect(results.map((r) => r.status).sort()).toEqual([200, 201]);
-    expect(results[0]!.body.id).toBe(results[1]!.body.id);
+    expect(results[0]!.body.workout.id).toBe(results[1]!.body.workout.id);
     expect(await prisma.workout.count()).toBe(1);
   });
 
   it("scopes clientId to the user: someone else's clientId never returns their workout", async () => {
     const input = validWorkout();
     const mine = await finish(user, input);
-    const otherUser = await signUpUser();
+    const otherUser = await signUpPlayer();
 
     const theirs = await finish(otherUser, input);
 
     expect(theirs.status).toBe(201);
-    expect(theirs.body.id).not.toBe(mine.body.id);
+    expect(theirs.body.workout.id).not.toBe(mine.body.workout.id);
     expect(await prisma.workout.count()).toBe(2);
   });
 });
@@ -217,9 +229,9 @@ describe("POST /workouts validation", () => {
 describe("GET /workouts/:id", () => {
   it("returns 404 for another user's workout, never their data", async () => {
     const theirs = await finish(user, validWorkout({ name: "Private session" }));
-    const intruder = await signUpUser();
+    const intruder = await signUpPlayer();
 
-    const res = await request(app).get(`/workouts/${theirs.body.id}`).set("Cookie", intruder.cookie);
+    const res = await request(app).get(`/workouts/${theirs.body.workout.id}`).set("Cookie", intruder.cookie);
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "WorkoutNotFound", message: "Workout not found." });
@@ -240,7 +252,7 @@ describe("GET /workouts (history)", () => {
     const startedAt = Date.now() - daysAgo * 24 * HOUR;
     const res = await finish(as, validWorkout({ name, startedAt: iso(startedAt), finishedAt: iso(startedAt + HOUR) }));
     expect(res.status).toBe(201);
-    return res.body.id as string;
+    return res.body.workout.id as string;
   }
 
   async function getPage(as: TestUser, query: string) {
@@ -301,7 +313,7 @@ describe("GET /workouts (history)", () => {
 
   it("only lists your own workouts", async () => {
     await logWorkout(user, 1, "Mine");
-    await logWorkout(await signUpUser(), 1, "Someone else's");
+    await logWorkout(await signUpPlayer(), 1, "Someone else's");
 
     const page = await getPage(user, "");
 

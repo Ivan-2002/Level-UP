@@ -22,6 +22,10 @@ export async function findProfileByUserId(userId: string): Promise<ProfileRecord
   return row ? withLatestBodyweight(row) : null;
 }
 
+export async function profileExists(userId: string): Promise<boolean> {
+  return (await prisma.profile.count({ where: { userId } })) > 0;
+}
+
 /** Case-insensitive, because the column is citext (see schema.prisma). */
 export function findProfileByUsername(username: string): Promise<ProfileRow | null> {
   return prisma.profile.findUnique({ where: { username } });

@@ -145,7 +145,9 @@ describe("buildFinishPayload", () => {
         clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10",
         startedAt: START.toISOString(),
         finishedAt: minutesLater(30).toISOString(),
-        exercises: [{ exerciseId: benchPress.id, sets: [{ reps: 8, weightKg: 62.5 }] }],
+        exercises: [
+          { exerciseId: benchPress.id, sets: [{ reps: 8, weightKg: 62.5, completedAt: minutesLater(10).toISOString() }] },
+        ],
       },
     });
   });

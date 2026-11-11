@@ -12,3 +12,5 @@ workoutsRouter.post("/workouts", requireAuth, validateBody(finishWorkoutSchema),
 // History, newest first: ?limit=20&cursor=<nextCursor from the previous page>
 workoutsRouter.get("/workouts", requireAuth, validateQuery(listWorkoutsQuerySchema), controller.listWorkouts);
 workoutsRouter.get("/workouts/:id", requireAuth, controller.getWorkout);
+// The same summary Finish returned, recalculated from saved data.
+workoutsRouter.get("/workouts/:id/summary", requireAuth, controller.getWorkoutSummary);

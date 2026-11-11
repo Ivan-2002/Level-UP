@@ -152,7 +152,7 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
       if (set.doneAt === null) continue;
       const parsed = parseSet(set, draft.exercise);
       if (!parsed.ok) return { ok: false, message: `${draft.exercise.name}: ${parsed.message}` };
-      sets.push(parsed.value);
+      sets.push({ ...parsed.value, completedAt: set.doneAt }); // the server stores when it was ticked
       doneTimes.push(Date.parse(set.doneAt));
     }
     if (sets.length > 0) exercises.push({ exerciseId: draft.exercise.id, sets });

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import * as Network from "expo-network";
-import type { WorkoutDetail } from "@levelup/shared";
+import type { FinishWorkoutResponse } from "@levelup/shared";
 import { apiPost } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { outboxStore } from "@/stores/device-stores";
@@ -31,7 +31,7 @@ export function useOutboxSync(userId: string | undefined): void {
 
     const processor = createOutboxProcessor({
       store: outboxStore,
-      send: (payload) => apiPost<WorkoutDetail>("/workouts", payload),
+      send: (payload) => apiPost<FinishWorkoutResponse>("/workouts", payload),
       getUserId: () => userId,
       now: Date.now,
       random: Math.random,

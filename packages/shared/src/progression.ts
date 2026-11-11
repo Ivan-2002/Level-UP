@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Equipment, RepsUnit } from "./workouts.js";
 
 // ---------------------------------------------------------------------------
@@ -195,6 +196,14 @@ export const REST_MIN_SEC = 15;
 export const REST_MAX_SEC = 600;
 export const REST_STEP_SEC = 15;
 export const REST_DEFAULT_SEC = 120;
+
+/** A rest time as the API accepts it: 15 s - 10 min, in 15 s steps. */
+export const restSecSchema = z
+  .number({ error: "Rest must be a number of seconds." })
+  .int()
+  .min(REST_MIN_SEC, `Rest must be at least ${REST_MIN_SEC} seconds.`)
+  .max(REST_MAX_SEC, `Rest must be at most ${REST_MAX_SEC / 60} minutes.`)
+  .multipleOf(REST_STEP_SEC, `Rest goes up in steps of ${REST_STEP_SEC} seconds.`);
 
 /** Snaps to 15 s steps and keeps it within 15 s - 10 min. */
 export function clampRestSec(seconds: number): number {

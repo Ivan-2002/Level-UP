@@ -30,6 +30,13 @@ export async function createProfile(userId: string, input: CreateProfileInput): 
   return toProfile(result);
 }
 
+/** Logging workouts needs a character: XP is added to it. (The app's guard ensures one.) */
+export async function requireProfile(userId: string): Promise<void> {
+  if (!(await repo.profileExists(userId))) {
+    throw new AppError("conflict", "ProfileRequired", "Create your character before logging workouts.");
+  }
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
