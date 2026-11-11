@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { coachIncrementsKg, formatWeight, STORED_KG_DECIMALS, type WeightUnit } from "./units.js";
 import type { Equipment, RepsUnit } from "./workouts.js";
 
 // ---------------------------------------------------------------------------
@@ -224,20 +225,16 @@ export function resolveRestSec(options: {
 // --- Coach hint (double progression, fixed rules, no AI) ----------------------------
 
 /**
- * How much to add when every set hit its target, per equipment type. Passed in (not
- * hard-coded) so it can be tuned, or loaded from the database later. null = there's no
- * sensible weight step, so progress by adding reps instead.
+ * How much to add (IN KG) when every set hit its target, per equipment type. Passed in
+ * (not hard-coded) so it can be tuned, or loaded from the database later. null = there's
+ * no sensible weight step, so progress by adding reps instead.
+ * The defaults depend on the player's unit (units.ts): +2.5 kg barbell / +1 kg dumbbell
+ * for kg players, +5 lb for lb players, converted to kg here.
  */
 export type ProgressionIncrements = Record<Equipment, number | null>;
 
-export const DEFAULT_INCREMENTS: ProgressionIncrements = {
-  barbell: 2.5,
-  machine: 2.5,
-  cable: 2.5,
-  dumbbell: 1, // per dumbbell
-  kettlebell: 4, // kettlebells come in 4 kg steps
-  bodyweight: null,
-};
+/** The kg player's defaults: barbell/machine/cable +2.5, dumbbell +1 (each), kettlebell +4. */
+export const DEFAULT_INCREMENTS: ProgressionIncrements = coachIncrementsKg("kg");
 
 /** Seconds added for a timed exercise once every hold reached the target. */
 export const HOLD_INCREMENT_SEC = 5;
@@ -259,9 +256,11 @@ export function coachAdvice(input: {
   targetReps?: number | null;
   equipment: Equipment;
   repsUnit: RepsUnit;
+  /** Default: the player's unit's defaults (5 lb steps for lb players). */
   increments?: ProgressionIncrements;
+  weightUnit?: WeightUnit;
 }): CoachAdvice {
-  const increments = input.increments ?? DEFAULT_INCREMENTS;
+  const increments = input.increments ?? coachIncrementsKg(input.weightUnit ?? "kg");
   if (input.lastSets.length === 0) return { kind: "first_time", targetReps: input.targetReps ?? null };
 
   const lastWeightKg = Math.max(...input.lastSets.map((s) => s.weightKg));
@@ -275,13 +274,13 @@ export function coachAdvice(input: {
     return { kind: "add_reps", lastWeightKg, lastReps, weightKg: lastWeightKg, reps: target + HOLD_INCREMENT_SEC };
   }
   if (step === null) return { kind: "add_reps", lastWeightKg, lastReps, weightKg: lastWeightKg, reps: target + 1 };
-  return { kind: "increase_weight", lastWeightKg, lastReps, weightKg: round(lastWeightKg + step, 2), reps: target };
+  // Same precision as storage, so 135 lb + 5 lb shows as exactly 140 lb.
+  return { kind: "increase_weight", lastWeightKg, lastReps, weightKg: round(lastWeightKg + step, STORED_KG_DECIMALS), reps: target };
 }
 
-const kg = (value: number) => `${round(value, 2)} kg`;
-
-/** The one-line hint under the exercise name. Sentence case, no AI. */
-export function coachHintText(advice: CoachAdvice, repsUnit: RepsUnit): string {
+/** The one-line hint under the exercise name, in the player's unit. Sentence case, no AI. */
+export function coachHintText(advice: CoachAdvice, repsUnit: RepsUnit, weightUnit: WeightUnit = "kg"): string {
+  const kg = (value: number) => formatWeight(value, weightUnit);
   const unit = repsUnit === "seconds" ? "s" : "";
   const list = (reps: number[]) => reps.map((r) => `${r}${unit}`).join(", ");
   switch (advice.kind) {
