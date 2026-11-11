@@ -37,7 +37,7 @@ const usernameTaken = () =>
 // Turns a database row into the shared API contract. This is where storage details
 // stop: Postgres DECIMAL becomes a plain number, dates become ISO strings, and
 // internal columns (userId, updatedAt) are not exposed.
-function toProfile(row: repo.ProfileRow): Profile {
+function toProfile(row: repo.ProfileRecord): Profile {
   return {
     username: row.username,
     bodyweightKg: row.bodyweightKg === null ? null : row.bodyweightKg.toNumber(),

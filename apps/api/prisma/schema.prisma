@@ -17,18 +17,22 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String     @id
+  id            String               @id
   name          String
-  email         String     @unique
-  emailVerified Boolean    @default(false)
+  email         String               @unique
+  emailVerified Boolean              @default(false)
   image         String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   sessions      Session[]
   accounts      Account[]
   profile       Profile?
   workouts      Workout[]
   exercises     Exercise[] // custom exercises this user created (later)
+  routines      Routine[]
+  bodyweights   BodyweightEntry[]
+  exercisePrefs ExercisePreference[]
+  xpEvents      XpEvent[]
 
   @@map("user")
 }
@@ -88,7 +92,6 @@ model Profile {
   userId       String   @id
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   username     String   @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
-  bodyweightKg Decimal? @db.Decimal(5, 1)
   weeklyTarget Int      @default(3)
   totalXp      Int      @default(0) // cached sum of the XP ledger (added in Milestone 5)
   streakWeeks  Int      @default(0)
@@ -96,6 +99,22 @@ model Profile {
   updatedAt    DateTime @updatedAt
 
   @@map("profile")
+}
+
+// Bodyweight over time: XP for bodyweight exercises uses the entry in effect on the
+// workout's date, so changing your weight never rewrites old workouts' XP.
+// Owned by the users module.
+model BodyweightEntry {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kg         Decimal  @db.Decimal(5, 1)
+  measuredOn DateTime @db.Date // a calendar day, no time
+  createdAt  DateTime @default(now())
+
+  // One entry per day: entering today's weight again updates it.
+  @@unique([userId, measuredOn])
+  @@map("bodyweight_entry")
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +145,15 @@ enum Equipment {
 }
 
 // What the "reps" number of a set means for this exercise. Plank is held, not repeated.
+// Compound = several joints, heavy (squat, bench); isolation = one joint (curl, raise).
+// Drives the suggested rest range shown in the app.
+enum Mechanic {
+  compound
+  isolation
+
+  @@map("mechanic")
+}
+
 enum RepsUnit {
   reps
   seconds
@@ -134,27 +162,82 @@ enum RepsUnit {
 }
 
 model Exercise {
-  id              String            @id @default(uuid(7)) @db.Uuid
+  id               String               @id @default(uuid(7)) @db.Uuid
   // Stable key for built-in exercises, so the seed can upsert ("barbell-back-squat").
   // Null for custom exercises; Postgres allows many NULLs in a unique column.
-  slug            String?           @unique
-  name            String
-  muscleGroup     String // finer than bodyPart, for display ("Lats", "Quadriceps")
-  bodyPart        BodyPart
-  equipment       Equipment
-  repsUnit        RepsUnit  @default(reps)
+  slug             String?              @unique
+  name             String
+  muscleGroup      String // finer than bodyPart, for display ("Lats", "Quadriceps")
+  bodyPart         BodyPart
+  equipment        Equipment
+  repsUnit         RepsUnit             @default(reps)
+  mechanic         Mechanic             @default(isolation)
+  suggestedRestSec Int                  @default(90) // rest priority: preference > routine > this > 120 s
   // XP tuning (Milestone 5): effective load = (weight + bodyweight x bodyweightRatio) x loadFactor
-  loadFactor      Decimal           @db.Decimal(4, 2)
-  bodyweightRatio Decimal           @default(0) @db.Decimal(3, 2)
-  isCustom        Boolean           @default(false)
-  ownerId         String? // set only for custom exercises (later)
-  owner           User?             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  usedIn          WorkoutExercise[]
+  loadFactor       Decimal              @db.Decimal(4, 2)
+  bodyweightRatio  Decimal              @default(0) @db.Decimal(3, 2)
+  isCustom         Boolean              @default(false)
+  ownerId          String? // set only for custom exercises (later)
+  owner            User?                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  usedIn           WorkoutExercise[]
+  inRoutines       RoutineExercise[]
+  preferences      ExercisePreference[]
 
   @@index([ownerId])
   @@map("exercise")
+}
+
+// The player's own choices for an exercise (rest time for now). Highest priority:
+// preference > routine > exercise.suggestedRestSec > 120 s. Stored on the server so it
+// follows the player to a new phone; written when a workout is finished.
+model ExercisePreference {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId String   @db.Uuid
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  restSec    Int
+  updatedAt  DateTime @updatedAt
+
+  @@id([userId, exerciseId])
+  @@map("exercise_preference")
+}
+
+// ---------------------------------------------------------------------------
+// Routines (saved plans): OWNED BY THE ROUTINES MODULE.
+// A workout COPIES a routine's exercises when it starts, so editing or deleting a
+// routine never changes history.
+// ---------------------------------------------------------------------------
+
+model Routine {
+  id        String            @id @default(uuid(7)) @db.Uuid
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  exercises RoutineExercise[]
+  workouts  Workout[]
+
+  @@index([userId])
+  @@map("routine")
+}
+
+model RoutineExercise {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  routineId  String   @db.Uuid
+  routine    Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exerciseId String   @db.Uuid
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  order      Int // 0-based
+  targetSets Int
+  targetReps Int
+  restSec    Int? // null = use the exercise's suggestion
+
+  @@unique([routineId, order])
+  @@index([exerciseId])
+  @@map("routine_exercise")
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +251,10 @@ model Workout {
   // Generated by the app when the workout starts; makes "Finish" safe to retry.
   clientId   String            @db.Uuid
   name       String?
+  // Optional link to the routine it was started from. SetNull: deleting the routine
+  // keeps the workout, the link just becomes empty.
+  routineId  String?           @db.Uuid
+  routine    Routine?          @relation(fields: [routineId], references: [id], onDelete: SetNull)
   startedAt  DateTime
   finishedAt DateTime
   createdAt  DateTime          @default(now()) // when the server received it (may be later, offline)
@@ -177,6 +264,7 @@ model Workout {
   @@unique([userId, clientId])
   // Exactly the history query: this user's workouts, newest first, id as the tiebreaker.
   @@index([userId, startedAt(sort: Desc), id(sort: Desc)])
+  @@index([routineId]) // "last done" per routine
   @@map("workout")
 }
 
@@ -188,6 +276,7 @@ model WorkoutExercise {
   // Restrict: an exercise that appears in someone's history can never be deleted.
   exercise   Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
   order      Int // 0-based position in the workout
+  restSec    Int? // rest used in this workout; null for workouts logged before 4c
   sets       WorkoutSet[]
 
   @@unique([workoutId, order])
@@ -202,7 +291,40 @@ model WorkoutSet {
   setOrder          Int // 0-based position within the exercise
   reps              Int
   weightKg          Decimal         @db.Decimal(5, 2) // added weight; 0 for plain bodyweight
+  completedAt       DateTime? // when it was ticked on the phone; null before 4c
+  // Space for later anti-cheat checks: a flagged set earns no XP and isn't a PR until confirmed.
+  isFlagged         Boolean         @default(false)
+  flagReason        String?
 
   @@unique([workoutExerciseId, setOrder])
   @@map("workout_set")
+}
+
+// ---------------------------------------------------------------------------
+// XP ledger: OWNED BY THE PROGRESSION MODULE.
+// One row per XP gain. Total XP = the sum (cached on profile.totalXp); level is derived.
+// ---------------------------------------------------------------------------
+
+enum XpSource {
+  workout_set // sourceId = workout_set.id
+  weekly_target // later; sourceId must include the user, e.g. "<userId>:2026-W46"
+  streak // later; same rule
+
+  @@map("xp_source")
+}
+
+model XpEvent {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  source    XpSource
+  sourceId  String
+  bodyPart  BodyPart? // which avatar part it grows; null for bonuses
+  createdAt DateTime  @default(now())
+
+  // The same gain can never be recorded twice, even if Finish is sent again.
+  @@unique([source, sourceId])
+  @@index([userId, createdAt])
+  @@map("xp_event")
 }

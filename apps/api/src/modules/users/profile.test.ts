@@ -1,5 +1,6 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
+import { prisma } from "../../lib/prisma.js";
 import { app, signUpUser, type TestUser } from "../../test/helpers.js";
 
 const validCharacter = { username: "IvanLifts", bodyweightKg: 75.5, weeklyTarget: 4 };
@@ -55,11 +56,30 @@ describe("POST /profile", () => {
     expect(fetched.body).toEqual(created.body);
   });
 
-  it("allows leaving bodyweight out", async () => {
+  it("allows leaving bodyweight out, and then records no bodyweight", async () => {
     const res = await createProfile(user, { username: "NoScale", weeklyTarget: 3 });
 
     expect(res.status).toBe(201);
     expect(res.body.bodyweightKg).toBeNull();
+    expect(await prisma.bodyweightEntry.count()).toBe(0);
+  });
+
+  it("stores bodyweight as a dated history entry, not on the profile", async () => {
+    await createProfile(user, validCharacter);
+
+    const entries = await prisma.bodyweightEntry.findMany({ where: { userId: user.userId } });
+    expect(entries.map((e) => [e.kg.toNumber(), e.measuredOn.toISOString().slice(0, 10)])).toEqual([
+      [75.5, new Date().toISOString().slice(0, 10)],
+    ]);
+  });
+
+  it("records no bodyweight when the username is taken", async () => {
+    await createProfile(user, validCharacter);
+    const otherUser = await signUpUser();
+
+    await createProfile(otherUser, { ...validCharacter, bodyweightKg: 90 });
+
+    expect(await prisma.bodyweightEntry.count({ where: { userId: otherUser.userId } })).toBe(0);
   });
 
   it("rejects a second character for the same user with 409 ProfileExists", async () => {
