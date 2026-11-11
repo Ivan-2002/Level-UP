@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { finishWorkoutResponseSchema, type FinishWorkoutInput } from "@levelup/shared";
+import { finishWorkoutResponseSchema, fromInputWeight, toDisplayWeight, type FinishWorkoutInput } from "@levelup/shared";
 import { prisma } from "../../lib/prisma.js";
 import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/helpers.js";
 
@@ -280,5 +280,31 @@ describe("rest times and completion times", () => {
     const { workout: saved } = await finish(user, old);
 
     expect(saved.exercises[0]).toMatchObject({ restSec: null, sets: [expect.objectContaining({ completedAt: null })] });
+  });
+});
+
+describe("weights stay exact for lb players (stored in kg, 3 decimals)", () => {
+  it("round-trips 135 / 225 / 46.25 lb through the API and the database", async () => {
+    const user = await signUpPlayer();
+    const lbs = [135, 225, 46.25];
+
+    const { workout: saved } = await finish(
+      user,
+      workout(0, [["barbell-bench-press", lbs.map((lb) => ({ reps: 5, weightKg: fromInputWeight(lb, "lb") }))]]),
+    );
+    const reread = await request(app).get(`/workouts/${saved.id}`).set("Cookie", user.cookie);
+
+    const sets = reread.body.exercises[0].sets as { weightKg: number }[];
+    expect(sets.map((s) => s.weightKg)).toEqual([61.235, 102.058, 20.979]);
+    expect(sets.map((s) => toDisplayWeight(s.weightKg, "lb"))).toEqual(lbs);
+  });
+
+  it("keeps a lb bodyweight exact too", async () => {
+    const user = await signUpPlayer();
+
+    const res = await request(app).post("/bodyweight").set("Cookie", user.cookie).send({ kg: fromInputWeight(180, "lb") });
+
+    expect(res.body.kg).toBe(81.647);
+    expect(toDisplayWeight(res.body.kg, "lb")).toBe(180);
   });
 });

@@ -15,6 +15,7 @@ export type NewProfile = {
   username: string;
   bodyweightKg?: number;
   weeklyTarget: number;
+  weightUnit: "kg" | "lb";
 };
 
 export async function findProfileByUserId(userId: string): Promise<ProfileRecord | null> {
@@ -24,6 +25,12 @@ export async function findProfileByUserId(userId: string): Promise<ProfileRecord
 
 export async function profileExists(userId: string): Promise<boolean> {
   return (await prisma.profile.count({ where: { userId } })) > 0;
+}
+
+/** Changes only the given fields. null = this user has no profile. */
+export async function updateProfile(userId: string, data: { weightUnit?: "kg" | "lb" }): Promise<ProfileRecord | null> {
+  const { count } = await prisma.profile.updateMany({ where: { userId }, data });
+  return count === 0 ? null : findProfileByUserId(userId);
 }
 
 /** Case-insensitive, because the column is citext (see schema.prisma). */

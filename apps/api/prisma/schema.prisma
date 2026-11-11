@@ -88,15 +88,24 @@ model Verification {
 // Game identity: OWNED BY US. Created on the "Create your character" screen.
 // ---------------------------------------------------------------------------
 
+// The unit a player types and reads weights in. Storage and maths are always kg.
+enum WeightUnit {
+  kg
+  lb
+
+  @@map("weight_unit")
+}
+
 model Profile {
-  userId       String   @id
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  username     String   @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
-  weeklyTarget Int      @default(3)
-  totalXp      Int      @default(0) // cached sum of the XP ledger (added in Milestone 5)
-  streakWeeks  Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  userId       String     @id
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username     String     @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
+  weeklyTarget Int        @default(3)
+  weightUnit   WeightUnit @default(kg)
+  totalXp      Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
+  streakWeeks  Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@map("profile")
 }
@@ -108,7 +117,7 @@ model BodyweightEntry {
   id         String   @id @default(uuid(7)) @db.Uuid
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kg         Decimal  @db.Decimal(5, 1)
+  kg         Decimal  @db.Decimal(7, 3) // 3 decimals: lb input converts back exactly (see units.ts)
   measuredOn DateTime @db.Date // a calendar day, no time
   createdAt  DateTime @default(now())
 
@@ -293,7 +302,7 @@ model WorkoutSet {
   workoutExercise   WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
   setOrder          Int // 0-based position within the exercise
   reps              Int
-  weightKg          Decimal         @db.Decimal(5, 2) // added weight; 0 for plain bodyweight
+  weightKg          Decimal         @db.Decimal(7, 3) // added weight; 0 for plain bodyweight. 3 decimals: 135 lb round-trips
   completedAt       DateTime? // when it was ticked on the phone; null before 4c
   // Space for later anti-cheat checks: a flagged set earns no XP and isn't a PR until confirmed.
   isFlagged         Boolean         @default(false)

@@ -1,4 +1,4 @@
-import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput } from "@levelup/shared";
+import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput, UpdateProfileInput } from "@levelup/shared";
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import * as repo from "./users.repository.js";
@@ -28,6 +28,12 @@ export async function createProfile(userId: string, input: CreateProfileInput): 
     throw (await repo.findProfileByUserId(userId)) ? profileExists() : usernameTaken();
   }
   return toProfile(result);
+}
+
+export async function updateProfile(userId: string, input: UpdateProfileInput): Promise<Profile> {
+  const row = await repo.updateProfile(userId, input);
+  if (!row) throw new AppError("not_found", "ProfileNotFound", "You haven't created your character yet.");
+  return toProfile(row);
 }
 
 /** Logging workouts needs a character: XP is added to it. (The app's guard ensures one.) */
@@ -78,6 +84,7 @@ function toProfile(row: repo.ProfileRecord): Profile {
     username: row.username,
     bodyweightKg: row.bodyweightKg === null ? null : row.bodyweightKg.toNumber(),
     weeklyTarget: row.weeklyTarget,
+    weightUnit: row.weightUnit,
     totalXp: row.totalXp,
     streakWeeks: row.streakWeeks,
     createdAt: row.createdAt.toISOString(),

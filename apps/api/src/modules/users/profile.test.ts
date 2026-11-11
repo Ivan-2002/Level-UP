@@ -46,6 +46,7 @@ describe("POST /profile", () => {
       username: "IvanLifts",
       bodyweightKg: 75.5, // a plain number, not Prisma's Decimal
       weeklyTarget: 4,
+      weightUnit: "kg", // the default when the app sends none
       totalXp: 0,
       streakWeeks: 0,
       createdAt: expect.any(String),
@@ -146,5 +147,46 @@ describe("POST /profile", () => {
 
     const res = await request(app).get("/profile").set("Cookie", user.cookie);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("weight unit (kg / lb)", () => {
+  let user: TestUser;
+  beforeEach(async () => {
+    user = await signUpUser();
+  });
+
+  it("is chosen at sign-up (the app sends one from the device locale)", async () => {
+    const res = await createProfile(user, { ...validCharacter, weightUnit: "lb" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.weightUnit).toBe("lb");
+  });
+
+  it("can be changed later with PATCH /profile, leaving everything else as it was", async () => {
+    await createProfile(user, validCharacter);
+
+    const res = await request(app).patch("/profile").set("Cookie", user.cookie).send({ weightUnit: "lb" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ username: "IvanLifts", weeklyTarget: 4, bodyweightKg: 75.5, weightUnit: "lb" });
+    expect((await request(app).get("/profile").set("Cookie", user.cookie)).body.weightUnit).toBe("lb");
+  });
+
+  it("rejects an unknown unit, an empty change, and a missing character", async () => {
+    await createProfile(user, validCharacter);
+    const patch = (as: TestUser, body: object) => request(app).patch("/profile").set("Cookie", as.cookie).send(body);
+
+    const unknown = await patch(user, { weightUnit: "stone" });
+    const empty = await patch(user, {});
+    const noCharacter = await patch(await signUpUser(), { weightUnit: "lb" });
+
+    expect([unknown.status, empty.status, noCharacter.status]).toEqual([400, 400, 404]);
+    expect(empty.body.message).toBe("Send at least one field to change.");
+    expect(noCharacter.body.error).toBe("ProfileNotFound");
+  });
+
+  it("needs a session", async () => {
+    expect((await request(app).patch("/profile").send({ weightUnit: "lb" })).status).toBe(401);
   });
 });

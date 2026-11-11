@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateProfileInput, RecordBodyweightInput } from "@levelup/shared";
+import type { CreateProfileInput, RecordBodyweightInput, UpdateProfileInput } from "@levelup/shared";
 import * as usersService from "./users.service.js";
 
 // Controllers translate HTTP <-> service calls, and nothing else:
@@ -26,4 +26,8 @@ export async function createProfile(req: Request<object, unknown, CreateProfileI
 export async function recordBodyweight(req: Request<object, unknown, RecordBodyweightInput>, res: Response) {
   const entry = await usersService.recordBodyweight(req.session!.user.id, req.body);
   res.json(entry); // 200, not 201: recording the same day again updates that day's entry
+}
+
+export async function updateProfile(req: Request<object, unknown, UpdateProfileInput>, res: Response) {
+  res.json(await usersService.updateProfile(req.session!.user.id, req.body));
 }

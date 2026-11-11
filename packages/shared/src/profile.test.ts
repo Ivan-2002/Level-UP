@@ -4,8 +4,9 @@ import { createProfileSchema } from "./index.js";
 const valid = { username: "IvanLifts", bodyweightKg: 75.5, weeklyTarget: 4 };
 
 describe("createProfileSchema", () => {
-  it("accepts the design's example character", () => {
-    expect(createProfileSchema.parse(valid)).toEqual(valid);
+  it("accepts the design's example character, defaulting the weight unit to kg", () => {
+    expect(createProfileSchema.parse(valid)).toEqual({ ...valid, weightUnit: "kg" });
+    expect(createProfileSchema.parse({ ...valid, weightUnit: "lb" }).weightUnit).toBe("lb");
   });
 
   it("makes bodyweight optional", () => {
