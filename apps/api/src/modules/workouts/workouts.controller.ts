@@ -1,6 +1,16 @@
 import type { Request, Response } from "express";
-import type { FinishWorkoutInput, FinishWorkoutResponse, ListWorkoutsQuery, WorkoutDetail, WorkoutPage } from "@levelup/shared";
+import type {
+  ExerciseSummary,
+  ExerciseSummaryQuery,
+  FinishWorkoutInput,
+  FinishWorkoutResponse,
+  ListWorkoutsQuery,
+  RecentExerciseList,
+  WorkoutDetail,
+  WorkoutPage,
+} from "@levelup/shared";
 import * as workoutsService from "./workouts.service.js";
+import * as historyService from "./exercise-history.service.js";
 
 // HTTP in, HTTP out. By the time these run, requireAuth has set req.session and the
 // validation middleware has checked the body / query.
@@ -26,4 +36,12 @@ export async function getWorkout(req: Request<{ id: string }>, res: Response<Wor
 
 export async function getWorkoutSummary(req: Request<{ id: string }>, res: Response<FinishWorkoutResponse>) {
   res.json(await workoutsService.getWorkoutSummary(req.session!.user.id, req.params.id));
+}
+
+export async function exerciseSummary(req: Request<{ id: string }>, res: Response<ExerciseSummary, { query: ExerciseSummaryQuery }>) {
+  res.json(await historyService.exerciseSummary(req.session!.user.id, req.params.id, res.locals.query.sessions));
+}
+
+export async function recentExercises(req: Request, res: Response<RecentExerciseList>) {
+  res.json(await historyService.recentExercises(req.session!.user.id));
 }

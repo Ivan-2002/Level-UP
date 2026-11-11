@@ -282,3 +282,51 @@ export const workoutPageSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 export type WorkoutPage = z.infer<typeof workoutPageSchema>;
+
+// --- Exercise history (GET /exercises/:id/summary, GET /exercises/recent) ---------
+
+const loggedSetSchema = z.object({ reps: z.number().int(), weightKg: z.number() });
+
+/** One past workout's sets of an exercise. weightKg is as logged; loads include bodyweight. */
+export const exerciseSessionSchema = z.object({
+  workoutId: z.uuid(),
+  startedAt: z.iso.datetime(),
+  /** Bodyweight in effect that day, for showing bodyweight sets as "BW + x kg". */
+  bodyweightKg: z.number(),
+  sets: z.array(loggedSetSchema),
+  bestE1rm: z.number().nullable(),
+  volumeKg: z.number(),
+  topSet: loggedSetSchema.nullable(),
+});
+export type ExerciseSession = z.infer<typeof exerciseSessionSchema>;
+
+const recordAtDate = <T extends z.ZodRawShape>(shape: T) => z.object({ ...shape, date: z.iso.datetime() }).nullable();
+
+/** Response of GET /exercises/:id/summary. Records are calculated on read from logged sets. */
+export const exerciseSummarySchema = z.object({
+  exercise: exerciseSchema,
+  /** The player's current bodyweight (latest entry, or the 75 kg fallback). */
+  bodyweightKg: z.number(),
+  previousSession: exerciseSessionSchema.nullable(),
+  records: z.object({
+    bestE1rm: recordAtDate({ value: z.number(), reps: z.number().int(), weightKg: z.number() }),
+    heaviestSet: recordAtDate({ reps: z.number().int(), weightKg: z.number(), loadKg: z.number() }),
+    bestSessionVolume: recordAtDate({ volumeKg: z.number() }),
+    /** Most reps in one set; for timed exercises, the longest hold in seconds. */
+    mostReps: recordAtDate({ reps: z.number().int(), weightKg: z.number() }),
+  }),
+  /** Newest first, for the trend chart. */
+  sessions: z.array(exerciseSessionSchema),
+});
+export type ExerciseSummary = z.infer<typeof exerciseSummarySchema>;
+
+export const exerciseSummaryQuerySchema = z.object({
+  sessions: z.coerce.number().int().min(1).max(100).default(8),
+});
+export type ExerciseSummaryQuery = z.infer<typeof exerciseSummaryQuerySchema>;
+
+/** Response of GET /exercises/recent: "Recently used" in the Add exercise sheet. */
+export const recentExerciseListSchema = z.object({
+  items: z.array(z.object({ exercise: exerciseSchema, lastDoneAt: z.iso.datetime(), lastSets: z.array(loggedSetSchema) })),
+});
+export type RecentExerciseList = z.infer<typeof recentExerciseListSchema>;

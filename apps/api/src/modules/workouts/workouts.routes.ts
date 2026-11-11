@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { finishWorkoutSchema, listWorkoutsQuerySchema } from "@levelup/shared";
+import { exerciseSummaryQuerySchema, finishWorkoutSchema, listWorkoutsQuerySchema } from "@levelup/shared";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validateBody, validateQuery } from "../../middleware/validate.js";
 import * as controller from "./workouts.controller.js";
@@ -14,3 +14,13 @@ workoutsRouter.get("/workouts", requireAuth, validateQuery(listWorkoutsQuerySche
 workoutsRouter.get("/workouts/:id", requireAuth, controller.getWorkout);
 // The same summary Finish returned, recalculated from saved data.
 workoutsRouter.get("/workouts/:id/summary", requireAuth, controller.getWorkoutSummary);
+
+// Exercise history is built from workouts, so these live here even though their URLs
+// start with /exercises (modules own data and rules, not URL prefixes).
+workoutsRouter.get("/exercises/recent", requireAuth, controller.recentExercises);
+workoutsRouter.get(
+  "/exercises/:id/summary",
+  requireAuth,
+  validateQuery(exerciseSummaryQuerySchema),
+  controller.exerciseSummary,
+);
