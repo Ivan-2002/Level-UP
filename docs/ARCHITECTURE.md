@@ -1,6 +1,6 @@
 # Level Up — Project Context & Architecture
 
-_Last updated: 2026-11-10 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
+_Last updated: 2026-11-11 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
 
 ## Vision & MVP scope
 
@@ -116,16 +116,20 @@ The XP-to-level formula lives in `packages/shared`, so the app can draw the XP b
 
 ## Initial data model
 
-Eight tables cover the MVP. Better Auth creates and owns its own user, session and account tables; our `profile` table extends that user with game data.
+These tables cover the MVP. Better Auth creates and owns its own user, session and account tables; our `profile` table extends that user with game data.
 
 | Table | Key fields | Purpose |
 | --- | --- | --- |
-| profile | user_id, username (citext: unique ignoring case), total_xp (cached), avatar_stage, bodyweight_kg, weekly_target, streak_weeks, created_at | Game identity for each user |
-| exercise | id, slug, name, muscle_group, body_part, equipment, reps_unit (reps or seconds), load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises later via owner_id. Tuning values never leave the server |
-| workout | id, user_id, client_id (unique per user), name, started_at, finished_at | One gym session; client_id makes "Finish" safe to retry. History is ordered by started_at |
-| workout_exercise | id, workout_id, exercise_id, order | Which exercises were done, in order (exercises in history can't be deleted) |
-| workout_set | id, workout_exercise_id, reps, weight_kg, set_order | Each set performed. weight_kg is per dumbbell for dumbbell lifts and added weight for bodyweight exercises; plank logs seconds in reps for now |
-| xp_event | id, user_id, amount, source, source_id, body_part, created_at | The XP ledger: one row per XP gain |
+| profile | user_id, username (citext: unique ignoring case), total_xp (cached), avatar_stage, weekly_target, streak_weeks, created_at | Game identity for each user |
+| bodyweight_entry | id, user_id, kg, measured_on (date) | Bodyweight history. XP uses the entry in effect on the workout's date (75 kg fallback when there is none) |
+| exercise | id, slug, name, muscle_group, body_part, equipment, mechanic (compound or isolation), reps_unit (reps or seconds), suggested_rest_sec, load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises via owner_id. Tuning values are sent to the app for display; the server recomputes |
+| exercise_preference | user_id, exercise_id, rest_sec | The player's own choices per exercise (rest time first). Highest priority: preference > routine > exercise suggestion > 120 s |
+| routine | id, user_id, name, created_at, updated_at | A saved plan |
+| routine_exercise | id, routine_id, exercise_id, order, target_sets, target_reps, rest_sec | The plan's exercises. A workout COPIES these when it starts, so editing a routine never changes history |
+| workout | id, user_id, client_id (unique per user), routine_id (optional link; cleared if the routine is deleted), name, started_at, finished_at | One gym session; client_id makes "Finish" safe to retry. History is ordered by started_at |
+| workout_exercise | id, workout_id, exercise_id, order, rest_sec | Which exercises were done, in order (exercises in history can't be deleted) |
+| workout_set | id, workout_exercise_id, reps, weight_kg, set_order, completed_at, is_flagged, flag_reason | Each set performed. weight_kg is per dumbbell for dumbbell lifts and added weight for bodyweight exercises; plank logs seconds in reps for now |
+| xp_event | id, user_id, amount, source, source_id, body_part, created_at | The XP ledger: one row per XP gain (one per completed set for workout XP). Unique on (source, source_id), so a repeated request can never award XP twice |
 | avatar_stage | level_required, name, asset_key | Growth stages of the avatar, stored as data |
 | cosmetic | id, slot, name, unlock_rule | Later: unlockable items (hair, outfit, pose) |
 
@@ -141,8 +145,11 @@ XP to reach level n = 100 × (n − 1)^1.5
 
 That puts level 2 at 100 XP, level 5 at 800 XP, level 10 at 2,700 XP and level 20 at about 8,300 XP. These numbers are a first guess to tune once real workouts are logged.
 
-- **Where XP comes from:** workout volume (sets × reps × weight) plus a weekly consistency bonus and streak (MVP); muscle-group variety, quests and achievements later, each as a new `source` in the ledger.
-- **Who calculates it:** the progression service on the server, in the same database transaction that saves the workout.
+- **Where XP comes from:** workout volume plus a weekly consistency bonus and streak (MVP); muscle-group variety, quests and achievements later, each as a new `source` in the ledger.
+- **XP per completed set** = round(reps × effective kg / 10), where effective kg = (kg + bodyweight × `bodyweight_ratio`) × `load_factor`. Bodyweight is the entry in effect on the workout's date (75 kg if none). A 0 kg pull-up therefore still earns XP. This is one function in `packages/shared`, so it is easy to swap.
+- **Personal records** (calculated on read from logged sets): estimated 1RM by Epley, kg × (1 + reps / 30), on effective kg; a single rep counts as the weight lifted. Sets above 12 reps don't count toward estimated-1RM PRs; they are tracked as "most reps at a weight". Timed exercises (plank) use the longest hold. Bodyweight sets are shown as "BW + x kg".
+- **Coach hint** (fixed rules, no AI): double progression. Raise the weight only when every set hit its target reps last time; the increment is configured per equipment type (default +2.5 kg barbell and machine, +1 kg per dumbbell).
+- **Who calculates it:** the progression service on the server, in the same database transaction that saves the workout. The app runs the same shared functions only to show live XP, PRs and hints during a workout; the server recomputes and is the only one that awards anything.
 - **Where the formula lives:** `packages/shared`, with unit tests, so app and server agree on level boundaries.
 - **Level-up moment:** the "Finish workout" response returns XP gained, old level and new level, so the app can play the level-up screen without a second request.
 
@@ -204,12 +211,16 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: a new user signs up on the phone and lands on an auth-guarded home screen.
 4. **Workout logging.** Exercise library, start a workout, add sets offline, finish with a safe retry.
    - Done when: a workout logged in airplane mode saves exactly once after reconnecting.
-5. **Progression.** XP ledger, level formula, XP bar, level-up screen.
+4c. **Routines and active workout.** Saved routines (list, detail, builder), the active workout screen with a rest timer and notification, estimated 1RM and PRs, XP per set written to the ledger, the workout summary and exercise history. Pulls the XP ledger and PRs forward from Milestone 5.
+   - Done when: starting a routine pre-fills the active workout, the rest timer is correct after the app was in the background, and Finish shows XP earned and new PRs, saved exactly once.
+5. **Progression.** Level-up screen, weekly-target and streak bonuses, daily XP cap (the ledger, level formula and XP bar arrive in 4c).
    - Done when: finishing a workout shows XP gained and, when earned, a level-up.
 6. **Stickman avatar.** Growth stages driven by level, body parts driven by body-part XP.
    - Done when: the avatar visibly changes at levels 5, 10, 15 and 20, and untrained body parts stay thin.
 7. **Beta readiness.** Hosting, Sentry, EAS builds, testers on TestFlight and Google Play internal testing.
    - Done when: five real people use it at the gym for two weeks.
+
+Later, not yet scheduled: **session backup sync**, an idempotent `PUT /sessions/:clientId` that uploads the whole in-progress session every minute or so. It protects against a lost phone and gives the server its own receive times, which the anti-cheat checks need (sets far above the player's history, or completed implausibly fast, get `is_flagged`, earn no XP and don't count as PRs until confirmed).
 
 After the beta: variety bonus, quests, achievements, the rules-based coach, cosmetics, then leaderboards and social features.
 
@@ -219,6 +230,17 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-11 | Milestone 4c: routines and the active workout, pulling the XP ledger and PRs forward from Milestone 5 | A bigger milestone; the core loop (log, earn XP, see progress) works end to end sooner |
+| 2026-11-11 | Stay local-first: the session lives on the phone and is sent whole at Finish through the outbox, now with each set's completed_at and rest_sec. Backup sync (`PUT /sessions/:clientId`) is a later milestone | Nothing reaches the server mid-workout, so a lost phone loses that session; no per-set sync protocol or half-finished sessions on the server |
+| 2026-11-11 | Progression maths (XP, estimated 1RM, PRs, coach hint, rest priority) are pure functions in `packages/shared`; the app uses them for live display, the server recomputes at Finish. `load_factor` and `bodyweight_ratio` are now sent to the app (supersedes the 2026-11-10 "server-only" decision) | Tuning values are public; harmless, because the client's numbers are never trusted |
+| 2026-11-11 | XP per set = round(reps × effective kg / 10), effective kg = (kg + bodyweight × bodyweight_ratio) × load_factor | Needs bodyweight; bodyweight and light exercises are no longer penalised |
+| 2026-11-11 | Bodyweight is a dated history (asked at sign-up); XP uses the value in effect on the workout's date, 75 kg if unknown | One more table and a lookup; old workouts keep their XP when bodyweight changes |
+| 2026-11-11 | Estimated-1RM PRs on effective kg, single rep = weight lifted, sets above 12 reps excluded (tracked as most reps at weight), plank = longest hold | Several PR kinds to show; no misleading 1RMs from high-rep sets |
+| 2026-11-11 | Coach hint uses double progression with increments configured per equipment type | Conservative suggestions; no AI, fully predictable and testable |
+| 2026-11-11 | The player's rest time per exercise is stored on the server (`exercise_preference`), written at Finish | Saved only when a workout is finished; follows the player to a new phone |
+| 2026-11-11 | `xp_event` is unique on (source, source_id), one event per completed set | Many ledger rows; a repeated request can never award XP twice, and each row carries its body part |
+| 2026-11-11 | Keep the names Workout / WorkoutExercise / WorkoutSet (not Session / Set) | Names differ from the spec's wording; no migration churn, and `Set` would hide JavaScript's built-in Set type |
+| 2026-11-11 | Exercise filters use the six body parts; search still matches muscle-group text | Coarser filter; fits a phone width and matches the avatar's body parts |
 | 2026-11-10 | App state persists to `expo-sqlite/kv-store` with its synchronous API | A tiny write on the JS thread per change; state restores before the first render and is on disk the moment Finish returns |
 | 2026-11-10 | Outbox: oldest first, one at a time; network errors, 5xx, 401, 408 and 429 retry with backoff (2 s doubling to 5 min, +/-20% jitter); other 4xx stop as "needs attention" | A retrying workout holds the ones behind it; order is kept for XP and streaks, and one rejected workout never blocks the rest |
 | 2026-11-10 | Finish sends only completed sets; a workout left open past 6 hours ends at its last completed set | Unticked sets are dropped silently; a forgotten Finish still saves instead of being rejected for good |
