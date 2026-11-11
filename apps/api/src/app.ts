@@ -6,6 +6,7 @@ import { healthRouter } from "./modules/health/health.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 import { exercisesRouter } from "./modules/exercises/exercises.routes.js";
 import { workoutsRouter } from "./modules/workouts/workouts.routes.js";
+import { routinesRouter } from "./modules/routines/routines.routes.js";
 import { notFound } from "./middleware/not-found.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
@@ -28,6 +29,7 @@ export function createApp() {
   app.use(usersRouter);
   app.use(exercisesRouter);
   app.use(workoutsRouter);
+  app.use(routinesRouter);
 
   app.use(notFound); // after all routes
   app.use(errorHandler); // always last

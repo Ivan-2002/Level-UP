@@ -13,6 +13,7 @@
 export * from "./profile.js";
 export * from "./workouts.js";
 export * from "./progression.js";
+export * from "./routines.js";
 
 /** Response of GET /health. */
 export type HealthResponse = {

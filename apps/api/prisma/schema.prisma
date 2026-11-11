@@ -211,14 +211,17 @@ model ExercisePreference {
 // ---------------------------------------------------------------------------
 
 model Routine {
-  id        String            @id @default(uuid(7)) @db.Uuid
-  userId    String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  exercises RoutineExercise[]
-  workouts  Workout[]
+  id         String            @id @default(uuid(7)) @db.Uuid
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  // Cached: when a workout from this routine last STARTED. Set by the workouts module at
+  // Finish (never moved backwards), so listing routines needs no workout query.
+  lastDoneAt DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  exercises  RoutineExercise[]
+  workouts   Workout[]
 
   @@index([userId])
   @@map("routine")

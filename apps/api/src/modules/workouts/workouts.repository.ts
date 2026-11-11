@@ -1,3 +1,4 @@
+import { isUuid } from "../../lib/ids.js";
 import { prisma } from "../../lib/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 
@@ -37,10 +38,6 @@ export type NewWorkout = {
   exercises: { exerciseId: string; sets: { reps: number; weightKg: number }[] }[];
 };
 
-// Workout ids are Postgres UUID columns. Anything else can't match a row, and passing it
-// to Postgres would raise an error (a 500) instead of simply finding nothing.
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function findByClientId(userId: string, clientId: string): Promise<WorkoutDetailRow | null> {
   return prisma.workout.findUnique({
     where: { userId_clientId: { userId, clientId } },
@@ -53,7 +50,7 @@ export function findByClientId(userId: string, clientId: string): Promise<Workou
  * there is no fetch-then-check step that could ever leak it.
  */
 export async function findByIdForUser(userId: string, id: string): Promise<WorkoutDetailRow | null> {
-  if (!UUID_PATTERN.test(id)) return null;
+  if (!isUuid(id)) return null;
   return prisma.workout.findFirst({ where: { id, userId }, include: withExercisesAndSets });
 }
 
