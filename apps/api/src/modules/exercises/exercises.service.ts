@@ -27,5 +27,6 @@ function toExercise(row: repo.ExerciseRow): Exercise {
     muscleGroup: row.muscleGroup,
     bodyPart: row.bodyPart,
     equipment: row.equipment,
+    repsUnit: row.repsUnit,
   };
 }

@@ -38,6 +38,6 @@ I'm a software engineering student and this project is how I learn. Act as a sen
 - Milestone 2 (Foundation) is done: monorepo, Docker Postgres, Prisma 7, Express API with `/health`, Expo app with a system-check screen, `@levelup/shared` (health contract + XP formula, tested), GitHub Actions CI.
 - Milestone 3 (Authentication) is code-complete: Better Auth (email + password), sign-up/sign-in screens, SecureStore sessions, and the "Create your character" step (`GET`/`POST /profile`, shown until the user has a profile). Remaining: verify the full flow on a phone.
 - API integration tests: Vitest + Supertest against a real `levelup_test` database (`pnpm test` needs Docker Postgres running).
-- Milestone 4 (Workout logging) is in progress. 4a, the API, is done: exercise library (`pnpm --filter api db:seed`), idempotent `POST /workouts`, `GET /workouts` (keyset pages), `GET /workouts/:id`. Next is 4b: the app's logging screens with offline storage (Zustand).
+- Milestone 4 (Workout logging) is in progress. 4a, the API, is done: exercise library (`pnpm --filter api db:seed`), idempotent `POST /workouts`, `GET /workouts` (keyset pages), `GET /workouts/:id`. 4b, the app, is code-complete: log workout screen, exercise picker (offline cache), a persisted active workout and an outbox that retries (unit-tested with jest-expo). Remaining: by-hand test on a simulator, including flight mode.
 
 See the roadmap in `docs/ARCHITECTURE.md`.

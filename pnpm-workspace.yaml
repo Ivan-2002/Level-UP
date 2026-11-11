@@ -1,8 +1,12 @@
 packages:
   - "apps/*"
   - "packages/*"
+# Which dependencies may run install scripts (pnpm blocks them by default: they're a
+# common supply-chain attack vector). false = deliberately not run.
 allowBuilds:
   "@prisma/engines": true
   esbuild: true
   prisma: true
+  # Optional native file watcher pulled in by Jest; Jest works without it.
+  "@parcel/watcher": false
 nodeLinker: hoisted

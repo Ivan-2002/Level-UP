@@ -28,12 +28,14 @@ export function findUsableExercisesByIds(userId: string, ids: string[]): Promise
  */
 export async function upsertCatalog(entries: CatalogExercise[]): Promise<void> {
   await prisma.$transaction(
-    entries.map(({ slug, ...fields }) =>
-      prisma.exercise.upsert({
+    entries.map(({ slug, repsUnit = "reps", ...rest }) => {
+      // Always written, so removing repsUnit from a catalog entry resets it to "reps".
+      const fields = { ...rest, repsUnit };
+      return prisma.exercise.upsert({
         where: { slug },
         create: { slug, ...fields },
         update: fields,
-      }),
-    ),
+      });
+    }),
   );
 }

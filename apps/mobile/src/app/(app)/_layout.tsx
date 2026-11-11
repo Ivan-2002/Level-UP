@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
+import { exercisesQuery } from "@/features/exercises/use-exercises";
+import { useOutboxSync } from "@/features/workouts/outbox-sync";
 import { Button } from "@/components/Button";
 import { colors } from "@/theme/colors";
 
@@ -15,6 +18,16 @@ export default function AppLayout() {
   const { data: session } = authClient.useSession();
   const { data: profile, isPending, isError, error, refetch, isRefetching } = useProfile(session?.user.id);
   const queryClient = useQueryClient();
+
+  // Keep sending finished workouts while signed in (stops on sign-out). Hooks must run
+  // before any early return below: React needs the same hooks in the same order every render.
+  useOutboxSync(session?.user.id);
+
+  // Load the exercise library as soon as we're signed in, so it's saved on the phone
+  // before the player is at the gym with no signal.
+  useEffect(() => {
+    if (session?.user.id) void queryClient.prefetchQuery(exercisesQuery);
+  }, [session?.user.id, queryClient]);
 
   async function signOut() {
     await authClient.signOut();
@@ -49,6 +62,8 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={hasProfile}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="workout" />
+        <Stack.Screen name="exercise-picker" options={{ presentation: "modal" }} />
       </Stack.Protected>
       <Stack.Protected guard={!hasProfile}>
         <Stack.Screen name="create-character" />

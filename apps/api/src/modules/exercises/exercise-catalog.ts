@@ -1,4 +1,4 @@
-import type { BodyPart, Equipment } from "@levelup/shared";
+import type { BodyPart, Equipment, RepsUnit } from "@levelup/shared";
 
 // The built-in exercise library. `pnpm db:seed` upserts these by slug, so editing a value
 // here and re-seeding retunes it in the database without creating duplicates.
@@ -21,7 +21,8 @@ import type { BodyPart, Equipment } from "@levelup/shared";
 // LOGGING CONVENTIONS the app must show in its UI:
 // - Dumbbell weight is PER DUMBBELL (the number printed on it). Factors account for that.
 // - Bodyweight exercises log ADDED weight (belt, vest); 0 for plain reps.
-// - Plank logs seconds held in the reps field (so at most 100 s per set for now).
+// - Plank logs seconds held in the reps field (so at most 100 s per set for now). It is
+//   marked repsUnit: "seconds" so the app can label the column, without hard-coding names.
 
 export type CatalogExercise = {
   slug: string;
@@ -31,6 +32,8 @@ export type CatalogExercise = {
   equipment: Equipment;
   loadFactor: number;
   bodyweightRatio: number;
+  /** Defaults to "reps". */
+  repsUnit?: RepsUnit;
 };
 
 //  Comment = the "typical hard set" the factor was derived from.
@@ -75,7 +78,7 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   { slug: "dip", name: "Dip", muscleGroup: "Triceps & chest", bodyPart: "arms", equipment: "bodyweight", loadFactor: 1.0, bodyweightRatio: 0.95 }, // (0 + 76) x 10
 
   // --- Core ---------------------------------------------------------------
-  { slug: "plank", name: "Plank", muscleGroup: "Abs", bodyPart: "core", equipment: "bodyweight", loadFactor: 0.35, bodyweightRatio: 0.5 }, // (0 + 40) x 60 s
+  { slug: "plank", name: "Plank", muscleGroup: "Abs", bodyPart: "core", equipment: "bodyweight", loadFactor: 0.35, bodyweightRatio: 0.5, repsUnit: "seconds" }, // (0 + 40) x 60 s
   { slug: "hanging-leg-raise", name: "Hanging Leg Raise", muscleGroup: "Abs", bodyPart: "core", equipment: "bodyweight", loadFactor: 2.4, bodyweightRatio: 0.35 }, // (0 + 28) x 12
   { slug: "ab-wheel-rollout", name: "Ab Wheel Rollout", muscleGroup: "Abs", bodyPart: "core", equipment: "bodyweight", loadFactor: 2.0, bodyweightRatio: 0.5 }, // (0 + 40) x 10
   { slug: "cable-crunch", name: "Cable Crunch", muscleGroup: "Abs", bodyPart: "core", equipment: "cable", loadFactor: 1.3, bodyweightRatio: 0 }, // 40 x 15

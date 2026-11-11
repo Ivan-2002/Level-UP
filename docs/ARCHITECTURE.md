@@ -38,7 +38,7 @@ TypeScript runs end to end, so types are shared between the app and the API. Thi
 | Mobile app | React Native + Expo + TypeScript | One codebase for iOS and Android; Expo handles builds, store submission and over-the-air updates |
 | Navigation | Expo Router | File-based routes, auth-guarded route groups, deep linking |
 | Server data | TanStack Query | Caching, retries and refetching for API data |
-| Local UI state | Zustand (persisted) | Holds the in-progress workout on the device |
+| Local UI state | Zustand (persisted to `expo-sqlite/kv-store`) | Holds the in-progress workout and the outbox of finished workouts on the device |
 | API | Node.js + Express + TypeScript | Own backend; the service layer owns all workout, XP and level rules |
 | Validation | Zod (shared) | One schema validates requests on the server and forms in the app |
 | Database | PostgreSQL + Prisma | Relational data fits workouts and sets; Prisma gives typed queries and migrations |
@@ -121,7 +121,7 @@ Eight tables cover the MVP. Better Auth creates and owns its own user, session a
 | Table | Key fields | Purpose |
 | --- | --- | --- |
 | profile | user_id, username (citext: unique ignoring case), total_xp (cached), avatar_stage, bodyweight_kg, weekly_target, streak_weeks, created_at | Game identity for each user |
-| exercise | id, slug, name, muscle_group, body_part, equipment, load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises later via owner_id. Tuning values never leave the server |
+| exercise | id, slug, name, muscle_group, body_part, equipment, reps_unit (reps or seconds), load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises later via owner_id. Tuning values never leave the server |
 | workout | id, user_id, client_id (unique per user), name, started_at, finished_at | One gym session; client_id makes "Finish" safe to retry. History is ordered by started_at |
 | workout_exercise | id, workout_id, exercise_id, order | Which exercises were done, in order (exercises in history can't be deleted) |
 | workout_set | id, workout_exercise_id, reps, weight_kg, set_order | Each set performed. weight_kg is per dumbbell for dumbbell lifts and added weight for bodyweight exercises; plank logs seconds in reps for now |
@@ -183,7 +183,7 @@ These are designed in from day one but switched on when the milestone needs them
 | --- | --- | --- |
 | Code quality | ESLint, Prettier, strict TypeScript | Milestone 1.5 |
 | CI | GitHub Actions: type check, lint and tests on every push | Milestone 1.5 |
-| Tests | Vitest unit tests for pure logic (XP formula, shared schemas); API integration tests with Supertest against a real Postgres test database (`levelup_test`, wiped before each test; CI uses a Postgres service container) | From Milestone 2 |
+| Tests | Vitest unit tests for pure logic (XP formula, shared schemas); Jest (`jest-expo`, as Expo recommends) for the app's workout and outbox logic; API integration tests with Supertest against a real Postgres test database (`levelup_test`, wiped before each test; CI uses a Postgres service container) | From Milestone 2 |
 | Config and secrets | `.env` files validated at startup with Zod; never committed | Milestone 1.5 |
 | Errors and crashes | Sentry in the app and the API | Before beta |
 | Hosting | API in a Docker container on a managed host; managed Postgres with backups | Before beta |
@@ -219,6 +219,11 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-10 | App state persists to `expo-sqlite/kv-store` with its synchronous API | A tiny write on the JS thread per change; state restores before the first render and is on disk the moment Finish returns |
+| 2026-11-10 | Outbox: oldest first, one at a time; network errors, 5xx, 401, 408 and 429 retry with backoff (2 s doubling to 5 min, +/-20% jitter); other 4xx stop as "needs attention" | A retrying workout holds the ones behind it; order is kept for XP and streaks, and one rejected workout never blocks the rest |
+| 2026-11-10 | Finish sends only completed sets; a workout left open past 6 hours ends at its last completed set | Unticked sets are dropped silently; a forgotten Finish still saves instead of being rejected for good |
+| 2026-11-10 | The exercise list is cached on the phone by hand (not TanStack's persister) and re-validated with the shared schema on read | A little custom code; no extra packages, and an outdated cache is discarded instead of crashing |
+| 2026-11-10 | Exercises carry `repsUnit` so the app labels timed exercises from data, not names | One more column; custom timed exercises will just work |
 | 2026-11-10 | Send the whole workout once, at Finish (not set by set) | Nothing reaches the server until Finish, so a lost phone loses the session in progress; in exchange, one simple request, no half-saved workouts and no sync protocol |
 | 2026-11-10 | Finish is idempotent by `clientId`, unique per user; a repeat returns 200 with the first saved version | A retry carrying edited data is ignored; a global key would have let one user's retry return another user's workout |
 | 2026-11-10 | Personal records (best set, estimated 1RM) are calculated on read from logged sets, never stored | Reads do more work as history grows (cache it later if needed); records can never drift from the sets, and changing a formula needs no data migration |

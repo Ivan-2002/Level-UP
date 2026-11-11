@@ -125,6 +125,14 @@ enum Equipment {
   @@map("equipment")
 }
 
+// What the "reps" number of a set means for this exercise. Plank is held, not repeated.
+enum RepsUnit {
+  reps
+  seconds
+
+  @@map("reps_unit")
+}
+
 model Exercise {
   id              String            @id @default(uuid(7)) @db.Uuid
   // Stable key for built-in exercises, so the seed can upsert ("barbell-back-squat").
@@ -134,6 +142,7 @@ model Exercise {
   muscleGroup     String // finer than bodyPart, for display ("Lats", "Quadriceps")
   bodyPart        BodyPart
   equipment       Equipment
+  repsUnit        RepsUnit  @default(reps)
   // XP tuning (Milestone 5): effective load = (weight + bodyweight x bodyweightRatio) x loadFactor
   loadFactor      Decimal           @db.Decimal(4, 2)
   bodyweightRatio Decimal           @default(0) @db.Decimal(3, 2)

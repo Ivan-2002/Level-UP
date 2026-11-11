@@ -17,6 +17,11 @@ export const EQUIPMENT = ["barbell", "dumbbell", "machine", "cable", "bodyweight
 export const equipmentSchema = z.enum(EQUIPMENT);
 export type Equipment = z.infer<typeof equipmentSchema>;
 
+/** What a set's `reps` number counts: repetitions, or seconds held (plank). */
+export const REPS_UNITS = ["reps", "seconds"] as const;
+export const repsUnitSchema = z.enum(REPS_UNITS);
+export type RepsUnit = z.infer<typeof repsUnitSchema>;
+
 // --- Limits (server-enforced; the app shows them as form hints) -------------
 
 export const REPS_MIN = 1;
@@ -113,6 +118,7 @@ export const exerciseSchema = z.object({
   muscleGroup: z.string(),
   bodyPart: bodyPartSchema,
   equipment: equipmentSchema,
+  repsUnit: repsUnitSchema,
 });
 export type Exercise = z.infer<typeof exerciseSchema>;
 
