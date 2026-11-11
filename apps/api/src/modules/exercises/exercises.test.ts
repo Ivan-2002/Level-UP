@@ -54,6 +54,17 @@ describe("exercise catalog", () => {
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
+  it("suggests rest in 15 s steps, inside each mechanic's range", () => {
+    const ranges = { compound: [120, 180], isolation: [45, 90] } as const;
+    for (const e of EXERCISE_CATALOG) {
+      const [min, max] = ranges[e.mechanic];
+      expect(e.suggestedRestSec % 15, e.slug).toBe(0);
+      // Push-ups are a compound movement but bodyweight: allowed the shorter 1:30.
+      expect(e.suggestedRestSec, e.slug).toBeGreaterThanOrEqual(e.slug === "push-up" ? 90 : min);
+      expect(e.suggestedRestSec, e.slug).toBeLessThanOrEqual(max);
+    }
+  });
+
   it("only gives a bodyweight share to exercises that move your body", () => {
     for (const e of EXERCISE_CATALOG) {
       expect(e.bodyweightRatio, e.slug).toBeGreaterThanOrEqual(0);

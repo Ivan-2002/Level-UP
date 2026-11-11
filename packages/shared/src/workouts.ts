@@ -17,6 +17,11 @@ export const EQUIPMENT = ["barbell", "dumbbell", "machine", "cable", "bodyweight
 export const equipmentSchema = z.enum(EQUIPMENT);
 export type Equipment = z.infer<typeof equipmentSchema>;
 
+/** Compound = several joints, heavy; isolation = one joint. Drives the suggested rest range. */
+export const MECHANICS = ["compound", "isolation"] as const;
+export const mechanicSchema = z.enum(MECHANICS);
+export type Mechanic = z.infer<typeof mechanicSchema>;
+
 /** What a set's `reps` number counts: repetitions, or seconds held (plank). */
 export const REPS_UNITS = ["reps", "seconds"] as const;
 export const repsUnitSchema = z.enum(REPS_UNITS);
