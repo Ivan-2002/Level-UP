@@ -116,7 +116,10 @@ export type ListWorkoutsQuery = z.infer<typeof listWorkoutsQuerySchema>;
 
 // --- Responses ---------------------------------------------------------------
 
-/** An exercise as the app sees it. XP tuning values (loadFactor, bodyweightRatio) stay on the server. */
+/**
+ * An exercise as the app sees it, including the XP tuning values: the app uses them only
+ * to show live XP during a workout; the server recomputes everything at Finish.
+ */
 export const exerciseSchema = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -124,8 +127,33 @@ export const exerciseSchema = z.object({
   bodyPart: bodyPartSchema,
   equipment: equipmentSchema,
   repsUnit: repsUnitSchema,
+  mechanic: mechanicSchema,
+  suggestedRestSec: z.number().int(),
+  loadFactor: z.number(),
+  bodyweightRatio: z.number(),
+  isCustom: z.boolean(),
+  /** The player's own rest time for this exercise (highest priority), or null. */
+  restPreferenceSec: z.number().int().nullable(),
 });
 export type Exercise = z.infer<typeof exerciseSchema>;
+
+/** Query of GET /exercises. Each search word must match the name or the muscle group. */
+export const listExercisesQuerySchema = z.object({
+  search: z.string().trim().max(60).optional(),
+  bodyPart: bodyPartSchema.optional(),
+});
+export type ListExercisesQuery = z.infer<typeof listExercisesQuerySchema>;
+
+/** Body of POST /exercises: a custom exercise. The server picks its XP tuning values. */
+export const createExerciseSchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters.").max(40, "Name must be at most 40 characters."),
+  muscleGroup: z.string().trim().min(2, "Muscle group must be at least 2 characters.").max(40),
+  bodyPart: bodyPartSchema,
+  equipment: equipmentSchema,
+  mechanic: mechanicSchema,
+  repsUnit: repsUnitSchema.default("reps"),
+});
+export type CreateExerciseInput = z.infer<typeof createExerciseSchema>;
 
 /** Response of GET /exercises. */
 export const exerciseListSchema = z.object({ items: z.array(exerciseSchema) });

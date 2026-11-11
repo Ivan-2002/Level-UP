@@ -1,6 +1,6 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BODY_PARTS, exerciseListSchema } from "@levelup/shared";
+import { BODY_PARTS, exerciseListSchema, exerciseSchema } from "@levelup/shared";
 import { app, seedExercises, signUpUser } from "../../test/helpers.js";
 import { EXERCISE_CATALOG } from "./exercise-catalog.js";
 
@@ -36,15 +36,121 @@ describe("GET /exercises", () => {
     expect(timed.map((e: { name: string }) => e.name)).toEqual(["Plank"]);
   });
 
-  it("keeps XP tuning values on the server", async () => {
+  it("includes the XP tuning values and rest suggestion the app needs for live display", async () => {
     const user = await signUpUser();
 
     const res = await request(app).get("/exercises").set("Cookie", user.cookie);
 
-    for (const exercise of res.body.items) {
-      expect(exercise).not.toHaveProperty("loadFactor");
-      expect(exercise).not.toHaveProperty("bodyweightRatio");
-    }
+    expect(res.body.items).toContainEqual(
+      expect.objectContaining({
+        name: "Pull-up",
+        loadFactor: 1.25,
+        bodyweightRatio: 1,
+        mechanic: "compound",
+        suggestedRestSec: 150,
+        isCustom: false,
+        restPreferenceSec: null,
+      }),
+    );
+  });
+
+  it("searches name OR muscle group, ignoring case, every word must match", async () => {
+    const user = await signUpUser();
+    const search = async (q: string) =>
+      (await request(app).get(`/exercises?search=${encodeURIComponent(q)}`).set("Cookie", user.cookie)).body.items.map(
+        (e: { name: string }) => e.name,
+      );
+
+    expect(await search("BENCH")).toEqual(["Bench Press"]);
+    expect(await search("lats")).toEqual(expect.arrayContaining(["Pull-up", "Lat Pulldown", "One-arm Dumbbell Row"]));
+    // Sorted by body part in enum order (chest before shoulders), then name.
+    expect(await search("dumbbell press")).toEqual(["Incline Dumbbell Press", "Dumbbell Shoulder Press"]);
+  });
+
+  it("filters by body part, combined with search", async () => {
+    const user = await signUpUser();
+
+    const res = await request(app).get("/exercises?bodyPart=core&search=plank").set("Cookie", user.cookie);
+
+    expect(res.body.items.map((e: { name: string }) => e.name)).toEqual(["Plank"]);
+  });
+
+  it("rejects an unknown body part with 400", async () => {
+    const user = await signUpUser();
+
+    const res = await request(app).get("/exercises?bodyPart=wings").set("Cookie", user.cookie);
+
+    expect(res.status).toBe(400);
+    expect(res.body.issues[0].path).toBe("bodyPart");
+  });
+});
+
+describe("POST /exercises (custom exercise)", () => {
+  beforeEach(async () => {
+    await seedExercises();
+  });
+
+  const custom = { name: "Landmine Press", muscleGroup: "Front delts", bodyPart: "shoulders", equipment: "barbell", mechanic: "compound" };
+
+  it("creates it with conservative server-chosen XP tuning", async () => {
+    const user = await signUpUser();
+
+    const res = await request(app).post("/exercises").set("Cookie", user.cookie).send(custom);
+
+    expect(res.status).toBe(201);
+    expect(exerciseSchema.parse(res.body)).toMatchObject({
+      ...custom,
+      repsUnit: "reps",
+      isCustom: true,
+      loadFactor: 1,
+      bodyweightRatio: 0,
+      suggestedRestSec: 150,
+    });
+  });
+
+  it("ignores tuning values sent by the client", async () => {
+    const user = await signUpUser();
+
+    const res = await request(app)
+      .post("/exercises")
+      .set("Cookie", user.cookie)
+      .send({ ...custom, loadFactor: 50, bodyweightRatio: 1 });
+
+    expect(res.body).toMatchObject({ loadFactor: 1, bodyweightRatio: 0 });
+  });
+
+  it("gives bodyweight custom exercises a share of bodyweight so they still earn XP", async () => {
+    const user = await signUpUser();
+
+    const res = await request(app)
+      .post("/exercises")
+      .set("Cookie", user.cookie)
+      .send({ name: "Archer Push-up", muscleGroup: "Chest", bodyPart: "chest", equipment: "bodyweight", mechanic: "compound" });
+
+    expect(res.body.bodyweightRatio).toBe(0.6);
+  });
+
+  it("shows a custom exercise only to its owner", async () => {
+    const owner = await signUpUser();
+    const someoneElse = await signUpUser();
+    await request(app).post("/exercises").set("Cookie", owner.cookie).send(custom);
+
+    const names = async (user: typeof owner) =>
+      (await request(app).get("/exercises?search=landmine").set("Cookie", user.cookie)).body.items.map((e: { name: string }) => e.name);
+
+    expect(await names(owner)).toEqual(["Landmine Press"]);
+    expect(await names(someoneElse)).toEqual([]);
+  });
+
+  it("validates the body and needs a session", async () => {
+    const user = await signUpUser();
+
+    const invalid = await request(app).post("/exercises").set("Cookie", user.cookie).send({ ...custom, name: "X", equipment: "rock" });
+    const anonymous = await request(app).post("/exercises").send(custom);
+
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.issues.map((i: { path: string }) => i.path)).toEqual(["name", "equipment"]);
+    expect(anonymous.status).toBe(401);
   });
 });
 
