@@ -15,6 +15,19 @@ export const E1RM_MAX_REPS = 12;
 
 export type ExerciseTuning = { loadFactor: number; bodyweightRatio: number };
 
+/**
+ * The bodyweight to use for a workout on `date` (any ISO date-time; its UTC date counts):
+ * the latest entry on or before that day. If every entry is later, the earliest one
+ * (a better guess than a generic value); with no entries at all, the 75 kg fallback.
+ */
+export function bodyweightOnDate(entries: { kg: number; measuredOn: string }[], date: string): number {
+  if (entries.length === 0) return BODYWEIGHT_FALLBACK_KG;
+  const day = date.slice(0, 10);
+  const sorted = [...entries].sort((a, b) => a.measuredOn.localeCompare(b.measuredOn));
+  const inEffect = sorted.filter((e) => e.measuredOn <= day).at(-1);
+  return (inEffect ?? sorted[0]!).kg;
+}
+
 const round = (value: number, decimals: number) => {
   const f = 10 ** decimals;
   return Math.round(value * f) / f;

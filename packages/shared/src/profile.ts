@@ -37,6 +37,19 @@ export const createProfileSchema = z.object({
     .max(WEEKLY_TARGET_MAX, `Weekly target must be at most ${WEEKLY_TARGET_MAX}.`),
 });
 
+/** Body of POST /bodyweight. `measuredOn` is the player's LOCAL date; defaults to today. */
+export const recordBodyweightSchema = z.object({
+  kg: z
+    .number({ error: "Enter your bodyweight as a number." })
+    .min(BODYWEIGHT_MIN_KG, `Bodyweight must be at least ${BODYWEIGHT_MIN_KG} kg.`)
+    .max(BODYWEIGHT_MAX_KG, `Bodyweight must be at most ${BODYWEIGHT_MAX_KG} kg.`),
+  measuredOn: z.iso.date("Use a date like 2026-11-11.").optional(),
+});
+export type RecordBodyweightInput = z.infer<typeof recordBodyweightSchema>;
+
+/** One day's bodyweight. Response of POST /bodyweight. */
+export type BodyweightEntry = { kg: number; measuredOn: string /* YYYY-MM-DD */ };
+
 /** Body of POST /profile. */
 export type CreateProfileInput = z.infer<typeof createProfileSchema>;
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addToRecordBook,
+  bodyweightOnDate,
   clampRestSec,
   coachAdvice,
   coachHintText,
@@ -183,5 +184,22 @@ describe("coachAdvice (double progression)", () => {
     expect(coachHintText(coachAdvice({ ...barbell, lastSets: [], targetReps: 5 }), "reps")).toBe(
       "First time: pick a weight you can lift for 5 good reps.",
     );
+  });
+});
+
+describe("bodyweightOnDate", () => {
+  const entries = [
+    { kg: 82, measuredOn: "2026-10-01" },
+    { kg: 80, measuredOn: "2026-11-01" },
+  ];
+
+  it("uses the latest entry on or before the workout's date", () => {
+    expect(bodyweightOnDate(entries, "2026-10-15T07:00:00.000Z")).toBe(82);
+    expect(bodyweightOnDate(entries, "2026-11-01T18:00:00.000Z")).toBe(80);
+  });
+
+  it("uses the earliest entry for a workout before any entry, and 75 kg with none at all", () => {
+    expect(bodyweightOnDate(entries, "2026-09-01T07:00:00.000Z")).toBe(82);
+    expect(bodyweightOnDate([], "2026-09-01T07:00:00.000Z")).toBe(75);
   });
 });

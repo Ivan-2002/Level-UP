@@ -1,4 +1,4 @@
-import { prisma } from "../../lib/prisma.js";
+import { prisma, type Db } from "../../lib/prisma.js";
 import { Prisma, type Profile as ProfileRow } from "../../generated/prisma/client.js";
 
 // The repository is the ONLY file in this module that talks to Prisma.
@@ -53,6 +53,25 @@ export async function insertProfile(data: NewProfile): Promise<ProfileRecord | "
   }
 }
 
+/** One entry per day: recording today's weight again replaces it. */
+export function upsertBodyweight(userId: string, kg: number, measuredOn: Date) {
+  return prisma.bodyweightEntry.upsert({
+    where: { userId_measuredOn: { userId, measuredOn } },
+    create: { userId, kg, measuredOn },
+    update: { kg },
+  });
+}
+
+export function findBodyweightEntries(userId: string, db: Db = prisma) {
+  return db.bodyweightEntry.findMany({ where: { userId }, orderBy: { measuredOn: "asc" }, select: { kg: true, measuredOn: true } });
+}
+
+/** Keeps the cached total in step with the XP ledger (called inside Finish's transaction). */
+export async function incrementTotalXp(db: Db, userId: string, amount: number): Promise<number> {
+  const profile = await db.profile.update({ where: { userId }, data: { totalXp: { increment: amount } }, select: { totalXp: true } });
+  return profile.totalXp;
+}
+
 async function withLatestBodyweight(row: ProfileRow): Promise<ProfileRecord> {
   const latest = await prisma.bodyweightEntry.findFirst({
     where: { userId: row.userId },
@@ -63,6 +82,6 @@ async function withLatestBodyweight(row: ProfileRow): Promise<ProfileRecord> {
 }
 
 /** Today's calendar date in UTC, as Postgres DATE columns want it (midnight, no time). */
-function todayUtc(): Date {
+export function todayUtc(): Date {
   return new Date(new Date().toISOString().slice(0, 10));
 }

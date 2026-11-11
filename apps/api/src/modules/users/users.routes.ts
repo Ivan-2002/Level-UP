@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createProfileSchema } from "@levelup/shared";
+import { createProfileSchema, recordBodyweightSchema } from "@levelup/shared";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import * as controller from "./users.controller.js";
@@ -13,3 +13,6 @@ usersRouter.get("/me", requireAuth, controller.getMe);
 
 usersRouter.get("/profile", requireAuth, controller.getProfile);
 usersRouter.post("/profile", requireAuth, validateBody(createProfileSchema), controller.createProfile);
+
+// Bodyweight is a dated history: XP uses the value in effect on each workout's date.
+usersRouter.post("/bodyweight", requireAuth, validateBody(recordBodyweightSchema), controller.recordBodyweight);

@@ -1,4 +1,5 @@
-import type { CreateProfileInput, Profile } from "@levelup/shared";
+import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput } from "@levelup/shared";
+import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import * as repo from "./users.repository.js";
 
@@ -27,6 +28,34 @@ export async function createProfile(userId: string, input: CreateProfileInput): 
     throw (await repo.findProfileByUserId(userId)) ? profileExists() : usernameTaken();
   }
   return toProfile(result);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Records the player's bodyweight for a day (their LOCAL date when the app sends one).
+ * A date up to one day ahead of the server's UTC date is allowed: it's already
+ * "tomorrow" in timezones east of UTC.
+ */
+export async function recordBodyweight(userId: string, input: RecordBodyweightInput): Promise<BodyweightEntry> {
+  const today = repo.todayUtc();
+  const measuredOn = input.measuredOn ? new Date(input.measuredOn) : today;
+  if (measuredOn.getTime() > today.getTime() + DAY_MS) {
+    throw new AppError("invalid", "FutureDate", "Bodyweight can't be recorded for a future date.");
+  }
+  const row = await repo.upsertBodyweight(userId, input.kg, measuredOn);
+  return { kg: row.kg.toNumber(), measuredOn: row.measuredOn.toISOString().slice(0, 10) };
+}
+
+/** Every bodyweight entry, oldest first (pass `db` to read inside a transaction). */
+export async function bodyweightHistory(userId: string, db?: Db): Promise<BodyweightEntry[]> {
+  const rows = await repo.findBodyweightEntries(userId, db);
+  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: r.measuredOn.toISOString().slice(0, 10) }));
+}
+
+/** Adds to the cached total XP; returns the new total. The ledger stays the source of truth. */
+export function addTotalXp(db: Db, userId: string, amount: number): Promise<number> {
+  return repo.incrementTotalXp(db, userId, amount);
 }
 
 const profileExists = () =>
