@@ -1,34 +1,70 @@
-import Svg, { Circle, Path } from "react-native-svg";
+import type { ComponentType } from "react";
+import type { LucideProps } from "lucide-react-native";
+// One import per icon (not `import { Check } from "lucide-react-native"`): the package's
+// index pulls in all ~1,500 icons, and Metro can't reliably drop the unused ones.
+import Award from "lucide-react-native/icons/award";
+import Check from "lucide-react-native/icons/check";
+import ChevronLeft from "lucide-react-native/icons/chevron-left";
+import ChevronRight from "lucide-react-native/icons/chevron-right";
+import Dumbbell from "lucide-react-native/icons/dumbbell";
+import Ellipsis from "lucide-react-native/icons/ellipsis";
+import History from "lucide-react-native/icons/history";
+import Minus from "lucide-react-native/icons/minus";
+import Pause from "lucide-react-native/icons/pause";
+import Play from "lucide-react-native/icons/play";
+import Plus from "lucide-react-native/icons/plus";
+import RefreshCw from "lucide-react-native/icons/refresh-cw";
+import Search from "lucide-react-native/icons/search";
+import Timer from "lucide-react-native/icons/timer";
+import TrendingUp from "lucide-react-native/icons/trending-up";
+import TriangleAlert from "lucide-react-native/icons/triangle-alert";
+import X from "lucide-react-native/icons/x";
+import Zap from "lucide-react-native/icons/zap";
+import { useTheme } from "@/theme/use-theme";
+import { ICON_STROKE } from "@/theme/tokens";
 
-// The few stroke icons the design uses, drawn with react-native-svg (already installed
-// for the avatar) instead of adding an icon font. Paths match the design's 24x24 icons.
-const paths = {
-  check: ["M20 6L9 17l-5-5"],
-  plus: ["M12 5v14M5 12h14"],
-  back: ["M15 18l-6-6 6-6"],
-  forward: ["M9 18l6-6-6-6"],
-  close: ["M18 6L6 18M6 6l12 12"],
-  dumbbell: ["M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"],
-  search: ["M21 21l-4.35-4.35", "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z"],
-  sync: ["M21 12a9 9 0 0 1-15.5 6.2L3 16", "M3 12a9 9 0 0 1 15.5-6.2L21 8", "M21 3v5h-5", "M3 21v-5h5"],
-  alert: ["M12 9v4", "M12 17h.01", "M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"],
-} as const;
+// Names describe what the icon MEANS in this app, not what it draws, so swapping a
+// drawing later is a one-line change here and no screen imports Lucide directly.
+const icons = {
+  alert: TriangleAlert,
+  back: ChevronLeft,
+  check: Check,
+  close: X,
+  coach: TrendingUp,
+  dumbbell: Dumbbell,
+  forward: ChevronRight,
+  history: History,
+  minus: Minus,
+  more: Ellipsis,
+  pause: Pause,
+  play: Play,
+  plus: Plus,
+  pr: Award,
+  search: Search,
+  sync: RefreshCw,
+  timer: Timer,
+  xp: Zap,
+} satisfies Record<string, ComponentType<LucideProps>>;
 
-export type IconName = keyof typeof paths | "more";
+export type IconName = keyof typeof icons;
 
-type Props = { name: IconName; size?: number; color: string; strokeWidth?: number };
+type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number; fill?: string };
 
-/** Decorative by default: give the surrounding button an accessibilityLabel instead. */
-export function Icon({ name, size = 20, color, strokeWidth = 2 }: Props) {
+/**
+ * A Lucide icon at the design's 1.75 stroke. Hidden from screen readers: an icon is
+ * decoration, so the button or row around it carries the accessibilityLabel.
+ */
+export function Icon({ name, size = 20, color, strokeWidth = ICON_STROKE, fill = "none" }: Props) {
+  const t = useTheme();
+  const Glyph = icons[name];
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no">
-      {name === "more" ? (
-        [5, 12, 19].map((cx) => <Circle key={cx} cx={cx} cy={12} r={1.75} fill={color} />)
-      ) : (
-        paths[name].map((d) => (
-          <Path key={d} d={d} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
-        ))
-      )}
-    </Svg>
+    <Glyph
+      size={size}
+      color={color ?? t.colors.ink}
+      strokeWidth={strokeWidth}
+      fill={fill}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
   );
 }
