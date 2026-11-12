@@ -7,6 +7,8 @@ import {
   WEIGHT_MIN_KG,
   type Exercise,
   type FinishWorkoutInput,
+  type LastSessionList,
+  type Routine,
 } from "@levelup/shared";
 
 // The workout in progress, as plain data plus pure functions (old state in, new state out).
@@ -37,6 +39,8 @@ export type ActiveWorkout = {
   startedAt: string; // ISO
   name: string;
   exercises: DraftExercise[];
+  /** The routine it was started from (optional: older saved workouts don't have it). */
+  routineId?: string | null;
 };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -45,6 +49,40 @@ export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
 
 export function startWorkout(args: { userId: string; clientId: string; now: Date }): ActiveWorkout {
   return { userId: args.userId, clientId: args.clientId, startedAt: args.now.toISOString(), name: "", exercises: [] };
+}
+
+/**
+ * Starts a workout from a routine: a COPY of its exercises (editing the routine later
+ * never changes this workout), each with its planned number of sets. Reps start at the
+ * target; weight at last session's top set, when there was one.
+ */
+export function startFromRoutine(args: {
+  userId: string;
+  clientId: string;
+  now: Date;
+  routine: Routine;
+  lastSessions?: LastSessionList;
+  newId: () => string;
+}): ActiveWorkout {
+  const lastTop = new Map((args.lastSessions?.items ?? []).map((i) => [i.exerciseId, i.session.topSet]));
+  return {
+    ...startWorkout(args),
+    name: args.routine.name,
+    routineId: args.routine.id,
+    exercises: args.routine.exercises.map((planned) => {
+      const top = lastTop.get(planned.exercise.id);
+      return {
+        id: args.newId(),
+        exercise: planned.exercise,
+        sets: Array.from({ length: planned.targetSets }, () => ({
+          id: args.newId(),
+          weightKg: top ? String(top.weightKg) : "",
+          reps: String(planned.targetReps),
+          doneAt: null,
+        })),
+      };
+    }),
+  };
 }
 
 /** Adds the exercise with one empty set, ready to fill in. */
@@ -170,6 +208,7 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
   const payload = {
     clientId: workout.clientId,
     ...(name ? { name } : {}),
+    ...(workout.routineId ? { routineId: workout.routineId } : {}),
     startedAt: workout.startedAt,
     finishedAt: new Date(finishedAt).toISOString(),
     exercises,

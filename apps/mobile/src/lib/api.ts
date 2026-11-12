@@ -1,4 +1,7 @@
+import { ApiError } from "./api-error";
 import { authClient } from "./auth-client";
+
+export { ApiError, isUnreachable } from "./api-error";
 
 // The one place the app talks to the LevelUp API.
 // Every request goes through here, so base URL, timeouts, the session cookie
@@ -13,21 +16,9 @@ if (!baseUrl) {
   );
 }
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number | null, // null = never reached the server
-    // The API's stable error code (e.g. "UsernameTaken"). Branch on this, never on
-    // `message`: messages are for humans and may be reworded at any time.
-    public readonly code: string | null = null,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
 
 async function request<T>(
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
   timeoutMs = 8000,
@@ -83,3 +74,7 @@ export const apiPost = <T>(path: string, body: unknown) =>
   request<T>("POST", path, body);
 export const apiPatch = <T>(path: string, body: unknown) =>
   request<T>("PATCH", path, body);
+export const apiPut = <T>(path: string, body: unknown) => request<T>("PUT", path, body);
+/** 204 No Content: resolves with nothing. */
+export const apiDelete = (path: string) => request<null>("DELETE", path);
+

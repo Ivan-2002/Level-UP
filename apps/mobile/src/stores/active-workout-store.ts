@@ -1,4 +1,4 @@
-import type { Exercise } from "@levelup/shared";
+import type { Exercise, LastSessionList, Routine } from "@levelup/shared";
 import { createStore } from "zustand/vanilla";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import * as workout from "@/features/workouts/active-workout";
@@ -11,8 +11,12 @@ import type { ActiveWorkout } from "@/features/workouts/active-workout";
 export type ActiveWorkoutState = {
   workout: ActiveWorkout | null;
   start: (userId: string) => void;
+  /** Starts from a routine (pre-filled). Does nothing if this user already has a workout going. */
+  startFromRoutine: (userId: string, routine: Routine, lastSessions?: LastSessionList) => void;
   rename: (name: string) => void;
   addExercise: (exercise: Exercise) => void;
+  /** Several at once, in the order given (the Add exercise sheet's multi-select). */
+  addExercises: (exercises: Exercise[]) => void;
   removeExercise: (exerciseKey: string) => void;
   addSet: (exerciseKey: string) => void;
   removeSet: (exerciseKey: string, setKey: string) => void;
@@ -41,8 +45,13 @@ export function createActiveWorkoutStore(deps: { storage: StateStorage; newId: (
             if (get().workout?.userId === userId) return;
             set({ workout: workout.startWorkout({ userId, clientId: deps.newId(), now: deps.now() }) });
           },
+          startFromRoutine: (userId, routine, lastSessions) => {
+            if (get().workout?.userId === userId) return;
+            set({ workout: workout.startFromRoutine({ userId, clientId: deps.newId(), now: deps.now(), routine, lastSessions, newId: deps.newId }) });
+          },
           rename: (name) => update((w) => ({ ...w, name })),
           addExercise: (exercise) => update((w) => workout.addExercise(w, exercise, deps.newId)),
+          addExercises: (exercises) => update((w) => exercises.reduce((acc, e) => workout.addExercise(acc, e, deps.newId), w)),
           removeExercise: (key) => update((w) => workout.removeExercise(w, key)),
           addSet: (key) => update((w) => workout.addSet(w, key, deps.newId)),
           removeSet: (key, setKey) => update((w) => workout.removeSet(w, key, setKey)),

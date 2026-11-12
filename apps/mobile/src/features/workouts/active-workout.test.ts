@@ -1,3 +1,4 @@
+import type { Routine } from "@levelup/shared";
 import { createActiveWorkoutStore } from "@/stores/active-workout-store";
 import { createOutboxStore } from "@/stores/outbox-store";
 import { benchPress, lateralRaise, memoryStorage, plank, pullUp, sequentialIds, testUuid } from "@/test/fixtures";
@@ -221,5 +222,69 @@ describe("loggingConvention", () => {
     [plank, { repsLabel: "SEC", hint: "Log seconds held · Added kg only · 0 = bodyweight" }],
   ])("labels $name correctly", (exercise, expected) => {
     expect(loggingConvention(exercise)).toEqual(expected);
+  });
+});
+
+describe("starting from a routine", () => {
+  const routine: Routine = {
+    id: testUuid(900),
+    name: "Push day",
+    lastDoneAt: null,
+    createdAt: START.toISOString(),
+    updatedAt: START.toISOString(),
+    exercises: [
+      { id: testUuid(901), order: 1, exercise: benchPress, targetSets: 3, targetReps: 8, restSec: null },
+      { id: testUuid(902), order: 2, exercise: pullUp, targetSets: 2, targetReps: 10, restSec: 120 },
+    ],
+  };
+  const lastSessions = {
+    items: [
+      {
+        exerciseId: benchPress.id,
+        session: { workoutId: testUuid(800), startedAt: START.toISOString(), bodyweightKg: 80, sets: [], bestE1rm: 76, volumeKg: 0, topSet: { reps: 8, weightKg: 62.5 } },
+      },
+    ],
+  };
+
+  it("copies the plan: name, exercises in order, planned sets with target reps and last time's weight", () => {
+    const { store } = setup();
+
+    store.getState().startFromRoutine("user-1", routine, lastSessions);
+
+    const workout = store.getState().workout!;
+    expect(workout).toMatchObject({ name: "Push day", routineId: routine.id, clientId: testUuid(1) });
+    expect(workout.exercises.map((e) => [e.exercise.name, e.sets.map((s) => [s.weightKg, s.reps, s.doneAt])])).toEqual([
+      ["Bench Press", [["62.5", "8", null], ["62.5", "8", null], ["62.5", "8", null]]],
+      ["Pull-up", [["", "10", null], ["", "10", null]]], // never done: weight left to fill in
+    ]);
+  });
+
+  it("links the finished workout to its routine", () => {
+    const { store } = setup();
+    store.getState().startFromRoutine("user-1", routine, lastSessions);
+    const { exerciseKey, setKey } = { exerciseKey: store.getState().workout!.exercises[0]!.id, setKey: store.getState().workout!.exercises[0]!.sets[0]!.id };
+    store.getState().toggleSetDone(exerciseKey, setKey);
+
+    const payload = buildFinishPayload(store.getState().workout!, minutesLater(30));
+
+    expect(payload).toMatchObject({ ok: true, value: { routineId: routine.id, name: "Push day" } });
+  });
+
+  it("never replaces a workout already in progress", () => {
+    const { store } = setup();
+    store.getState().start("user-1");
+
+    store.getState().startFromRoutine("user-1", routine);
+
+    expect(store.getState().workout).toMatchObject({ name: "", exercises: [] });
+  });
+
+  it("adds several exercises at once, in the order picked", () => {
+    const { store } = setup();
+    store.getState().start("user-1");
+
+    store.getState().addExercises([plank, lateralRaise]);
+
+    expect(store.getState().workout!.exercises.map((e) => e.exercise.name)).toEqual(["Plank", "Lateral Raise"]);
   });
 });
