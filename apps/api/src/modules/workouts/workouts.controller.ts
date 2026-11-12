@@ -4,6 +4,8 @@ import type {
   ExerciseSummaryQuery,
   FinishWorkoutInput,
   FinishWorkoutResponse,
+  LastSessionList,
+  LastSessionsQuery,
   ListWorkoutsQuery,
   RecentExerciseList,
   WorkoutDetail,
@@ -50,4 +52,8 @@ export async function recentExercises(req: Request, res: Response<RecentExercise
 
 export async function weeklyGoal(req: Request, res: Response<WeeklyGoalStatus>) {
   res.json(await weeklyGoalService.currentWeeklyGoal(req.session!.user.id));
+}
+
+export async function lastSessions(req: Request, res: Response<LastSessionList, { query: LastSessionsQuery }>) {
+  res.json(await historyService.lastSessions(req.session!.user.id, res.locals.query.ids));
 }

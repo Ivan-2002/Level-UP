@@ -291,6 +291,8 @@ export type WorkoutPage = z.infer<typeof workoutPageSchema>;
 // --- Exercise history (GET /exercises/:id/summary, GET /exercises/recent) ---------
 
 const loggedSetSchema = z.object({ reps: z.number().int(), weightKg: z.number() });
+/** A completed set as history shows it. */
+export type LoggedSet = z.infer<typeof loggedSetSchema>;
 
 /** One past workout's sets of an exercise. weightKg is as logged; loads include bodyweight. */
 export const exerciseSessionSchema = z.object({
@@ -329,6 +331,25 @@ export const exerciseSummaryQuerySchema = z.object({
   sessions: z.coerce.number().int().min(1).max(100).default(8),
 });
 export type ExerciseSummaryQuery = z.infer<typeof exerciseSummaryQuerySchema>;
+
+/** Query of GET /exercises/last-sessions: up to 20 exercise ids, comma-separated. */
+export const lastSessionsQuerySchema = z.object({
+  ids: z
+    .string()
+    .transform((value) => [...new Set(value.split(",").map((id) => id.trim()).filter(Boolean))])
+    .pipe(z.array(z.uuid("Unknown exercise.")).min(1, "Give at least one exercise id.").max(20, "At most 20 exercises.")),
+});
+export type LastSessionsQuery = z.infer<typeof lastSessionsQuerySchema>;
+
+/**
+ * Response of GET /exercises/last-sessions: each exercise's most recent session (only
+ * exercises the player has done). Routine detail shows its top set; the active workout
+ * pre-fills from it.
+ */
+export const lastSessionListSchema = z.object({
+  items: z.array(z.object({ exerciseId: z.uuid(), session: exerciseSessionSchema })),
+});
+export type LastSessionList = z.infer<typeof lastSessionListSchema>;
 
 /** Response of GET /exercises/recent: "Recently used" in the Add exercise sheet. */
 export const recentExerciseListSchema = z.object({

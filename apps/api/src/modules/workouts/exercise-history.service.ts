@@ -8,6 +8,7 @@ import {
   type Exercise,
   type ExerciseSession,
   type ExerciseSummary,
+  type LastSessionList,
   type RecentExerciseList,
 } from "@levelup/shared";
 import { AppError } from "../../lib/errors.js";
@@ -61,6 +62,37 @@ export async function exerciseSummary(userId: string, exerciseId: string, sessio
       mostReps: stats.mostReps && { reps: stats.mostReps.reps, weightKg: stats.mostReps.weightKg, date: stats.mostReps.date },
     },
     sessions: newestFirst.slice(0, sessionLimit),
+  };
+}
+
+/**
+ * Each exercise's most recent session, in one request (routine detail would otherwise
+ * need one request per exercise). Exercises never done, or not usable by this player,
+ * are left out.
+ */
+export async function lastSessions(userId: string, exerciseIds: string[]): Promise<LastSessionList> {
+  const [exercises, history, bodyweights] = await Promise.all([
+    exercisesService.findUsableExercises(userId, exerciseIds),
+    repo.findExerciseHistory(userId, exerciseIds),
+    usersService.bodyweightHistory(userId),
+  ]);
+
+  // History is oldest first: the last workout seen per exercise is the newest. An
+  // exercise done twice in that workout merges into one session.
+  const latest = new Map<string, repo.ExerciseHistoryRow[]>();
+  for (const row of history) {
+    const rows = latest.get(row.exerciseId);
+    latest.set(row.exerciseId, rows && rows[0]!.workout.id === row.workout.id ? [...rows, row] : [row]);
+  }
+
+  return {
+    items: exerciseIds.flatMap((exerciseId) => {
+      const rows = latest.get(exerciseId);
+      const exercise = exercises.get(exerciseId);
+      if (!rows || !exercise) return [];
+      const bodyweightKg = bodyweightOnDate(bodyweights, rows[0]!.workout.startedAt.toISOString());
+      return [{ exerciseId, session: toSession(rows, exercise, bodyweightKg) }];
+    }),
   };
 }
 

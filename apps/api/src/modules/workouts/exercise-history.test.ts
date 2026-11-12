@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { exerciseSummarySchema, recentExerciseListSchema } from "@levelup/shared";
+import { exerciseSummarySchema, lastSessionListSchema, recentExerciseListSchema } from "@levelup/shared";
 import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/helpers.js";
 
 const DAY = 24 * 60 * 60_000;
@@ -126,5 +126,38 @@ describe("GET /exercises/recent", () => {
 
   it("needs a session", async () => {
     expect((await request(app).get("/exercises/recent")).status).toBe(401);
+  });
+});
+
+describe("GET /exercises/last-sessions", () => {
+  const last = (query: string, as = user) => request(app).get(`/exercises/last-sessions${query}`).set("Cookie", as.cookie);
+
+  it("returns each exercise's most recent session in one request, in the order asked", async () => {
+    await log(user, 3, [["deadlift", [[5, 120]]]]);
+    const day1 = await log(user, 1, [["deadlift", [[5, 125], [3, 135]]], ["barbell-bench-press", [[8, 60]]]]);
+    await log(await signUpPlayer(), 0, [["deadlift", [[1, 300]]]]); // someone else's
+
+    const res = await last(`?ids=${ids["barbell-bench-press"]},${ids["deadlift"]},${ids["plank"]}`);
+
+    expect(res.status).toBe(200);
+    expect(lastSessionListSchema.parse(res.body).items.map((i) => [i.exerciseId, i.session.startedAt, i.session.topSet])).toEqual([
+      [ids["barbell-bench-press"], day1, { reps: 8, weightKg: 60 }],
+      [ids["deadlift"], day1, { reps: 3, weightKg: 135 }], // the heaviest set of that session
+      // plank: never done, so left out
+    ]);
+  });
+
+  it("merges an exercise done twice in its last workout", async () => {
+    await log(user, 1, [["deadlift", [[5, 100]]], ["deadlift", [[5, 110]]]]);
+
+    const res = await last(`?ids=${ids["deadlift"]}`);
+
+    expect(res.body.items[0].session.sets).toEqual([{ reps: 5, weightKg: 100 }, { reps: 5, weightKg: 110 }]);
+  });
+
+  it("validates the ids and needs a session", async () => {
+    expect((await last("")).status).toBe(400);
+    expect((await last("?ids=bench")).status).toBe(400);
+    expect((await request(app).get(`/exercises/last-sessions?ids=${ids["deadlift"]}`)).status).toBe(401);
   });
 });
