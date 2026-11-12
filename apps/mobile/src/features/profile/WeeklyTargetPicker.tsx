@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { WEEKLY_TARGET_MAX, WEEKLY_TARGET_MIN } from "@levelup/shared";
-import { colors } from "@/theme/colors";
+import { Text } from "@/components/Text";
+import { createStyles } from "@/theme/use-theme";
 
 // The range comes from @levelup/shared, so the buttons always match what the API accepts.
 const OPTIONS = Array.from(
@@ -17,9 +18,10 @@ type Props = {
 // "Workouts per week" as a row of number buttons. It's a single choice, so screen readers
 // get radio semantics: "3, radio button, selected, 2 of 5".
 export function WeeklyTargetPicker({ value, onChange, hint }: Props) {
+  const styles = useStyles();
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label} nativeID="weekly-target-label">
+      <Text variant="label" nativeID="weekly-target-label">
         Weekly target
       </Text>
       <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabelledBy="weekly-target-label">
@@ -34,33 +36,35 @@ export function WeeklyTargetPicker({ value, onChange, hint }: Props) {
               onPress={() => onChange(option)}
               style={({ pressed }) => [styles.option, selected && styles.selected, pressed && styles.pressed]}
             >
-              <Text style={[styles.optionText, selected && styles.selectedText]}>{option}</Text>
+              <Text variant="heading" tone={selected ? "onPrimary" : "ink"} tabular>
+                {option}
+              </Text>
             </Pressable>
           );
         })}
       </View>
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      {hint ? (
+        <Text variant="caption" tone="inkMuted">
+          {hint}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: { gap: 8 },
-  label: { color: colors.ink, fontSize: 13, fontWeight: "500" },
-  row: { flexDirection: "row", gap: 8 },
+const useStyles = createStyles((t) => ({
+  wrapper: { gap: t.space[2] },
+  row: { flexDirection: "row", gap: t.space[2] },
   option: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-  selected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  selected: { backgroundColor: t.colors.primary, borderColor: t.colors.primary },
   pressed: { opacity: 0.7 },
-  optionText: { color: colors.ink, fontSize: 16, fontWeight: "600" },
-  selectedText: { color: colors.onPrimary },
-  hint: { color: colors.inkMuted, fontSize: 12, lineHeight: 16 },
-});
+}));

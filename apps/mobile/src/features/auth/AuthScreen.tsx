@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/Button";
+import { Text } from "@/components/Text";
 import { TextField } from "@/components/TextField";
-import { colors } from "@/theme/colors";
+import { createStyles } from "@/theme/use-theme";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -17,6 +18,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const styles = useStyles();
 
   // Quick checks before calling the server, for instant feedback.
   // The SERVER still validates everything: never trust the app alone.
@@ -63,11 +65,16 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.brand}>
-              LEVEL<Text style={{ color: colors.purple }}>UP</Text>
+            <Text variant="heading" style={styles.brand}>
+              LEVEL
+              <Text variant="heading" tone="purple">
+                UP
+              </Text>
             </Text>
-            <Text style={styles.title}>{isSignUp ? "Create your account" : "Welcome back"}</Text>
-            <Text style={styles.subtitle}>
+            <Text variant="display" accessibilityRole="header" style={styles.title}>
+              {isSignUp ? "Create your account" : "Welcome back"}
+            </Text>
+            <Text tone="inkMuted">
               {isSignUp ? "Start as a Rookie. Grow with every workout." : "Sign in to keep levelling up."}
             </Text>
           </View>
@@ -95,7 +102,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
               returnKeyType="go"
             />
             {error ? (
-              <Text style={styles.error} accessibilityRole="alert">
+              <Text tone="danger" accessibilityRole="alert">
                 {error}
               </Text>
             ) : null}
@@ -103,7 +110,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
 
           <Button label={isSignUp ? "Create account" : "Sign in"} onPress={submit} loading={loading} />
 
-          <Text style={styles.switchText}>
+          <Text variant="label" tone="inkMuted" style={styles.switchText}>
             {isSignUp ? "Already have an account? " : "New to LevelUp? "}
             <Link href={isSignUp ? "/sign-in" : "/sign-up"} replace style={styles.link}>
               {isSignUp ? "Sign in" : "Create an account"}
@@ -115,16 +122,14 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((t) => ({
   flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { flexGrow: 1, justifyContent: "center", padding: 16, gap: 24 },
+  screen: { flex: 1, backgroundColor: t.colors.bg },
+  content: { flexGrow: 1, justifyContent: "center", padding: t.space[4], gap: t.space[6] },
   header: { gap: 6 },
-  brand: { color: colors.ink, fontSize: 18, fontWeight: "700", letterSpacing: 2 },
-  title: { color: colors.ink, fontSize: 28, fontWeight: "700", marginTop: 16 },
-  subtitle: { color: colors.inkMuted, fontSize: 15 },
-  form: { gap: 16 },
-  error: { color: colors.danger, fontSize: 14 },
-  switchText: { color: colors.inkMuted, fontSize: 14, textAlign: "center" },
-  link: { color: colors.ice, fontWeight: "600" },
-});
+  brand: { letterSpacing: 2 },
+  title: { marginTop: t.space[4] },
+  form: { gap: t.space[4] },
+  switchText: { textAlign: "center" },
+  link: { ...t.type.labelStrong, color: t.colors.ice },
+}));

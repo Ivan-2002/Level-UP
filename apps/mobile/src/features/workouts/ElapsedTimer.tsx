@@ -13,5 +13,5 @@ export function ElapsedTimer({ startedAt, style }: { startedAt: string; style?: 
     return () => clearInterval(id);
   }, []);
 
-  return <Text style={style}>{formatElapsed(now - Date.parse(startedAt))}</Text>;
+  return <Text style={[{ fontVariant: ["tabular-nums"] }, style]}>{formatElapsed(now - Date.parse(startedAt))}</Text>;
 }

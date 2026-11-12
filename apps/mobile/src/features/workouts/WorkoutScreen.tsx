@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/Button";
 import { Icon } from "@/components/Icon";
+import { IconButton } from "@/components/IconButton";
+import { Text } from "@/components/Text";
 import { TextField } from "@/components/TextField";
 import { activeWorkoutStore, outboxStore, useActiveWorkout } from "@/stores/device-stores";
-import { colors } from "@/theme/colors";
+import { createStyles, useTheme } from "@/theme/use-theme";
 import { setCounts } from "./active-workout";
 import { ElapsedTimer } from "./ElapsedTimer";
 import { ExerciseCard } from "./ExerciseCard";
@@ -26,14 +28,18 @@ export function WorkoutScreen() {
   const { data: session } = authClient.useSession();
   const workout = useActiveWorkout((s) => s.workout);
   const [finishError, setFinishError] = useState<string | null>(null);
+  const styles = useStyles();
+  const t = useTheme();
 
   // Opened with no workout (e.g. it was just finished): show a way out rather than
   // redirecting, which would race with the navigation that's already happening.
   if (!workout || workout.userId !== session?.user.id) {
     return (
       <SafeAreaView style={[styles.screen, styles.empty]}>
-        <Text style={styles.emptyText}>No workout in progress.</Text>
-        <Button label="Back to home" variant="secondary" onPress={goHome} />
+        <Text tone="inkMuted" style={styles.centeredText}>
+          No workout in progress.
+        </Text>
+        <Button label="Back to home" variant="outline" onPress={goHome} />
       </SafeAreaView>
     );
   }
@@ -66,19 +72,19 @@ export function WorkoutScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Pressable onPress={goHome} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back to home">
-              <Icon name="back" color={colors.ink} strokeWidth={1.75} />
-            </Pressable>
+            <IconButton icon="back" onPress={goHome} accessibilityLabel="Back to home" />
             <View style={styles.savedPill}>
-              <Icon name="check" size={14} color={colors.ice} />
-              <Text style={styles.savedText}>Saved on this phone</Text>
+              <Icon name="check" size={14} color={t.colors.ice} />
+              <Text variant="caption" tone="ice">
+                Saved on this phone
+              </Text>
             </View>
           </View>
           <View>
-            <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>
+            <Text variant="title" accessibilityRole="header" numberOfLines={1}>
               {workout.name.trim() || "Workout"}
             </Text>
-            <Text style={styles.subtitle}>
+            <Text variant="label" tone="inkMuted">
               <ElapsedTimer startedAt={workout.startedAt} /> elapsed · {plural(done, "set")} done
             </Text>
           </View>
@@ -98,28 +104,19 @@ export function WorkoutScreen() {
             <ExerciseCard key={draft.id} draft={draft} />
           ))}
 
-          <Pressable
-            onPress={() => router.push("/exercise-picker")}
-            style={styles.addExercise}
-            accessibilityRole="button"
-          >
-            <Icon name="plus" size={18} color={colors.ink} strokeWidth={1.75} />
-            <Text style={styles.addExerciseText}>Add exercise</Text>
-          </Pressable>
+          <Button label="Add exercise" icon="plus" variant="outline" tone="link" size="md" onPress={() => router.push("/exercise-picker")} />
 
-          <Pressable onPress={discard} style={styles.discard} accessibilityRole="button">
-            <Text style={styles.discardText}>Discard workout</Text>
-          </Pressable>
+          <Button label="Discard workout" variant="plain" tone="danger" size="md" onPress={discard} />
         </ScrollView>
 
         <SafeAreaView edges={["bottom"]} style={styles.footer}>
           {finishError ? (
-            <Text style={styles.finishError} accessibilityRole="alert">
+            <Text variant="label" tone="danger" style={styles.centeredText} accessibilityRole="alert">
               {finishError}
             </Text>
           ) : null}
           <Button label="Finish workout" onPress={finish} disabled={done === 0} />
-          <Text style={styles.footerHint}>
+          <Text variant="caption" tone="inkMuted" style={styles.centeredText}>
             {done === 0
               ? "Tick at least one set to finish."
               : "Saved on this phone until it reaches the server, even offline."}
@@ -130,68 +127,39 @@ export function WorkoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((t) => ({
   flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: colors.bg },
-  empty: { alignItems: "stretch", justifyContent: "center", padding: 16, gap: 16 },
-  emptyText: { color: colors.inkMuted, fontSize: 15, textAlign: "center" },
+  screen: { flex: 1, backgroundColor: t.colors.bg },
+  empty: { alignItems: "stretch", justifyContent: "center", padding: t.space[4], gap: t.space[4] },
+  centeredText: { textAlign: "center" },
   header: {
     paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 12,
+    paddingHorizontal: t.space[4],
+    paddingBottom: t.space[3],
+    gap: t.space[3],
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: t.colors.border,
   },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   savedPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: t.colors.surface,
+    borderColor: t.colors.border,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: t.radius.pill,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
-  savedText: { color: colors.ice, fontSize: 12, fontWeight: "500" },
-  title: { color: colors.ink, fontSize: 24, lineHeight: 30, fontWeight: "700" },
-  subtitle: { color: colors.inkMuted, fontSize: 13 },
-  content: { padding: 16, gap: 12 },
-  addExercise: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  addExerciseText: { color: colors.ink, fontSize: 14, fontWeight: "500" },
-  discard: { height: 44, alignItems: "center", justifyContent: "center" },
-  discardText: { color: colors.danger, fontSize: 14, fontWeight: "500" },
+  content: { padding: t.space[4], gap: t.space[3] },
   footer: {
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: colors.surface,
+    paddingTop: t.space[3],
+    paddingHorizontal: t.space[4],
+    paddingBottom: t.space[3],
+    backgroundColor: t.colors.surface,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 8,
+    borderTopColor: t.colors.border,
+    gap: t.space[2],
   },
-  finishError: { color: colors.danger, fontSize: 13, textAlign: "center" },
-  footerHint: { color: colors.inkMuted, fontSize: 12, textAlign: "center" },
-});
+}));

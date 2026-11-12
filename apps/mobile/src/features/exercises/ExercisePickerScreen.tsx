@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { BODY_PARTS, type BodyPart, type Exercise } from "@levelup/shared";
 import { Button } from "@/components/Button";
+import { Chip } from "@/components/Chip";
 import { Icon } from "@/components/Icon";
+import { IconButton } from "@/components/IconButton";
+import { Text } from "@/components/Text";
 import { activeWorkoutStore } from "@/stores/device-stores";
-import { colors } from "@/theme/colors";
+import { createStyles, useTheme } from "@/theme/use-theme";
 import { capitalise } from "@/features/workouts/format";
 import { filterExercises } from "./filter-exercises";
 import { useExercises } from "./use-exercises";
@@ -18,6 +21,8 @@ export function ExercisePickerScreen() {
   const { data: exercises, isPending, isError, error, refetch, isRefetching, isFetching } = useExercises();
   const [search, setSearch] = useState("");
   const [bodyPart, setBodyPart] = useState<BodyPart | null>(null);
+  const styles = useStyles();
+  const t = useTheme();
 
   const results = useMemo(
     () => (exercises ? filterExercises(exercises, search, bodyPart) : []),
@@ -32,21 +37,19 @@ export function ExercisePickerScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           Add exercise
         </Text>
-        <Pressable onPress={() => router.back()} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Close">
-          <Icon name="close" color={colors.ink} />
-        </Pressable>
+        <IconButton icon="close" variant="plain" onPress={() => router.back()} accessibilityLabel="Close" />
       </View>
 
       <View style={styles.searchBox}>
-        <Icon name="search" size={18} color={colors.inkMuted} />
+        <Icon name="search" size={18} color={t.colors.inkMuted} />
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder="Search exercises"
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={t.colors.inkMuted}
           autoCorrect={false}
           returnKeyType="search"
           accessibilityLabel="Search exercises"
@@ -55,30 +58,31 @@ export function ExercisePickerScreen() {
       </View>
 
       <View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {[null, ...BODY_PARTS].map((part) => {
-            const selected = part === bodyPart;
-            return (
-              <Pressable
-                key={part ?? "all"}
-                onPress={() => setBodyPart(part)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{part ? capitalise(part) : "All"}</Text>
-              </Pressable>
-            );
-          })}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Muscle group"
+        >
+          {[null, ...BODY_PARTS].map((part) => (
+            <Chip
+              key={part ?? "all"}
+              label={part ? capitalise(part) : "All"}
+              role="radio"
+              selected={part === bodyPart}
+              onPress={() => setBodyPart(part)}
+            />
+          ))}
         </ScrollView>
       </View>
 
       {isPending ? (
-        <ActivityIndicator style={styles.centered} color={colors.purple} />
+        <ActivityIndicator style={styles.centered} color={t.colors.purple} />
       ) : isError && !exercises ? (
         // Only when there is NO saved copy: first use, and offline.
         <View style={styles.message}>
-          <Text style={styles.messageText}>
+          <Text tone="inkMuted" style={styles.messageText}>
             {"Couldn't load the exercise list. Connect once to save it on this phone; after that it works offline.\n\n"}
             {error.message}
           </Text>
@@ -90,10 +94,16 @@ export function ExercisePickerScreen() {
           keyExtractor={(exercise) => exercise.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.messageText}>No exercises match.</Text>}
+          ListEmptyComponent={
+            <Text tone="inkMuted" style={styles.messageText}>
+              No exercises match.
+            </Text>
+          }
           ListFooterComponent={
             !isFetching && isError ? (
-              <Text style={styles.offlineNote}>Offline: showing the list saved on this phone.</Text>
+              <Text variant="caption" tone="warning" style={styles.offlineNote}>
+                Offline: showing the list saved on this phone.
+              </Text>
             ) : undefined
           }
           renderItem={({ item }) => (
@@ -103,8 +113,8 @@ export function ExercisePickerScreen() {
               accessibilityHint="Adds it to your workout"
               style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
             >
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemMeta}>
+              <Text variant="bodyStrong">{item.name}</Text>
+              <Text variant="caption" tone="inkMuted">
                 {item.muscleGroup} · {item.equipment}
               </Text>
             </Pressable>
@@ -115,53 +125,37 @@ export function ExercisePickerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12 },
-  title: { color: colors.ink, fontSize: 22, fontWeight: "700" },
-  iconButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+const useStyles = createStyles((t) => ({
+  screen: { flex: 1, backgroundColor: t.colors.bg },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: t.space[4], paddingTop: t.space[3] },
   searchBox: {
-    marginHorizontal: 16,
-    marginTop: 8,
+    marginHorizontal: t.space[4],
+    marginTop: t.space[2],
     height: 48,
-    borderRadius: 12,
+    borderRadius: t.radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceRaised,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surfaceRaised,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: t.space[2],
     paddingHorizontal: 14,
   },
-  searchInput: { flex: 1, color: colors.ink, fontSize: 15, height: "100%" },
-  chips: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  chip: {
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    justifyContent: "center",
-  },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.ink, fontSize: 14, fontWeight: "500" },
-  chipTextSelected: { color: colors.onPrimary },
-  centered: { marginTop: 32 },
-  message: { padding: 16, gap: 16 },
-  messageText: { color: colors.inkMuted, fontSize: 14, textAlign: "center", padding: 16 },
-  offlineNote: { color: colors.warning, fontSize: 12, textAlign: "center", paddingVertical: 12 },
-  list: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
+  searchInput: { ...t.type.body, flex: 1, color: t.colors.ink, height: "100%", paddingVertical: 0 },
+  chips: { paddingHorizontal: t.space[4], paddingVertical: t.space[3], gap: t.space[2] },
+  centered: { marginTop: t.space[8] },
+  message: { padding: t.space[4], gap: t.space[4] },
+  messageText: { textAlign: "center", padding: t.space[4] },
+  offlineNote: { textAlign: "center", paddingVertical: t.space[3] },
+  list: { paddingHorizontal: t.space[4], paddingBottom: t.space[8], gap: t.space[2] },
   item: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: t.colors.surface,
+    borderColor: t.colors.border,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: t.radius.md,
+    paddingVertical: t.space[3],
     paddingHorizontal: 14,
     gap: 2,
   },
-  itemPressed: { opacity: 0.7 },
-  itemName: { color: colors.ink, fontSize: 15, fontWeight: "600" },
-  itemMeta: { color: colors.inkMuted, fontSize: 12 },
-});
+  itemPressed: { backgroundColor: t.colors.surfaceRaised },
+}));
