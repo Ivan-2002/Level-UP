@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,15 +13,13 @@ import { ProgressSegments } from "@/components/ProgressSegments";
 import { StatTile } from "@/components/StatTile";
 import { Text } from "@/components/Text";
 import { authClient } from "@/lib/auth-client";
-import { activeWorkoutStore, outboxStore, restTimerStore, useActiveWorkout } from "@/stores/device-stores";
+import { activeWorkoutStore, restTimerStore, useActiveWorkout } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { useProfile } from "@/features/profile/use-profile";
 import { currentExercise, setCounts, type ActiveWorkout } from "./active-workout";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
 import { ElapsedTimer } from "./ElapsedTimer";
-import { finishActiveWorkout } from "./finish-workout";
 import { lastSessionText, liveXp, nextUp, workoutSegments } from "./live-workout";
-import { syncOutboxNow } from "./outbox-sync";
 import { RestBar } from "./RestBar";
 import { exerciseSummaryQuery, useExerciseSummary } from "./use-exercise-summary";
 
@@ -34,7 +32,8 @@ const addExercise = () => router.push({ pathname: "/add-exercise", params: { for
 
 // The active workout: everything you need between sets on one screen. All of it lives in
 // the active workout store, saved on the phone after every change; nothing reaches the
-// server until Finish (then the outbox delivers it, retrying until it arrives).
+// server until Finish (the Finish sheet queues it in the outbox, which retries until it
+// arrives), then the summary shows what it earned.
 export function ActiveWorkoutScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
@@ -61,7 +60,6 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   const queryClient = useQueryClient();
   const draft = currentExercise(workout);
   const summary = useExerciseSummary(userId, draft?.exercise.id);
-  const [finishError, setFinishError] = useState<string | null>(null);
   const styles = useStyles();
   const t = useTheme();
   const bodyweightKg = profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG;
@@ -79,14 +77,6 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   const following = workout.exercises[index + 1];
   const followingSummary = queryClient.getQueryData(exerciseSummaryQuery(userId, following?.exercise.id ?? "none").queryKey);
   const started = new Date(workout.startedAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-
-  function finish() {
-    const result = finishActiveWorkout({ activeWorkout: activeWorkoutStore, outbox: outboxStore, now: new Date() });
-    if (!result.ok) return setFinishError(result.message);
-    restTimerStore.getState().skip(); // no rest alert after the workout is over
-    syncOutboxNow(); // try right away; the outbox keeps retrying if we're offline
-    goHome();
-  }
 
   function discard() {
     Alert.alert("Discard workout?", "Your sets will be deleted from this phone. This can't be undone.", [
@@ -116,7 +106,7 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
               {workout.exercises.length > 0 ? `Exercise ${index + 1} of ${workout.exercises.length} · ${started}` : started}
             </Text>
           </View>
-          <Button label="Finish" variant="secondary" size="md" onPress={finish} />
+          <Button label="Finish" variant="secondary" size="md" onPress={() => router.push("/finish-workout")} />
         </View>
 
         <View style={styles.tiles}>
@@ -181,11 +171,6 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
           ) : null}
 
           <Button label="Add exercise" icon="plus" variant="outline" tone="link" size="md" onPress={addExercise} />
-          {finishError ? (
-            <Text variant="label" tone="danger" accessibilityRole="alert" style={styles.centeredText}>
-              {finishError}
-            </Text>
-          ) : null}
           <Button label="Discard workout" variant="plain" tone="danger" size="md" onPress={discard} />
         </ScrollView>
       </KeyboardAvoidingView>

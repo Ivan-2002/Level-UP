@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, View } from "react-native";
+import { router } from "expo-router";
 import { coachAdvice, coachHintText, formatWeight, REST_MAX_SEC, REST_MIN_SEC, type ExerciseSummary } from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -59,6 +60,8 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
     else restTimerStore.getState().skip();
   }
 
+  const openHistory = () => router.push({ pathname: "/exercises/[id]/history", params: { id: exercise.id } });
+
   function showOptions() {
     Alert.alert(exercise.name, undefined, [
       { text: "Remove exercise", style: "destructive", onPress: () => actions.removeExercise(draft.id) },
@@ -75,7 +78,8 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
             {capitalise(exercise.bodyPart)} · {exercise.equipment}
           </Text>
         </View>
-        <IconButton icon="more" onPress={showOptions} accessibilityLabel={`${exercise.name} options`} />
+        <IconButton icon="history" onPress={openHistory} accessibilityLabel={`${exercise.name} history`} />
+        <IconButton icon="more" variant="plain" onPress={showOptions} accessibilityLabel={`${exercise.name} options`} />
       </View>
 
       {previous?.length || bestShown > 0 ? (
@@ -141,7 +145,13 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
 
       <Button label="Add set" icon="plus" variant="dashed" size="md" onPress={() => actions.addSet(draft.id)} />
 
-      {exercise.repsUnit === "reps" && summary ? <E1rmChart bars={e1rmBars(summary.sessions, today)} unit={unit} /> : null}
+      {exercise.repsUnit === "reps" && summary ? (
+        <E1rmChart
+          bars={e1rmBars(summary.sessions, today)}
+          unit={unit}
+          action={<Button label="See history" variant="plain" tone="link" size="md" onPress={openHistory} />}
+        />
+      ) : null}
     </Card>
   );
 }

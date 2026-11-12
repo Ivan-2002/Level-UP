@@ -10,18 +10,21 @@ import { fetchWithDeviceCache, readCached } from "@/lib/device-cache";
 /** Sessions on the trend chart; today is drawn as one more bar. */
 const SESSIONS = 5;
 
-export function exerciseSummaryQuery(userId: string, exerciseId: string) {
-  const key = `levelup.exercise-summary.${userId}.${exerciseId}`;
+/** The full history screen asks for more sessions (the most the API allows). */
+export const HISTORY_SESSIONS = 100;
+
+export function exerciseSummaryQuery(userId: string, exerciseId: string, sessions = SESSIONS) {
+  const key = `levelup.exercise-summary.${userId}.${exerciseId}.${sessions}`;
   return queryOptions({
-    queryKey: ["exercise-summary", userId, exerciseId],
+    queryKey: ["exercise-summary", userId, exerciseId, sessions],
     queryFn: () =>
-      fetchWithDeviceCache(key, exerciseSummarySchema, () => apiGet<ExerciseSummary>(`/exercises/${exerciseId}/summary?sessions=${SESSIONS}`)),
+      fetchWithDeviceCache(key, exerciseSummarySchema, () => apiGet<ExerciseSummary>(`/exercises/${exerciseId}/summary?sessions=${sessions}`)),
     initialData: () => readCached(key, exerciseSummarySchema),
     initialDataUpdatedAt: 0,
     staleTime: 5 * 60_000, // history only changes when a workout syncs (which refreshes it)
   });
 }
 
-export function useExerciseSummary(userId: string, exerciseId: string | undefined) {
-  return useQuery({ ...exerciseSummaryQuery(userId, exerciseId ?? "none"), enabled: !!exerciseId });
+export function useExerciseSummary(userId: string, exerciseId: string | undefined, sessions = SESSIONS) {
+  return useQuery({ ...exerciseSummaryQuery(userId, exerciseId ?? "none", sessions), enabled: !!exerciseId });
 }

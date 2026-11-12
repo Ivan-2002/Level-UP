@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { View } from "react-native";
 import { formatWeight, type WeightUnit } from "@levelup/shared";
 import { Text } from "@/components/Text";
@@ -7,8 +8,18 @@ import type { ChartBar } from "./live-workout";
 const MAX_BAR = 52;
 const MIN_BAR = 12;
 
+type Props = {
+  bars: ChartBar[];
+  unit: WeightUnit;
+  /** null hides the title (the screen draws its own); `divider` adds a line above. */
+  title?: string | null;
+  divider?: boolean;
+  /** Shown next to the title, e.g. a "See history" link. */
+  action?: ReactNode;
+};
+
 /** Estimated 1RM: the last sessions and today, today's bar purple when it's a PR. */
-export function E1rmChart({ bars, unit }: { bars: ChartBar[]; unit: WeightUnit }) {
+export function E1rmChart({ bars, unit, title = "Estimated 1RM trend", divider = true, action }: Props) {
   const styles = useStyles();
   const t = useTheme();
   const values = bars.map((b) => b.value).filter((v): v is number => v !== null);
@@ -23,8 +34,13 @@ export function E1rmChart({ bars, unit }: { bars: ChartBar[]; unit: WeightUnit }
   const summary = bars.map((b) => `${b.label} ${b.value === null ? "none yet" : formatWeight(b.value, unit, { decimals: 0 })}`).join(", ");
 
   return (
-    <View style={styles.wrap}>
-      <Text variant="labelStrong">Estimated 1RM trend</Text>
+    <View style={[styles.wrap, divider && styles.divider]}>
+      {title !== null || action ? (
+        <View style={styles.titleRow}>
+          {title !== null ? <Text variant="labelStrong">{title}</Text> : <View />}
+          {action}
+        </View>
+      ) : null}
       <View style={styles.row} accessible accessibilityRole="image" accessibilityLabel={`Estimated one-rep max: ${summary}`}>
         {bars.map((bar, index) => (
           <View key={index} style={styles.column}>
@@ -43,7 +59,9 @@ export function E1rmChart({ bars, unit }: { bars: ChartBar[]; unit: WeightUnit }
 }
 
 const useStyles = createStyles((t) => ({
-  wrap: { gap: t.space[2], borderTopWidth: 1, borderTopColor: t.colors.border, paddingTop: t.space[3] },
+  wrap: { gap: t.space[2] },
+  divider: { borderTopWidth: 1, borderTopColor: t.colors.border, paddingTop: t.space[3] },
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   row: { flexDirection: "row", alignItems: "flex-end", gap: t.space[2] },
   column: { flex: 1, alignItems: "center", gap: t.space[1] },
   bar: { width: "100%", borderRadius: 6 },

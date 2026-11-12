@@ -68,12 +68,15 @@ export default function AppLayout() {
       <Stack.Protected guard={hasProfile}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workout" />
+        <Stack.Screen name="workout-summary" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="exercises/[id]/history" />
         <Stack.Screen name="routines/new" />
         <Stack.Screen name="routines/[id]/index" />
         <Stack.Screen name="routines/[id]/edit" />
         {/* Sheets that slide up over the screen that opened them. */}
         <Stack.Screen name="add-exercise" options={{ presentation: "modal" }} />
         <Stack.Screen name="create-exercise" options={{ presentation: "modal" }} />
+        <Stack.Screen name="finish-workout" options={{ presentation: "modal" }} />
         <Stack.Screen name="ui-preview" />
       </Stack.Protected>
       <Stack.Protected guard={!hasProfile}>

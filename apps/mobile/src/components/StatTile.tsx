@@ -15,10 +15,13 @@ type Props = {
   tone?: "neutral" | "progress";
   /** What a screen reader says, e.g. "Sets left, 12 of 18". Defaults to label + value. */
   accessibilityLabel?: string;
+  /** A small line under the value, e.g. "+4% vs last" (green when `noteGood`). */
+  note?: string;
+  noteGood?: boolean;
 };
 
 /** A small labelled number: "Elapsed 42:18", "Sets left 12 / 18", "XP earned +181". */
-export function StatTile({ label, value, suffix, icon, tone = "neutral", accessibilityLabel }: Props) {
+export function StatTile({ label, value, suffix, icon, tone = "neutral", accessibilityLabel, note, noteGood = false }: Props) {
   const styles = useStyles();
   const t = useTheme();
   const progress = tone === "progress";
@@ -27,7 +30,7 @@ export function StatTile({ label, value, suffix, icon, tone = "neutral", accessi
     <View
       style={styles.tile}
       accessible
-      accessibilityLabel={accessibilityLabel ?? (typeof value === "string" ? `${label}, ${value}${suffix ?? ""}` : label)}
+      accessibilityLabel={(accessibilityLabel ?? (typeof value === "string" ? `${label}, ${value}${suffix ?? ""}` : label)) + (note ? `, ${note}` : "")}
     >
       <View style={styles.labelRow}>
         {icon ? <Icon name={icon} size={14} color={progress ? t.colors.purple : t.colors.inkMuted} /> : null}
@@ -43,6 +46,11 @@ export function StatTile({ label, value, suffix, icon, tone = "neutral", accessi
           </Text>
         ) : null}
       </Text>
+      {note ? (
+        <Text variant="caption" tone={noteGood ? "success" : "inkMuted"} numberOfLines={1}>
+          {note}
+        </Text>
+      ) : null}
     </View>
   );
 }
