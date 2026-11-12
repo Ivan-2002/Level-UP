@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { authClient } from "@/lib/auth-client";
 import { queryClient } from "@/lib/query-client";
+import { configureNotifications } from "@/features/workouts/rest-notifications";
 import { useAppFonts } from "@/theme/fonts";
 import { useTheme } from "@/theme/use-theme";
 
@@ -14,6 +15,7 @@ import { useTheme } from "@/theme/use-theme";
 // Sora/Inter instead of flashing the system font. Called at module scope, before any
 // render, as the expo-splash-screen docs require.
 void SplashScreen.preventAutoHideAsync();
+configureNotifications();
 
 // The root layout wraps EVERY screen. Providers placed here are available everywhere.
 export default function RootLayout() {
