@@ -7,10 +7,12 @@ import type {
   ListWorkoutsQuery,
   RecentExerciseList,
   WorkoutDetail,
+  WeeklyGoalStatus,
   WorkoutPage,
 } from "@levelup/shared";
 import * as workoutsService from "./workouts.service.js";
 import * as historyService from "./exercise-history.service.js";
+import * as weeklyGoalService from "./weekly-goal.service.js";
 
 // HTTP in, HTTP out. By the time these run, requireAuth has set req.session and the
 // validation middleware has checked the body / query.
@@ -44,4 +46,8 @@ export async function exerciseSummary(req: Request<{ id: string }>, res: Respons
 
 export async function recentExercises(req: Request, res: Response<RecentExerciseList>) {
   res.json(await historyService.recentExercises(req.session!.user.id));
+}
+
+export async function weeklyGoal(req: Request, res: Response<WeeklyGoalStatus>) {
+  res.json(await weeklyGoalService.currentWeeklyGoal(req.session!.user.id));
 }

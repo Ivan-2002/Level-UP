@@ -54,7 +54,7 @@ describe("XP at Finish", () => {
     const events = await prisma.xpEvent.findMany({ where: { userId: user.userId } });
     expect(events.map((e) => [e.amount, e.source, e.bodyPart])).toEqual(times(3, [60, "workout_set", "chest"] as never));
     expect(events.map((e) => e.sourceId).sort()).toEqual(saved.exercises[0]!.sets.map((s) => s.id).sort());
-    expect(summary.xp).toEqual({ sets: 180, weeklyTarget: 0, streak: 0, total: 180 });
+    expect(summary.xp).toEqual({ sets: 180, weeklyGoal: 0, streakMilestone: 0, total: 180 });
     expect(summary.level).toEqual({ before: 1, after: 2, totalXpBefore: 0, totalXpAfter: 180 }); // level 2 starts at 100
     expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(180);
   });

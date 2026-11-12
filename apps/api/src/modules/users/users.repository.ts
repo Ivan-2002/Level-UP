@@ -14,8 +14,10 @@ export type NewProfile = {
   userId: string;
   username: string;
   bodyweightKg?: number;
-  weeklyTarget: number;
   weightUnit: "kg" | "lb";
+  timeZone: string;
+  /** Sign-up moment: decides whether the first week is a warm-up. */
+  createdAt: Date;
 };
 
 export async function findProfileByUserId(userId: string): Promise<ProfileRecord | null> {
@@ -28,7 +30,7 @@ export async function profileExists(userId: string): Promise<boolean> {
 }
 
 /** Changes only the given fields. null = this user has no profile. */
-export async function updateProfile(userId: string, data: { weightUnit?: "kg" | "lb" }): Promise<ProfileRecord | null> {
+export async function updateProfile(userId: string, data: { weightUnit?: "kg" | "lb"; timeZone?: string }): Promise<ProfileRecord | null> {
   const { count } = await prisma.profile.updateMany({ where: { userId }, data });
   return count === 0 ? null : findProfileByUserId(userId);
 }
@@ -75,6 +77,22 @@ export function upsertBodyweight(userId: string, kg: number, measuredOn: Date) {
 
 export function findBodyweightEntries(userId: string, db: Db = prisma) {
   return db.bodyweightEntry.findMany({ where: { userId }, orderBy: { measuredOn: "asc" }, select: { kg: true, measuredOn: true } });
+}
+
+/**
+ * The player's time zone and sign-up moment, LOCKING their profile row until the
+ * transaction ends. Two requests rolling over the same player's weeks at once (opening
+ * the app while a Finish is saving) then run one after the other, never interleaved.
+ */
+export async function lockGoalContext(db: Db, userId: string): Promise<{ timeZone: string; createdAt: Date } | null> {
+  const rows = await db.$queryRaw<{ timeZone: string; createdAt: Date }[]>`
+    SELECT "timeZone", "createdAt" FROM "profile" WHERE "userId" = ${userId} FOR UPDATE`;
+  return rows[0] ?? null;
+}
+
+export async function findTimeZone(userId: string): Promise<string | null> {
+  const row = await prisma.profile.findUnique({ where: { userId }, select: { timeZone: true } });
+  return row?.timeZone ?? null;
 }
 
 /** Keeps the cached total in step with the XP ledger (called inside Finish's transaction). */

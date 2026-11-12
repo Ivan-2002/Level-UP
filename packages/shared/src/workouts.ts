@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { weeklyGoalStatusSchema } from "./weekly-goal.js";
 import { restSecSchema } from "./progression.js";
 
 // ---------------------------------------------------------------------------
@@ -232,8 +233,10 @@ const sessionStatsSchema = z.object({
 export const finishSummarySchema = z.object({
   xp: z.object({
     sets: z.number().int(),
-    weeklyTarget: z.number().int(), // stub (0) until Milestone 5
-    streak: z.number().int(), // stub (0) until Milestone 5
+    /** The weekly bonus, when THIS workout met the week's goal. */
+    weeklyGoal: z.number().int(),
+    /** A streak milestone (12, 26, 52 weeks) reached by meeting the goal with this workout. */
+    streakMilestone: z.number().int(),
     total: z.number().int(),
   }),
   /** Total XP before and after; the app draws the level bar with levelProgress(). */
@@ -247,6 +250,8 @@ export const finishSummarySchema = z.object({
     /** The previous workout of the same routine (or any previous workout); null if none. */
     previous: sessionStatsSchema.nullable(),
   }),
+  /** The goal of the week this workout started in, as of this workout (later workouts not counted); null if that week has no goal row. */
+  weeklyGoal: weeklyGoalStatusSchema.nullable(),
   prs: z.array(
     z.object({
       exerciseId: z.uuid(),

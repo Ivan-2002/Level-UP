@@ -58,15 +58,7 @@ export function setXp(set: { reps: number; weightKg: number }, bodyweightKg: num
   return Math.round((set.reps * effectiveKg(set.weightKg, bodyweightKg, tuning)) / 10);
 }
 
-/** Bonus for hitting the weekly target. Stub until Milestone 5. */
-export function weeklyTargetXp(): number {
-  return 0;
-}
-
-/** Bonus for the weekly streak. Stub until Milestone 5. */
-export function streakXp(): number {
-  return 0;
-}
+// Weekly goal and streak bonuses: see weekly-goal.ts.
 
 // --- Estimated 1RM and records ---------------------------------------------------
 

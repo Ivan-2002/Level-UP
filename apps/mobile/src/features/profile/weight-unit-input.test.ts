@@ -28,7 +28,7 @@ describe("parseBodyweightInput", () => {
 
 describe("bodyweightMessage", () => {
   const issueFor = (bodyweightKg: number) =>
-    createProfileSchema.safeParse({ username: "IvanLifts", weeklyTarget: 3, bodyweightKg }).error!.issues[0]!;
+    createProfileSchema.safeParse({ username: "IvanLifts", bodyweightKg }).error!.issues[0]!;
 
   it("restates the schema's kg range in pounds for a lb player", () => {
     const issue = issueFor(parseBodyweightInput("50", "lb")!); // 22.7 kg: too light
@@ -43,7 +43,7 @@ describe("bodyweightMessage", () => {
   it.each(["kg", "lb"] as const)("states a %s range whose ends the schema really accepts", (unit) => {
     const { min, max } = bodyweightRange(unit);
     const accepts = (value: number) =>
-      createProfileSchema.safeParse({ username: "IvanLifts", weeklyTarget: 3, bodyweightKg: parseBodyweightInput(String(value), unit) }).success;
+      createProfileSchema.safeParse({ username: "IvanLifts", bodyweightKg: parseBodyweightInput(String(value), unit) }).success;
 
     expect([accepts(min), accepts(max)]).toEqual([true, true]);
     expect([accepts(min - 1), accepts(max + 1)]).toEqual([false, false]);

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../lib/prisma.js";
 import { app, signUpUser, type TestUser } from "../../test/helpers.js";
 
-const validCharacter = { username: "IvanLifts", bodyweightKg: 75.5, weeklyTarget: 4 };
+const validCharacter = { username: "IvanLifts", bodyweightKg: 75.5, timeZone: "Africa/Johannesburg" };
 
 function createProfile(user: TestUser, body: object) {
   return request(app).post("/profile").set("Cookie", user.cookie).send(body);
@@ -45,10 +45,9 @@ describe("POST /profile", () => {
     expect(created.body).toEqual({
       username: "IvanLifts",
       bodyweightKg: 75.5, // a plain number, not Prisma's Decimal
-      weeklyTarget: 4,
       weightUnit: "kg", // the default when the app sends none
+      timeZone: "Africa/Johannesburg",
       totalXp: 0,
-      streakWeeks: 0,
       createdAt: expect.any(String),
     });
 
@@ -58,7 +57,7 @@ describe("POST /profile", () => {
   });
 
   it("allows leaving bodyweight out, and then records no bodyweight", async () => {
-    const res = await createProfile(user, { username: "NoScale", weeklyTarget: 3 });
+    const res = await createProfile(user, { username: "NoScale" });
 
     expect(res.status).toBe(201);
     expect(res.body.bodyweightKg).toBeNull();
@@ -123,12 +122,17 @@ describe("POST /profile", () => {
     });
   });
 
-  it.each([1, 7])("rejects weekly target %i (allowed: 2 to 6)", async (weeklyTarget) => {
-    const res = await createProfile(user, { ...validCharacter, weeklyTarget });
+  it("rejects an unknown time zone", async () => {
+    const res = await createProfile(user, { ...validCharacter, timeZone: "Mars/Olympus" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("ValidationError");
-    expect(res.body.issues).toEqual([{ path: "weeklyTarget", message: expect.stringMatching(/weekly target/i) }]);
+    expect(res.body.issues).toEqual([{ path: "timeZone", message: "Unknown time zone." }]);
+  });
+
+  it("defaults the time zone to UTC when the app sends none", async () => {
+    const res = await createProfile(user, { username: "NoZone" });
+
+    expect(res.body.timeZone).toBe("UTC");
   });
 
   it("rejects malformed JSON with 400 instead of a server error", async () => {
@@ -143,7 +147,7 @@ describe("POST /profile", () => {
   });
 
   it("saves nothing when validation fails", async () => {
-    await createProfile(user, { ...validCharacter, weeklyTarget: 9 });
+    await createProfile(user, { ...validCharacter, timeZone: "Nowhere" });
 
     const res = await request(app).get("/profile").set("Cookie", user.cookie);
     expect(res.status).toBe(404);
@@ -169,7 +173,7 @@ describe("weight unit (kg / lb)", () => {
     const res = await request(app).patch("/profile").set("Cookie", user.cookie).send({ weightUnit: "lb" });
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ username: "IvanLifts", weeklyTarget: 4, bodyweightKg: 75.5, weightUnit: "lb" });
+    expect(res.body).toMatchObject({ username: "IvanLifts", timeZone: "Africa/Johannesburg", bodyweightKg: 75.5, weightUnit: "lb" });
     expect((await request(app).get("/profile").set("Cookie", user.cookie)).body.weightUnit).toBe("lb");
   });
 

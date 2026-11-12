@@ -33,6 +33,8 @@ model User {
   bodyweights   BodyweightEntry[]
   exercisePrefs ExercisePreference[]
   xpEvents      XpEvent[]
+  weeklyGoals   WeeklyGoal[]
+  achievements  UserAchievement[]
 
   @@map("user")
 }
@@ -97,15 +99,16 @@ enum WeightUnit {
 }
 
 model Profile {
-  userId       String     @id
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  username     String     @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
-  weeklyTarget Int        @default(3)
-  weightUnit   WeightUnit @default(kg)
-  totalXp      Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
-  streakWeeks  Int        @default(0)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  userId     String     @id
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username   String     @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
+  weightUnit WeightUnit @default(kg)
+  // IANA zone from the phone ("Africa/Johannesburg"). Weeks run Monday to Sunday and
+  // training days count in this zone. The app updates it when the phone's zone changes.
+  timeZone   String     @default("UTC")
+  totalXp    Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   @@map("profile")
 }
@@ -271,6 +274,7 @@ model Workout {
   finishedAt DateTime
   createdAt  DateTime          @default(now()) // when the server received it (may be later, offline)
   exercises  WorkoutExercise[]
+  metGoals   WeeklyGoal[] // the week whose goal this workout met (at most one)
 
   // Unique PER USER: a global key would let one user's retry match another user's workout.
   @@unique([userId, clientId])
@@ -319,8 +323,8 @@ model WorkoutSet {
 
 enum XpSource {
   workout_set // sourceId = workout_set.id
-  weekly_target // later; sourceId must include the user, e.g. "<userId>:2026-W46"
-  streak // later; same rule
+  weekly_goal // sourceId = weekly_goal.id: the goal of that week was met
+  streak_milestone // sourceId = weekly_goal.id: the week the streak reached 12, 26 or 52
 
   @@map("xp_source")
 }
@@ -339,4 +343,50 @@ model XpEvent {
   @@unique([source, sourceId])
   @@index([userId, createdAt])
   @@map("xp_event")
+}
+
+// One row per player per week (Monday to Sunday in their time zone), created lazily
+// when they open the app or finish a workout; weeks they were away are filled in, in
+// order, the next time. The open week's numbers update as they train.
+model WeeklyGoal {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart      DateTime  @db.Date // the Monday, as a local calendar date
+  kind           WeekKind  @default(goal)
+  target         Int // training days needed
+  daysTrained    Int       @default(0)
+  met            Boolean   @default(false)
+  // Streak including this week. While the week is open and unmet it carries the previous
+  // streak; when the week closes unmet it becomes 0.
+  streakAfter    Int       @default(0)
+  // The workout that met the goal: the workout summary shows the bonus it earned.
+  metByWorkoutId String?   @db.Uuid
+  metByWorkout   Workout?  @relation(fields: [metByWorkoutId], references: [id], onDelete: SetNull)
+  closedAt       DateTime? // set once the week is over and its result is final
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, weekStart])
+  @@map("weekly_goal")
+}
+
+enum WeekKind {
+  goal // a normal week: counts for the target and the streak
+  warm_up // the partial week of sign-up: pauses both (a "rest week" would too)
+
+  @@map("week_kind")
+}
+
+// Badges, awarded once each. XP for reaching a milestone again goes to the ledger;
+// the badge row already exists, so it isn't awarded twice.
+model UserAchievement {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String // e.g. "streak_12"
+  sourceId  String   @db.Uuid // the weekly_goal row that earned it first
+  awardedAt DateTime @default(now())
+
+  @@id([userId, key])
+  @@map("user_achievement")
 }

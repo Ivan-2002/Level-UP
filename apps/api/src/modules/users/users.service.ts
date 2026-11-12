@@ -1,6 +1,7 @@
 import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput, UpdateProfileInput } from "@levelup/shared";
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
+import { now } from "../../lib/clock.js";
 import * as repo from "./users.repository.js";
 
 // The service holds the business rules for a player's profile:
@@ -20,7 +21,7 @@ export async function createProfile(userId: string, input: CreateProfileInput): 
   if (await repo.findProfileByUserId(userId)) throw profileExists();
   if (await repo.findProfileByUsername(input.username)) throw usernameTaken();
 
-  const result = await repo.insertProfile({ userId, ...input });
+  const result = await repo.insertProfile({ userId, ...input, createdAt: now() });
 
   // ...but a concurrent request can still win the race between check and insert.
   // The database's unique constraints catch that; we just work out which one fired.
@@ -41,6 +42,18 @@ export async function requireProfile(userId: string): Promise<void> {
   if (!(await repo.profileExists(userId))) {
     throw new AppError("conflict", "ProfileRequired", "Create your character before logging workouts.");
   }
+}
+
+/** Time zone and sign-up moment for the weekly goal, locking the profile (see repository). */
+export async function lockGoalContext(db: Db, userId: string): Promise<{ timeZone: string; createdAt: Date }> {
+  const context = await repo.lockGoalContext(db, userId);
+  if (!context) throw new AppError("conflict", "ProfileRequired", "Create your character before logging workouts.");
+  return context;
+}
+
+/** The player's time zone (UTC if they have no profile). */
+export async function timeZoneOf(userId: string): Promise<string> {
+  return (await repo.findTimeZone(userId)) ?? "UTC";
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -83,10 +96,9 @@ function toProfile(row: repo.ProfileRecord): Profile {
   return {
     username: row.username,
     bodyweightKg: row.bodyweightKg === null ? null : row.bodyweightKg.toNumber(),
-    weeklyTarget: row.weeklyTarget,
     weightUnit: row.weightUnit,
+    timeZone: row.timeZone,
     totalXp: row.totalXp,
-    streakWeeks: row.streakWeeks,
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -12,13 +12,10 @@ import { Text } from "@/components/Text";
 import { TextField } from "@/components/TextField";
 import { createStyles } from "@/theme/use-theme";
 import { useCreateProfile } from "./use-profile";
-import { WeeklyTargetPicker } from "./WeeklyTargetPicker";
+import { useDeviceTimeZone } from "./use-sync-time-zone";
 import { bodyweightMessage, parseBodyweightInput, weightUnitForMeasurementSystem } from "./weight-unit-input";
 
-type FieldErrors = Partial<Record<"username" | "bodyweightKg" | "weeklyTarget", string>>;
-
-// Matches the profile table's default, so "didn't think about it" means the same everywhere.
-const DEFAULT_WEEKLY_TARGET = 3;
+type FieldErrors = Partial<Record<"username" | "bodyweightKg", string>>;
 
 // "Create your character": the last step of sign-up. The (app) layout shows this screen
 // instead of home until the player has a profile, so they can't skip it.
@@ -31,7 +28,7 @@ export function CreateCharacterScreen() {
   // A first guess from the phone's region (US -> lb); the player can change it below.
   const [weightUnit, setWeightUnit] = useState<WeightUnit>(() => weightUnitForMeasurementSystem(getLocales()[0]?.measurementSystem));
   const styles = useStyles();
-  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
+  const timeZone = useDeviceTimeZone(); // weeks run Monday to Sunday in this zone
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -43,8 +40,8 @@ export function CreateCharacterScreen() {
     const parsed = createProfileSchema.safeParse({
       username,
       bodyweightKg: parseBodyweightInput(bodyweight, weightUnit), // always kg for the API
-      weeklyTarget,
       weightUnit,
+      timeZone,
     });
     if (!parsed.success) {
       const errors: FieldErrors = {};
@@ -142,11 +139,12 @@ export function CreateCharacterScreen() {
               keyboardType="decimal-pad"
               maxLength={5}
             />
-            <WeeklyTargetPicker
-              value={weeklyTarget}
-              onChange={setWeeklyTarget}
-              hint={fieldErrors.weeklyTarget ?? "Workouts per week. Hit it to earn bonus XP and build your weekly streak."}
-            />
+            <View style={styles.goalNote}>
+              <Text variant="label">Weekly goal</Text>
+              <Text variant="caption" tone="inkMuted">
+                Start at 2 days a week. Hit your goal and it grows, up to 4.
+              </Text>
+            </View>
             {formError ? (
               <Text tone="danger" accessibilityRole="alert">
                 {formError}
@@ -197,6 +195,7 @@ const useStyles = createStyles((t) => ({
     paddingHorizontal: t.space[3],
   },
   form: { gap: t.space[4] },
+  goalNote: { gap: t.space[1] },
   unitRow: { flexDirection: "row", alignItems: "center", gap: t.space[2] },
   spacer: { flexGrow: 1 }, // pushes the button to the bottom on tall screens, like the design
 }));

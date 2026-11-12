@@ -198,3 +198,24 @@ export function findHistoryPage(
     select: summarySelect,
   });
 }
+
+/**
+ * Workouts that may fall in a week: a window one day wider on each side than the UTC week,
+ * because the player's local week can be up to 14 hours off UTC. The caller keeps those
+ * whose LOCAL day is in the week. completedSets excludes flagged sets.
+ */
+export async function findWorkoutsAround(db: Db, userId: string, weekStart: string) {
+  const from = new Date(`${weekStart}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const to = new Date(from);
+  to.setUTCDate(to.getUTCDate() + 9);
+  const rows = await db.workout.findMany({
+    where: { userId, startedAt: { gte: from, lt: to } },
+    select: { startedAt: true, createdAt: true, exercises: { select: { _count: { select: { sets: { where: { isFlagged: false } } } } } } },
+  });
+  return rows.map((w) => ({
+    startedAt: w.startedAt,
+    savedAt: w.createdAt,
+    completedSets: w.exercises.reduce((sum, e) => sum + e._count.sets, 0),
+  }));
+}

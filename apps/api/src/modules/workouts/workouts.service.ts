@@ -7,9 +7,7 @@ import {
   levelFromXp,
   liftedKg,
   setXp,
-  streakXp,
   volumeKg,
-  weeklyTargetXp,
   type Exercise,
   type FinishSummary,
   type FinishWorkoutInput,
@@ -19,19 +17,22 @@ import {
   type WorkoutDetail,
   type WorkoutPage,
 } from "@levelup/shared";
+import { now } from "../../lib/clock.js";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import * as exercisesService from "../exercises/exercises.service.js";
 import * as progressionService from "../progression/progression.service.js";
+import * as weeklyGoalService from "../progression/weekly-goal.service.js";
 import * as routinesService from "../routines/routines.service.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./workouts.repository.js";
+import { daysTrainedAsOf, daysTrainedFor } from "./weekly-goal.service.js";
 
 // Business rules for logged workouts:
 // - "Finish" is idempotent per (user, clientId): a retry returns the saved workout and
 //   creates nothing. The FIRST version saved wins; a retry's payload is not compared.
-// - Finish saves the workout, its XP, rest preferences and the routine's "last done" in
-//   ONE transaction: all of it, or none of it.
+// - Finish saves the workout, its XP, the weekly goal (and any bonus it earned), rest
+//   preferences and the routine's "last done" in ONE transaction: all of it, or none of it.
 // - The summary is calculated from saved data on every read, so a repeat returns the
 //   same summary. Records only ever compare with workouts that started earlier.
 // - A user only ever sees their own workouts.
@@ -69,6 +70,8 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
 
       const bodyweightKg = bodyweightOnDate(await usersService.bodyweightHistory(userId, tx), input.startedAt);
       await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, bodyweightKg));
+      // Rolls the weeks over and, if this workout meets this week's goal, pays the bonus.
+      await weeklyGoalService.syncWeeklyGoal(tx, userId, { now: now(), daysTrainedIn: daysTrainedFor(tx, userId), metByWorkoutId: row.id });
       await exercisesService.saveRestPreferences(tx, userId, chosenRestTimes(input));
       if (routineId) await routinesService.recordRoutineDone(tx, routineId, startedAt);
       return row;
@@ -175,9 +178,8 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
   // XP: what the ledger recorded for these sets, and the total just before.
   const setIds = row.exercises.flatMap((e) => e.sets.map((s) => s.id));
   const { earned, totalBefore } = await progressionService.workoutXp(userId, setIds, row.createdAt);
-  const weeklyTarget = weeklyTargetXp();
-  const streak = streakXp();
-  const total = earned + weeklyTarget + streak;
+  const bonus = await weeklyGoalService.bonusXpOf(row.id);
+  const total = earned + bonus.weeklyGoal + bonus.streakMilestone;
 
   // Compared with last time (same routine, or the previous workout).
   const previous = await repo.findPreviousWorkout(userId, row);
@@ -186,7 +188,7 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
     : null;
 
   return {
-    xp: { sets: earned, weeklyTarget, streak, total },
+    xp: { sets: earned, ...bonus, total },
     level: {
       before: levelFromXp(totalBefore),
       after: levelFromXp(totalBefore + total),
@@ -197,6 +199,7 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
       ...sessionStats(row, exercises, bodyweightKg),
       previous: previous && previousExercises ? sessionStats(previous, previousExercises, bodyweightOn(previous.startedAt)) : null,
     },
+    weeklyGoal: await weeklyGoalService.weekStatusAsOf(userId, row.startedAt, daysTrainedAsOf(userId, row.createdAt)),
     prs: await personalRecords(userId, row, exercises, bodyweightKg, bodyweightOn),
     bodyweightKg,
   };

@@ -15,6 +15,10 @@ workoutsRouter.get("/workouts/:id", requireAuth, controller.getWorkout);
 // The same summary Finish returned, recalculated from saved data.
 workoutsRouter.get("/workouts/:id/summary", requireAuth, controller.getWorkoutSummary);
 
+// The weekly goal is counted from workouts, so it lives here too. Opening the app calls
+// it, which is also when finished weeks are rolled over.
+workoutsRouter.get("/weekly-goal", requireAuth, controller.weeklyGoal);
+
 // Exercise history is built from workouts, so these live here even though their URLs
 // start with /exercises (modules own data and rules, not URL prefixes).
 workoutsRouter.get("/exercises/recent", requireAuth, controller.recentExercises);

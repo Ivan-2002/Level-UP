@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { weightUnitSchema, type WeightUnit } from "./units.js";
+import { timeZoneSchema } from "./weekly-goal.js";
 
 // ---------------------------------------------------------------------------
 // Profile ("Create your character")
@@ -12,8 +13,6 @@ export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 20;
 export const BODYWEIGHT_MIN_KG = 30;
 export const BODYWEIGHT_MAX_KG = 300;
-export const WEEKLY_TARGET_MIN = 2;
-export const WEEKLY_TARGET_MAX = 6;
 
 export const usernameSchema = z
   .string()
@@ -31,19 +30,16 @@ export const createProfileSchema = z.object({
     .min(BODYWEIGHT_MIN_KG, `Bodyweight must be at least ${BODYWEIGHT_MIN_KG} kg.`)
     .max(BODYWEIGHT_MAX_KG, `Bodyweight must be at most ${BODYWEIGHT_MAX_KG} kg.`)
     .optional(),
-  weeklyTarget: z
-    .number({ error: "Choose a weekly target." })
-    .int("Weekly target must be a whole number.")
-    .min(WEEKLY_TARGET_MIN, `Weekly target must be at least ${WEEKLY_TARGET_MIN}.`)
-    .max(WEEKLY_TARGET_MAX, `Weekly target must be at most ${WEEKLY_TARGET_MAX}.`),
   /** The unit the player types and reads weights in. The app sends a default from the
    * device locale (US -> lb). bodyweightKg above is always kg: the app converts. */
   weightUnit: weightUnitSchema.default("kg"),
+  /** The phone's IANA time zone: weeks run Monday to Sunday and days count in local time. */
+  timeZone: timeZoneSchema.default("UTC"),
 });
 
 /** Body of PATCH /profile: only the fields to change (at least one). */
 export const updateProfileSchema = z
-  .object({ weightUnit: weightUnitSchema.optional() })
+  .object({ weightUnit: weightUnitSchema.optional(), timeZone: timeZoneSchema.optional() })
   .refine((body) => Object.values(body).some((v) => v !== undefined), "Send at least one field to change.");
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
@@ -67,10 +63,9 @@ export type CreateProfileInput = z.infer<typeof createProfileSchema>;
 export type Profile = {
   username: string;
   bodyweightKg: number | null;
-  weeklyTarget: number;
   weightUnit: WeightUnit;
+  timeZone: string;
   totalXp: number;
-  streakWeeks: number;
   createdAt: string; // ISO 8601
 };
 

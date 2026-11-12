@@ -44,13 +44,13 @@ let playerCount = 0;
  * A signed-up user WITH a character (profile), like every real player who logs workouts.
  * Bodyweight is optional, as on the "Create your character" screen.
  */
-export async function signUpPlayer(options: { bodyweightKg?: number; weeklyTarget?: number } = {}): Promise<TestUser> {
+export async function signUpPlayer(options: { bodyweightKg?: number; timeZone?: string } = {}): Promise<TestUser> {
   const user = await signUpUser();
   playerCount += 1;
   const res = await request(app)
     .post("/profile")
     .set("Cookie", user.cookie)
-    .send({ username: `player_${playerCount}`, weeklyTarget: options.weeklyTarget ?? 3, bodyweightKg: options.bodyweightKg });
+    .send({ username: `player_${playerCount}`, bodyweightKg: options.bodyweightKg, timeZone: options.timeZone });
   if (res.status !== 201) throw new Error(`Test profile failed (${res.status}): ${res.text}`);
   return user;
 }
