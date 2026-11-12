@@ -13,7 +13,7 @@ import { plural } from "./format";
 import { syncOutboxNow } from "./outbox-sync";
 
 /** "Start workout", or "Resume workout" when this user has one in progress. */
-export function StartOrResumeWorkout({ userId }: { userId: string }) {
+export function StartOrResumeWorkout({ userId, label = "Start workout" }: { userId: string; label?: string }) {
   const workout = useActiveWorkout((s) => s.workout);
   const styles = useStyles();
   const t = useTheme();
@@ -21,7 +21,7 @@ export function StartOrResumeWorkout({ userId }: { userId: string }) {
   if (!workout || workout.userId !== userId) {
     return (
       <Button
-        label="Start workout"
+        label={label}
         onPress={() => {
           activeWorkoutStore.getState().start(userId);
           router.push("/workout");

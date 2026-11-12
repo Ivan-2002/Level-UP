@@ -15,7 +15,7 @@ import { createStyles, useTheme } from "@/theme/use-theme";
 // Second guard: a signed-in user WITHOUT a profile only gets "Create your character".
 // This asks the server instead of remembering "just signed up" on the phone, so it also
 // catches someone who signed up, closed the app, and signs in again later.
-// Tabs (Home, History, Progress, Profile) come later.
+// The tabs (Home, Workouts) are the (tabs) group; other screens stack on top of them.
 export default function AppLayout() {
   const { data: session } = authClient.useSession();
   const { data: profile, isPending, isError, error, refetch, isRefetching } = useProfile(session?.user.id);
@@ -66,9 +66,14 @@ export default function AppLayout() {
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.colors.bg } }}>
       <Stack.Protected guard={hasProfile}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workout" />
-        <Stack.Screen name="exercise-picker" options={{ presentation: "modal" }} />
+        <Stack.Screen name="routines/new" />
+        <Stack.Screen name="routines/[id]/index" />
+        <Stack.Screen name="routines/[id]/edit" />
+        {/* Sheets that slide up over the screen that opened them. */}
+        <Stack.Screen name="add-exercise" options={{ presentation: "modal" }} />
+        <Stack.Screen name="create-exercise" options={{ presentation: "modal" }} />
         <Stack.Screen name="ui-preview" />
       </Stack.Protected>
       <Stack.Protected guard={!hasProfile}>

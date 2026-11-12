@@ -104,7 +104,7 @@ export function WorkoutScreen() {
             <ExerciseCard key={draft.id} draft={draft} />
           ))}
 
-          <Button label="Add exercise" icon="plus" variant="outline" tone="link" size="md" onPress={() => router.push("/exercise-picker")} />
+          <Button label="Add exercise" icon="plus" variant="outline" tone="link" size="md" onPress={() => router.push({ pathname: "/add-exercise", params: { for: "workout" } })} />
 
           <Button label="Discard workout" variant="plain" tone="danger" size="md" onPress={discard} />
         </ScrollView>

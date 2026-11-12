@@ -42,6 +42,10 @@ export function useOutboxSync(userId: string | undefined): void {
       onSynced: () => {
         void queryClient.invalidateQueries({ queryKey: ["workouts"] });
         void queryClient.invalidateQueries({ queryKey: ["weekly-goal"] });
+        // A routine's "last done", and the "Last: 62.5 kg × 8" numbers, just changed.
+        void queryClient.invalidateQueries({ queryKey: ["routines"] });
+        void queryClient.invalidateQueries({ queryKey: ["last-sessions"] });
+        void queryClient.invalidateQueries({ queryKey: ["exercises", "recent"] });
       },
     });
     current = processor;
