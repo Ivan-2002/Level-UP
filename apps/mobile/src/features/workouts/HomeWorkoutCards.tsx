@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Text } from "@/components/Text";
 import { activeWorkoutStore, outboxStore, useActiveWorkout, useOutbox } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
+import { useProfile } from "@/features/profile/use-profile";
 import { setCounts } from "./active-workout";
 import { ElapsedTimer } from "./ElapsedTimer";
 import { plural } from "./format";
@@ -15,6 +16,7 @@ import { syncOutboxNow } from "./outbox-sync";
 /** "Start workout", or "Resume workout" when this user has one in progress. */
 export function StartOrResumeWorkout({ userId, label = "Start workout" }: { userId: string; label?: string }) {
   const workout = useActiveWorkout((s) => s.workout);
+  const { data: profile } = useProfile(userId); // already cached by the (app) layout
   const styles = useStyles();
   const t = useTheme();
 
@@ -23,7 +25,7 @@ export function StartOrResumeWorkout({ userId, label = "Start workout" }: { user
       <Button
         label={label}
         onPress={() => {
-          activeWorkoutStore.getState().start(userId);
+          activeWorkoutStore.getState().start(userId, profile?.weightUnit ?? "kg");
           router.push("/workout");
         }}
       />

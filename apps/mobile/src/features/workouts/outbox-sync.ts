@@ -46,6 +46,7 @@ export function useOutboxSync(userId: string | undefined): void {
         void queryClient.invalidateQueries({ queryKey: ["routines"] });
         void queryClient.invalidateQueries({ queryKey: ["last-sessions"] });
         void queryClient.invalidateQueries({ queryKey: ["exercises", "recent"] });
+        void queryClient.invalidateQueries({ queryKey: ["exercise-summary"] }); // last time, PRs, the trend
       },
     });
     current = processor;

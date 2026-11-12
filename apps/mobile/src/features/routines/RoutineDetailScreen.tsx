@@ -13,6 +13,7 @@ import { activeWorkoutStore, useActiveWorkout } from "@/stores/device-stores";
 import { createStyles } from "@/theme/use-theme";
 import { useProfile } from "@/features/profile/use-profile";
 import { formatLastDone, formatRest, formatSet, plural } from "@/features/workouts/format";
+import { lastSetsFrom } from "@/features/workouts/active-workout";
 import { inheritedRestSec } from "./routine-draft";
 import { useDeleteRoutine, useLastSessions, useRoutine } from "./use-routines";
 
@@ -64,7 +65,7 @@ export function RoutineDetailScreen({ routineId }: { routineId: string }) {
       ]);
       return;
     }
-    activeWorkoutStore.getState().startFromRoutine(userId, current, lastSessions.data);
+    activeWorkoutStore.getState().startFromRoutine(userId, profile?.weightUnit ?? "kg", current, lastSetsFrom(lastSessions.data));
     router.push("/workout");
   }
 

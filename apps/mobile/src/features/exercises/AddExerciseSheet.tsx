@@ -15,6 +15,7 @@ import { routineDraftStore } from "@/stores/routine-draft-store";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { TAP_TARGET } from "@/theme/tokens";
 import { useProfile } from "@/features/profile/use-profile";
+import type { LastSets } from "@/features/workouts/active-workout";
 import { capitalise, formatSet, topSet } from "@/features/workouts/format";
 import { addButtonLabel, groupExercises, initials, toggleSelected } from "./exercise-selection";
 import { useExercises, useRecentExercises } from "./use-exercises";
@@ -30,8 +31,9 @@ export type AddExerciseTarget = "workout" | "routine";
 
 export const sheetSelection = createStore<{ ids: string[] }>()(() => ({ ids: [] }));
 
-const addTo: Record<AddExerciseTarget, (exercises: Exercise[]) => void> = {
-  workout: (exercises) => activeWorkoutStore.getState().addExercises(exercises),
+// The workout pre-fills from last time when it's known ("recently used" carries it).
+const addTo: Record<AddExerciseTarget, (exercises: Exercise[], lastSets: LastSets) => void> = {
+  workout: (exercises, lastSets) => activeWorkoutStore.getState().addExercises(exercises, lastSets),
   routine: (exercises) => routineDraftStore.getState().addExercises(exercises),
 };
 
@@ -62,7 +64,8 @@ export function AddExerciseSheet({ target }: { target: AddExerciseTarget }) {
 
   function add() {
     const byId = new Map((library.data ?? []).map((e) => [e.id, e]));
-    addTo[target](selected.flatMap((id) => byId.get(id) ?? []));
+    const lastSets: LastSets = new Map((recent.data?.items ?? []).map((r) => [r.exercise.id, r.lastSets]));
+    addTo[target](selected.flatMap((id) => byId.get(id) ?? []), lastSets);
     router.back();
   }
 
