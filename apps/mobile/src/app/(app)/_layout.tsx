@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
+import { useSyncTimeZone } from "@/features/profile/use-sync-time-zone";
 import { exercisesQuery } from "@/features/exercises/use-exercises";
 import { useOutboxSync } from "@/features/workouts/outbox-sync";
 import { Button } from "@/components/Button";
@@ -25,6 +26,7 @@ export default function AppLayout() {
   // Keep sending finished workouts while signed in (stops on sign-out). Hooks must run
   // before any early return below: React needs the same hooks in the same order every render.
   useOutboxSync(session?.user.id);
+  useSyncTimeZone(session?.user.id, profile);
 
   // Load the exercise library as soon as we're signed in, so it's saved on the phone
   // before the player is at the gym with no signal.

@@ -37,8 +37,12 @@ export function useOutboxSync(userId: string | undefined): void {
       random: Math.random,
       setTimer: (callback, ms) => setTimeout(callback, ms),
       clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-      // History (Milestone 4c/5) will read ["workouts"]; refresh it when one arrives.
-      onSynced: () => void queryClient.invalidateQueries({ queryKey: ["workouts"] }),
+      // A workout arrived: refresh what it changes. History reads ["workouts"]; the
+      // weekly goal may now be met (and waits for an empty outbox, see weekly-goal-gate.ts).
+      onSynced: () => {
+        void queryClient.invalidateQueries({ queryKey: ["workouts"] });
+        void queryClient.invalidateQueries({ queryKey: ["weekly-goal"] });
+      },
     });
     current = processor;
     void processor.flush();

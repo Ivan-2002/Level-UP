@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useHealth } from "@/features/health/use-health";
 import { useProfile } from "@/features/profile/use-profile";
+import { WeeklyGoalCard } from "@/features/progress/WeeklyGoalCard";
 import { StartOrResumeWorkout, SyncStatus } from "@/features/workouts/HomeWorkoutCards";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -41,6 +42,7 @@ export default function Home() {
 
         {userId ? (
           <>
+            <WeeklyGoalCard userId={userId} />
             <StartOrResumeWorkout userId={userId} />
             <SyncStatus userId={userId} />
           </>

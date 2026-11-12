@@ -2,10 +2,15 @@ import { View } from "react-native";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { layoutSegments, segmentTotals, type Segment, type SegmentTone } from "./progress-segments";
 
-type Props = { segments: Segment[]; currentIndex: number };
+type Props = {
+  segments: Segment[];
+  currentIndex: number;
+  /** What a screen reader says; defaults to "3 of 11 sets completed". */
+  accessibilityLabel?: string;
+};
 
 /** The workout's progress bar: one segment per exercise (rules in progress-segments.ts). */
-export function ProgressSegments({ segments, currentIndex }: Props) {
+export function ProgressSegments({ segments, currentIndex, accessibilityLabel }: Props) {
   const styles = useStyles();
   const t = useTheme();
   const fills: Record<SegmentTone, string> = { complete: t.colors.success, current: t.colors.primary, other: t.colors.inkMuted };
@@ -16,7 +21,7 @@ export function ProgressSegments({ segments, currentIndex }: Props) {
       style={styles.row}
       accessible
       accessibilityRole="progressbar"
-      accessibilityLabel={`${done} of ${total} sets completed`}
+      accessibilityLabel={accessibilityLabel ?? `${done} of ${total} sets completed`}
       accessibilityValue={{ min: 0, max: total, now: done }}
     >
       {layoutSegments(segments, currentIndex).map((segment, index) => (
