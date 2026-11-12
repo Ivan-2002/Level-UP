@@ -119,7 +119,14 @@ describe("personal records in the summary", () => {
 
     expect(first.summary.prs).toEqual([]);
     expect(second.summary.prs).toEqual([
-      { exerciseId: ids["barbell-bench-press"], exerciseName: "Bench Press", kind: "e1rm", value: 78, previousValue: 76 },
+      {
+        exerciseId: ids["barbell-bench-press"],
+        exerciseName: "Bench Press",
+        kind: "e1rm",
+        value: 78,
+        previousValue: 76,
+        set: { reps: 6, weightKg: 65 }, // the set that set it
+      },
     ]);
   });
 
@@ -129,7 +136,7 @@ describe("personal records in the summary", () => {
     await finish(user, workout(2, [["pull-up", [{ reps: 8, weightKg: 0 }]]])); // 80 x (1 + 8/30) = 101.3
     const { summary } = await finish(user, workout(1, [["pull-up", [{ reps: 8, weightKg: 10 }]]])); // 90 -> 114
 
-    expect(summary.prs).toEqual([expect.objectContaining({ kind: "e1rm", value: 114, previousValue: 101.3 })]);
+    expect(summary.prs).toEqual([expect.objectContaining({ kind: "e1rm", value: 114, previousValue: 101.3, set: { reps: 8, weightKg: 10 } })]);
   });
 
   it("only compares with workouts that started EARLIER, even when synced later", async () => {

@@ -226,6 +226,10 @@ const sessionStatsSchema = z.object({
   volumeKg: z.number(), // reps x lifted kg; timed exercises excluded
 });
 
+const loggedSetSchema = z.object({ reps: z.number().int(), weightKg: z.number() });
+/** A completed set as history shows it. */
+export type LoggedSet = z.infer<typeof loggedSetSchema>;
+
 /**
  * The workout summary: what Finish earned and how it compares. Calculated from saved
  * data (never stored), so a repeated Finish returns exactly the same summary.
@@ -259,6 +263,8 @@ export const finishSummarySchema = z.object({
       kind: z.enum(["e1rm", "reps_at_weight", "longest_hold"]),
       value: z.number(), // kg (lifted, bodyweight included) / reps / seconds
       previousValue: z.number(),
+      /** The set that set it, as logged (added weight for bodyweight exercises): "65 kg × 6". */
+      set: loggedSetSchema,
     }),
   ),
   /** The bodyweight used for this workout's XP and records (for "BW + x kg"). */
@@ -290,9 +296,6 @@ export type WorkoutPage = z.infer<typeof workoutPageSchema>;
 
 // --- Exercise history (GET /exercises/:id/summary, GET /exercises/recent) ---------
 
-const loggedSetSchema = z.object({ reps: z.number().int(), weightKg: z.number() });
-/** A completed set as history shows it. */
-export type LoggedSet = z.infer<typeof loggedSetSchema>;
 
 /** One past workout's sets of an exercise. weightKg is as logged; loads include bodyweight. */
 export const exerciseSessionSchema = z.object({

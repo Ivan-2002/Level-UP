@@ -243,10 +243,11 @@ async function personalRecords(
   const prs: FinishSummary["prs"] = [];
   for (const exerciseId of exerciseIds) {
     const exercise = exerciseOf(exercises, exerciseId);
-    const sets = row.exercises
+    const logged = row.exercises
       .filter((we) => we.exerciseId === exerciseId)
       .flatMap((we) => we.sets.filter((s) => !s.isFlagged))
-      .map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bodyweightKg, exercise.bodyweightRatio) }));
+      .map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() }));
+    const sets = logged.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg, bodyweightKg, exercise.bodyweightRatio) }));
     const records = findNewRecords(books.get(exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit);
 
     for (const kind of new Set(records.map((r) => r.kind))) {
@@ -255,7 +256,7 @@ async function personalRecords(
       // e1RM and holds improve step by step within a session: compare with the
       // pre-workout best. "Reps at weight" compares at the best set's own weight.
       const previousValue = kind === "reps_at_weight" ? best.previousValue : Math.min(...ofKind.map((r) => r.previousValue));
-      prs.push({ exerciseId, exerciseName: exercise.name, kind, value: best.value, previousValue });
+      prs.push({ exerciseId, exerciseName: exercise.name, kind, value: best.value, previousValue, set: logged[best.index]! });
     }
   }
   return prs;
