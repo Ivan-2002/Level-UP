@@ -15,6 +15,7 @@ export type ActiveWorkoutState = {
   /** Starts from a routine, pre-filled. Does nothing if this user already has a workout going. */
   startFromRoutine: (userId: string, weightUnit: WeightUnit, routine: Routine, lastSets?: LastSets) => void;
   rename: (name: string) => void;
+  linkRoutine: (routineId: string) => void;
   /** Several at once, in the order given (the Add exercise sheet's multi-select); opens the first. */
   addExercises: (exercises: Exercise[], lastSets?: LastSets) => void;
   removeExercise: (exerciseKey: string) => void;
@@ -52,6 +53,7 @@ export function createActiveWorkoutStore(deps: { storage: StateStorage; newId: (
             set({ workout: workout.startFromRoutine({ userId, clientId: deps.newId(), now: deps.now(), weightUnit, routine, lastSets, newId: deps.newId }) });
           },
           rename: (name) => update((w) => ({ ...w, name })),
+          linkRoutine: (routineId) => update((w) => workout.linkRoutine(w, routineId)),
           addExercises: (exercises, lastSets) => update((w) => workout.addExercises(w, exercises, deps.newId, lastSets)),
           removeExercise: (key) => update((w) => workout.removeExercise(w, key)),
           selectExercise: (key) => update((w) => workout.selectExercise(w, key)),

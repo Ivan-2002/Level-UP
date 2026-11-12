@@ -96,7 +96,8 @@ describe("outbox processor", () => {
     await processor.flush();
 
     expect(store.getState().items).toEqual([]);
-    expect(onSynced).toHaveBeenCalledWith(expect.objectContaining({ clientId: "a" }));
+    // ...with the server's response, which the summary screen shows.
+    expect(onSynced).toHaveBeenCalledWith(expect.objectContaining({ clientId: "a" }), { status: 201 });
   });
 
   it("counts a 200 repeat (already saved on an earlier, lost response) as success", async () => {

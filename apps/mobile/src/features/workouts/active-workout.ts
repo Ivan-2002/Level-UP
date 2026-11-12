@@ -63,7 +63,14 @@ export type ActiveWorkout = {
   routineId: string | null;
   /** The exercise on screen (survives leaving the screen or the app being killed). */
   currentExerciseKey: string | null;
+  /**
+   * The routine's plan as it was when the workout started, to ask "Update {routine}
+   * with these changes?" on Finish. Optional: workouts saved before it existed have none.
+   */
+  plan?: PlannedExercise[];
 };
+
+export type PlannedExercise = { exerciseId: string; targetSets: number; targetReps: number; restSec: number | null };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -114,6 +121,7 @@ export function startFromRoutine(args: {
     ...startWorkout(args),
     name: args.routine.name,
     routineId: args.routine.id,
+    plan: args.routine.exercises.map((e) => ({ exerciseId: e.exercise.id, targetSets: e.targetSets, targetReps: e.targetReps, restSec: e.restSec })),
     exercises,
     currentExerciseKey: exercises[0]?.id ?? null,
   };
@@ -139,6 +147,11 @@ export function removeExercise(workout: ActiveWorkout, exerciseKey: string): Act
   const current =
     workout.currentExerciseKey === exerciseKey ? (exercises[index] ?? exercises[index - 1] ?? null)?.id ?? null : workout.currentExerciseKey;
   return { ...workout, exercises, currentExerciseKey: current };
+}
+
+/** Links the workout to a routine just saved from it (so Finish updates its "last done"). */
+export function linkRoutine(workout: ActiveWorkout, routineId: string): ActiveWorkout {
+  return { ...workout, routineId };
 }
 
 export function selectExercise(workout: ActiveWorkout, exerciseKey: string): ActiveWorkout {

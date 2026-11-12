@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import * as Network from "expo-network";
-import type { FinishWorkoutResponse } from "@levelup/shared";
+import { finishWorkoutResponseSchema, type FinishWorkoutResponse } from "@levelup/shared";
 import { apiPost } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
-import { outboxStore } from "@/stores/device-stores";
+import { finishedWorkoutStore, outboxStore } from "@/stores/device-stores";
 import { createOutboxProcessor, type OutboxProcessor } from "./outbox";
 
 // Connects the plain-TypeScript outbox to the real world: the API, timers, and the events
@@ -39,7 +39,10 @@ export function useOutboxSync(userId: string | undefined): void {
       clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       // A workout arrived: refresh what it changes. History reads ["workouts"]; the
       // weekly goal may now be met (and waits for an empty outbox, see weekly-goal-gate.ts).
-      onSynced: () => {
+      onSynced: (item, response) => {
+        // The summary screen may be waiting for this workout's real numbers.
+        const parsed = finishWorkoutResponseSchema.safeParse(response);
+        if (parsed.success) finishedWorkoutStore.getState().attachResponse(item.clientId, parsed.data);
         void queryClient.invalidateQueries({ queryKey: ["workouts"] });
         void queryClient.invalidateQueries({ queryKey: ["weekly-goal"] });
         // A routine's "last done", and the "Last: 62.5 kg × 8" numbers, just changed.
