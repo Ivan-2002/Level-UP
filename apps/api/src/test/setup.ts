@@ -1,5 +1,6 @@
 import { afterAll, beforeEach } from "vitest";
 import { env } from "../config/env.js";
+import { setNow } from "../lib/clock.js";
 import { prisma } from "../lib/prisma.js";
 import { assertIsTestDatabase } from "./test-database.js";
 
@@ -8,6 +9,8 @@ import { assertIsTestDatabase } from "./test-database.js";
 // Every test starts from an empty database, so tests can't depend on each other's leftovers
 // and can run in any order.
 beforeEach(async () => {
+  setNow(null); // the real time, unless a test sets the clock
+
   // One last check right before the only destructive line in the test suite.
   assertIsTestDatabase(env.DATABASE_URL);
 

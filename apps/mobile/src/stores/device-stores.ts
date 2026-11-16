@@ -3,6 +3,10 @@ import { useStore } from "zustand";
 import { deviceStorage } from "@/lib/storage";
 import { createActiveWorkoutStore, type ActiveWorkoutState } from "./active-workout-store";
 import { createOutboxStore } from "./outbox-store";
+import { createSettingsStore, type SettingsState } from "./settings-store";
+import { createRestTimerStore, type RestTimerState } from "./rest-timer-store";
+import { createFinishedWorkoutStore } from "./finished-workout-store";
+import { restNotifier } from "@/features/workouts/rest-notifications";
 import type { OutboxState } from "@/features/workouts/outbox";
 
 // The app's one instance of each store, saved to the phone. (Tests build their own with
@@ -16,7 +20,17 @@ export const activeWorkoutStore = createActiveWorkoutStore({
 
 export const outboxStore = createOutboxStore(deviceStorage);
 
+export const settingsStore = createSettingsStore(deviceStorage);
+
+export const finishedWorkoutStore = createFinishedWorkoutStore(deviceStorage);
+
+export const restTimerStore = createRestTimerStore({ storage: deviceStorage, now: Date.now, notifier: restNotifier });
+
 // React hooks: re-render only when the selected part changes.
 export const useActiveWorkout = <T>(selector: (state: ActiveWorkoutState) => T) =>
   useStore(activeWorkoutStore, selector);
 export const useOutbox = <T>(selector: (state: OutboxState) => T) => useStore(outboxStore, selector);
+export const useSettings = <T>(selector: (state: SettingsState) => T) => useStore(settingsStore, selector);
+export const useRestTimer = <T>(selector: (state: RestTimerState) => T) => useStore(restTimerStore, selector);
+export const useFinishedWorkout = <T>(selector: (state: ReturnType<typeof finishedWorkoutStore.getState>) => T) =>
+  useStore(finishedWorkoutStore, selector);

@@ -1,15 +1,30 @@
 import type { Request, Response } from "express";
-import type { FinishWorkoutInput, ListWorkoutsQuery, WorkoutDetail, WorkoutPage } from "@levelup/shared";
+import type {
+  ExerciseSummary,
+  ExerciseSummaryQuery,
+  FinishWorkoutInput,
+  FinishWorkoutResponse,
+  LastSessionList,
+  LastSessionsQuery,
+  ListWorkoutsQuery,
+  RecentExerciseList,
+  WorkoutDetail,
+  WeeklyGoalStatus,
+  WorkoutPage,
+} from "@levelup/shared";
 import * as workoutsService from "./workouts.service.js";
+import * as historyService from "./exercise-history.service.js";
+import * as weeklyGoalService from "./weekly-goal.service.js";
 
 // HTTP in, HTTP out. By the time these run, requireAuth has set req.session and the
 // validation middleware has checked the body / query.
 
 export async function finishWorkout(req: Request<object, unknown, FinishWorkoutInput>, res: Response) {
-  const { workout, created } = await workoutsService.finishWorkout(req.session!.user.id, req.body);
+  const { created, ...response } = await workoutsService.finishWorkout(req.session!.user.id, req.body);
   // The service says WHETHER something new was created; choosing the status code is HTTP's job.
   // 201 Created: saved now. 200 OK: this clientId was already saved (a retry); nothing new.
-  res.status(created ? 201 : 200).json(workout satisfies WorkoutDetail);
+  // Both carry the same workout + summary, so the app can show the summary either way.
+  res.status(created ? 201 : 200).json(response satisfies FinishWorkoutResponse);
 }
 
 // The second Response type parameter types res.locals, filled in by validateQuery.
@@ -21,4 +36,24 @@ export async function listWorkouts(req: Request, res: Response<WorkoutPage, { qu
 export async function getWorkout(req: Request<{ id: string }>, res: Response<WorkoutDetail>) {
   const workout = await workoutsService.getWorkout(req.session!.user.id, req.params.id);
   res.json(workout);
+}
+
+export async function getWorkoutSummary(req: Request<{ id: string }>, res: Response<FinishWorkoutResponse>) {
+  res.json(await workoutsService.getWorkoutSummary(req.session!.user.id, req.params.id));
+}
+
+export async function exerciseSummary(req: Request<{ id: string }>, res: Response<ExerciseSummary, { query: ExerciseSummaryQuery }>) {
+  res.json(await historyService.exerciseSummary(req.session!.user.id, req.params.id, res.locals.query.sessions));
+}
+
+export async function recentExercises(req: Request, res: Response<RecentExerciseList>) {
+  res.json(await historyService.recentExercises(req.session!.user.id));
+}
+
+export async function weeklyGoal(req: Request, res: Response<WeeklyGoalStatus>) {
+  res.json(await weeklyGoalService.currentWeeklyGoal(req.session!.user.id));
+}
+
+export async function lastSessions(req: Request, res: Response<LastSessionList, { query: LastSessionsQuery }>) {
+  res.json(await historyService.lastSessions(req.session!.user.id, res.locals.query.ids));
 }

@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client.js";
+import { PrismaClient, type Prisma } from "../generated/prisma/client.js";
 import { env } from "../config/env.js";
 
 // ONE shared Prisma client for the whole API. Each client keeps a pool of
@@ -8,3 +8,11 @@ import { env } from "../config/env.js";
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 
 export const prisma = new PrismaClient({ adapter });
+
+/**
+ * What repository functions accept as their database: the shared client above, or the
+ * client of a transaction in progress (`prisma.$transaction(async (tx) => ...)`).
+ * Passing `tx` lets several modules write inside ONE transaction (a "unit of work")
+ * without touching each other's tables.
+ */
+export type Db = Prisma.TransactionClient;

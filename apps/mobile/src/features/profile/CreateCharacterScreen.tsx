@@ -1,20 +1,21 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { createProfileSchema, USERNAME_MAX } from "@levelup/shared";
+import { getLocales } from "expo-localization";
+import { createProfileSchema, USERNAME_MAX, WEIGHT_UNITS, type WeightUnit } from "@levelup/shared";
 import { authClient } from "@/lib/auth-client";
 import { ApiError } from "@/lib/api";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
+import { Chip } from "@/components/Chip";
+import { Text } from "@/components/Text";
 import { TextField } from "@/components/TextField";
-import { colors } from "@/theme/colors";
+import { createStyles } from "@/theme/use-theme";
 import { useCreateProfile } from "./use-profile";
-import { WeeklyTargetPicker } from "./WeeklyTargetPicker";
+import { useDeviceTimeZone } from "./use-sync-time-zone";
+import { bodyweightMessage, parseBodyweightInput, weightUnitForMeasurementSystem } from "./weight-unit-input";
 
-type FieldErrors = Partial<Record<"username" | "bodyweightKg" | "weeklyTarget", string>>;
-
-// Matches the profile table's default, so "didn't think about it" means the same everywhere.
-const DEFAULT_WEEKLY_TARGET = 3;
+type FieldErrors = Partial<Record<"username" | "bodyweightKg", string>>;
 
 // "Create your character": the last step of sign-up. The (app) layout shows this screen
 // instead of home until the player has a profile, so they can't skip it.
@@ -23,8 +24,11 @@ export function CreateCharacterScreen() {
   const createProfile = useCreateProfile(session?.user.id ?? "");
 
   const [username, setUsername] = useState("");
-  const [bodyweight, setBodyweight] = useState(""); // raw text; parsed on submit
-  const [weeklyTarget, setWeeklyTarget] = useState(DEFAULT_WEEKLY_TARGET);
+  const [bodyweight, setBodyweight] = useState(""); // raw text, in weightUnit; parsed on submit
+  // A first guess from the phone's region (US -> lb); the player can change it below.
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(() => weightUnitForMeasurementSystem(getLocales()[0]?.measurementSystem));
+  const styles = useStyles();
+  const timeZone = useDeviceTimeZone(); // weeks run Monday to Sunday in this zone
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -35,14 +39,16 @@ export function CreateCharacterScreen() {
     // The server checks again: the app's check is a convenience, not a guarantee.
     const parsed = createProfileSchema.safeParse({
       username,
-      bodyweightKg: parseBodyweight(bodyweight),
-      weeklyTarget,
+      bodyweightKg: parseBodyweightInput(bodyweight, weightUnit), // always kg for the API
+      weightUnit,
+      timeZone,
     });
     if (!parsed.success) {
       const errors: FieldErrors = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path[0] as keyof FieldErrors;
-        errors[field] ??= issue.message; // first problem per field is enough
+        // First problem per field is enough. Bodyweight ranges are restated in the player's unit.
+        errors[field] ??= field === "bodyweightKg" ? bodyweightMessage(issue.code, issue.message, weightUnit) : issue.message;
       }
       setFieldErrors(errors);
       return;
@@ -68,11 +74,13 @@ export function CreateCharacterScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.eyebrow}>NEW PLAYER</Text>
-            <Text style={styles.title} accessibilityRole="header">
+            <Text variant="captionStrong" tone="ice" style={styles.eyebrow}>
+              NEW PLAYER
+            </Text>
+            <Text variant="display" accessibilityRole="header">
               Create your character
             </Text>
-            <Text style={styles.subtitle}>
+            <Text tone="inkMuted">
               Everyone starts as a Rookie. Your avatar grows with every workout you log.
             </Text>
           </View>
@@ -82,8 +90,12 @@ export function CreateCharacterScreen() {
               <Avatar />
             </View>
             <View style={styles.avatarInfo}>
-              <Text style={styles.levelPill}>Lv. 1 · Rookie</Text>
-              <Text style={styles.avatarText}>
+              <View style={styles.levelPill}>
+                <Text variant="labelStrong" tone="purple">
+                  Lv. 1 · Rookie
+                </Text>
+              </View>
+              <Text variant="label" tone="inkMuted">
                 Chest, back, shoulders, arms, core and legs each grow from the exercises that train them.
               </Text>
             </View>
@@ -106,8 +118,16 @@ export function CreateCharacterScreen() {
               maxLength={USERNAME_MAX}
               returnKeyType="next"
             />
+            <View style={styles.unitRow} accessibilityRole="radiogroup" accessibilityLabel="Weight unit">
+              <Text variant="label" style={styles.flex}>
+                Weigh in
+              </Text>
+              {WEIGHT_UNITS.map((unit) => (
+                <Chip key={unit} label={unit} role="radio" selected={unit === weightUnit} onPress={() => setWeightUnit(unit)} />
+              ))}
+            </View>
             <TextField
-              label="Bodyweight (kg)"
+              label={`Bodyweight (${weightUnit})`}
               value={bodyweight}
               onChangeText={(text) => {
                 setBodyweight(text);
@@ -115,17 +135,18 @@ export function CreateCharacterScreen() {
               }}
               error={fieldErrors.bodyweightKg}
               hint="Used to give fair XP for push-ups, pull-ups and other bodyweight exercises."
-              placeholder="e.g. 75"
+              placeholder={weightUnit === "lb" ? "e.g. 165" : "e.g. 75"}
               keyboardType="decimal-pad"
               maxLength={5}
             />
-            <WeeklyTargetPicker
-              value={weeklyTarget}
-              onChange={setWeeklyTarget}
-              hint={fieldErrors.weeklyTarget ?? "Workouts per week. Hit it to earn bonus XP and build your weekly streak."}
-            />
+            <View style={styles.goalNote}>
+              <Text variant="label">Weekly goal</Text>
+              <Text variant="caption" tone="inkMuted">
+                Start at 2 days a week. Hit your goal and it grows, up to 4.
+              </Text>
+            </View>
             {formError ? (
-              <Text style={styles.formError} accessibilityRole="alert">
+              <Text tone="danger" accessibilityRole="alert">
                 {formError}
               </Text>
             ) : null}
@@ -140,58 +161,41 @@ export function CreateCharacterScreen() {
   );
 }
 
-/**
- * Empty means "not given" (bodyweight is optional). Accepts "75,5" as well as "75.5",
- * because many locales (including South Africa) type a comma as the decimal separator.
- * Anything unparseable becomes NaN, which the schema reports as "Enter ... as a number."
- */
-function parseBodyweight(text: string): number | undefined {
-  const trimmed = text.trim();
-  if (trimmed === "") return undefined;
-  return Number(trimmed.replace(",", "."));
-}
-
-const styles = StyleSheet.create({
+const useStyles = createStyles((t) => ({
   flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { flexGrow: 1, paddingTop: 28, paddingHorizontal: 16, paddingBottom: 24, gap: 20 },
+  screen: { flex: 1, backgroundColor: t.colors.bg },
+  content: { flexGrow: 1, paddingTop: 28, paddingHorizontal: t.space[4], paddingBottom: t.space[6], gap: 20 },
   header: { gap: 6 },
-  eyebrow: { color: colors.ice, fontSize: 12, fontWeight: "600", letterSpacing: 1.9 },
-  title: { color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: "700" },
-  subtitle: { color: colors.inkMuted, fontSize: 14, lineHeight: 20 },
+  eyebrow: { letterSpacing: 1.9 },
   avatarCard: {
     height: 200,
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    padding: 16,
-    borderRadius: 24,
+    gap: t.space[4],
+    padding: t.space[4],
+    borderRadius: t.radius.xl,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   avatarFrame: {
     width: 132,
     height: 168,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceRaised,
+    borderRadius: t.radius.lg,
+    backgroundColor: t.colors.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInfo: { flex: 1, gap: 8 },
+  avatarInfo: { flex: 1, gap: t.space[2] },
   levelPill: {
     alignSelf: "flex-start",
-    color: colors.purple,
-    backgroundColor: colors.purpleSoft,
-    fontSize: 14,
-    fontWeight: "700",
-    borderRadius: 999,
-    overflow: "hidden", // iOS needs this for borderRadius on a Text background
-    paddingVertical: 4,
-    paddingHorizontal: 12,
+    backgroundColor: t.colors.purpleSoft,
+    borderRadius: t.radius.pill,
+    paddingVertical: t.space[1],
+    paddingHorizontal: t.space[3],
   },
-  avatarText: { color: colors.inkMuted, fontSize: 13, lineHeight: 18 },
-  form: { gap: 16 },
-  formError: { color: colors.danger, fontSize: 14 },
+  form: { gap: t.space[4] },
+  goalNote: { gap: t.space[1] },
+  unitRow: { flexDirection: "row", alignItems: "center", gap: t.space[2] },
   spacer: { flexGrow: 1 }, // pushes the button to the bottom on tall screens, like the design
-});
+}));

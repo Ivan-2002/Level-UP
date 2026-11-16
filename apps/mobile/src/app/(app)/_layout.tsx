@@ -1,27 +1,32 @@
 import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
+import { useSyncTimeZone } from "@/features/profile/use-sync-time-zone";
 import { exercisesQuery } from "@/features/exercises/use-exercises";
 import { useOutboxSync } from "@/features/workouts/outbox-sync";
 import { Button } from "@/components/Button";
-import { colors } from "@/theme/colors";
+import { Text } from "@/components/Text";
+import { createStyles, useTheme } from "@/theme/use-theme";
 
 // Screens for signed-in users (the root layout already guarantees a session).
 // Second guard: a signed-in user WITHOUT a profile only gets "Create your character".
 // This asks the server instead of remembering "just signed up" on the phone, so it also
 // catches someone who signed up, closed the app, and signs in again later.
-// Tabs (Home, History, Progress, Profile) come later.
+// The tabs (Home, Workouts) are the (tabs) group; other screens stack on top of them.
 export default function AppLayout() {
   const { data: session } = authClient.useSession();
   const { data: profile, isPending, isError, error, refetch, isRefetching } = useProfile(session?.user.id);
   const queryClient = useQueryClient();
+  const styles = useStyles();
+  const t = useTheme();
 
   // Keep sending finished workouts while signed in (stops on sign-out). Hooks must run
   // before any early return below: React needs the same hooks in the same order every render.
   useOutboxSync(session?.user.id);
+  useSyncTimeZone(session?.user.id, profile);
 
   // Load the exercise library as soon as we're signed in, so it's saved on the phone
   // before the player is at the gym with no signal.
@@ -37,7 +42,7 @@ export default function AppLayout() {
   if (isPending) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={colors.purple} />
+        <ActivityIndicator color={t.colors.purple} />
       </View>
     );
   }
@@ -47,7 +52,7 @@ export default function AppLayout() {
   if (isError) {
     return (
       <View style={[styles.centered, styles.errorBox]}>
-        <Text style={styles.errorText}>{`Couldn't load your character. ${error.message}`}</Text>
+        <Text tone="danger" style={styles.errorText}>{`Couldn't load your character. ${error.message}`}</Text>
         <Button label="Try again" onPress={() => refetch()} loading={isRefetching} />
         <Button label="Sign out" variant="secondary" onPress={signOut} />
       </View>
@@ -59,11 +64,20 @@ export default function AppLayout() {
   // When hasProfile flips (character just created), the screen the player is on becomes
   // protected, and Expo Router moves them to the first screen that is available.
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.colors.bg } }}>
       <Stack.Protected guard={hasProfile}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workout" />
-        <Stack.Screen name="exercise-picker" options={{ presentation: "modal" }} />
+        <Stack.Screen name="workout-summary" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="exercises/[id]/history" />
+        <Stack.Screen name="routines/new" />
+        <Stack.Screen name="routines/[id]/index" />
+        <Stack.Screen name="routines/[id]/edit" />
+        {/* Sheets that slide up over the screen that opened them. */}
+        <Stack.Screen name="add-exercise" options={{ presentation: "modal" }} />
+        <Stack.Screen name="create-exercise" options={{ presentation: "modal" }} />
+        <Stack.Screen name="finish-workout" options={{ presentation: "modal" }} />
+        <Stack.Screen name="ui-preview" />
       </Stack.Protected>
       <Stack.Protected guard={!hasProfile}>
         <Stack.Screen name="create-character" />
@@ -72,8 +86,8 @@ export default function AppLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
-  errorBox: { padding: 16, gap: 12, alignItems: "stretch" },
-  errorText: { color: colors.danger, fontSize: 15, textAlign: "center" },
-});
+const useStyles = createStyles((t) => ({
+  centered: { flex: 1, backgroundColor: t.colors.bg, alignItems: "center", justifyContent: "center" },
+  errorBox: { padding: t.space[4], gap: t.space[3], alignItems: "stretch" },
+  errorText: { textAlign: "center" },
+}));

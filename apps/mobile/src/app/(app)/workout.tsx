@@ -1,5 +1,3 @@
-import { WorkoutScreen } from "@/features/workouts/WorkoutScreen";
+import { ActiveWorkoutScreen } from "@/features/workouts/ActiveWorkoutScreen";
 
-export default function Workout() {
-  return <WorkoutScreen />;
-}
+export default ActiveWorkoutScreen;

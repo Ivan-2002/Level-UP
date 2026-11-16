@@ -30,6 +30,12 @@ export const benchPress: Exercise = {
   bodyPart: "chest",
   equipment: "barbell",
   repsUnit: "reps",
+  mechanic: "compound",
+  suggestedRestSec: 180,
+  loadFactor: 1.25,
+  bodyweightRatio: 0,
+  isCustom: false,
+  restPreferenceSec: null,
 };
 
 export const pullUp: Exercise = {
@@ -39,6 +45,12 @@ export const pullUp: Exercise = {
   bodyPart: "back",
   equipment: "bodyweight",
   repsUnit: "reps",
+  mechanic: "compound",
+  suggestedRestSec: 150,
+  loadFactor: 1.25,
+  bodyweightRatio: 1.0,
+  isCustom: false,
+  restPreferenceSec: null,
 };
 
 export const plank: Exercise = {
@@ -48,6 +60,12 @@ export const plank: Exercise = {
   bodyPart: "core",
   equipment: "bodyweight",
   repsUnit: "seconds",
+  mechanic: "isolation",
+  suggestedRestSec: 60,
+  loadFactor: 0.35,
+  bodyweightRatio: 0.5,
+  isCustom: false,
+  restPreferenceSec: null,
 };
 
 export const lateralRaise: Exercise = {
@@ -57,4 +75,10 @@ export const lateralRaise: Exercise = {
   bodyPart: "shoulders",
   equipment: "dumbbell",
   repsUnit: "reps",
+  mechanic: "isolation",
+  suggestedRestSec: 60,
+  loadFactor: 5.0,
+  bodyweightRatio: 0,
+  isCustom: false,
+  restPreferenceSec: null,
 };

@@ -93,8 +93,8 @@ export type OutboxProcessorDeps = {
   random: () => number;
   setTimer: (callback: () => void, ms: number) => unknown;
   clearTimer: (handle: unknown) => void;
-  /** Called after each workout reaches the server (e.g. to refresh history). */
-  onSynced?: (item: OutboxItem) => void;
+  /** Called after each workout reaches the server, with its response (e.g. the summary to show). */
+  onSynced?: (item: OutboxItem, response: unknown) => void;
 };
 
 export type OutboxProcessor = {
@@ -136,9 +136,9 @@ export function createOutboxProcessor(deps: OutboxProcessorDeps): OutboxProcesso
       tried.add(item.clientId);
 
       try {
-        await deps.send(item.payload);
+        const response = await deps.send(item.payload);
         deps.store.getState().markSynced(item.clientId);
-        deps.onSynced?.(item);
+        deps.onSynced?.(item, response);
       } catch (error) {
         if (classifyFailure(error) === "stop") {
           // This workout can't succeed as it is; don't let it block the ones behind it.

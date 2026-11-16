@@ -1,12 +1,12 @@
 import Svg, { Circle, Line, Path } from "react-native-svg";
-import { colors } from "@/theme/colors";
+import { useTheme } from "@/theme/use-theme";
 
 // The stickman avatar, drawn as SVG in code (no art assets; see docs/ARCHITECTURE.md).
 // For now it always draws the Rookie stage. In Milestone 6 it takes a stage config
 // (stroke width, shoulder width, extras) and per-body-part development values,
 // never a level, so the art stays separate from the game rules.
 export function Avatar({ width = 104, height = 140 }: { width?: number; height?: number }) {
-  const stroke = colors.ink;
+  const stroke = useTheme().colors.ink;
   return (
     <Svg width={width} height={height} viewBox="0 0 104 140" accessibilityRole="image" accessibilityLabel="Rookie stickman avatar">
       <Circle cx={52} cy={22} r={13} fill="none" stroke={stroke} strokeWidth={3} />

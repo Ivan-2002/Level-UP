@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { finishWorkoutSchema, listWorkoutsQuerySchema } from "@levelup/shared";
+import { exerciseSummaryQuerySchema, finishWorkoutSchema, lastSessionsQuerySchema, listWorkoutsQuerySchema } from "@levelup/shared";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validateBody, validateQuery } from "../../middleware/validate.js";
 import * as controller from "./workouts.controller.js";
@@ -12,3 +12,21 @@ workoutsRouter.post("/workouts", requireAuth, validateBody(finishWorkoutSchema),
 // History, newest first: ?limit=20&cursor=<nextCursor from the previous page>
 workoutsRouter.get("/workouts", requireAuth, validateQuery(listWorkoutsQuerySchema), controller.listWorkouts);
 workoutsRouter.get("/workouts/:id", requireAuth, controller.getWorkout);
+// The same summary Finish returned, recalculated from saved data.
+workoutsRouter.get("/workouts/:id/summary", requireAuth, controller.getWorkoutSummary);
+
+// The weekly goal is counted from workouts, so it lives here too. Opening the app calls
+// it, which is also when finished weeks are rolled over.
+workoutsRouter.get("/weekly-goal", requireAuth, controller.weeklyGoal);
+
+// Exercise history is built from workouts, so these live here even though their URLs
+// start with /exercises (modules own data and rules, not URL prefixes).
+workoutsRouter.get("/exercises/recent", requireAuth, controller.recentExercises);
+// ?ids=a,b,c -> each exercise's most recent session (routine detail, active workout pre-fill).
+workoutsRouter.get("/exercises/last-sessions", requireAuth, validateQuery(lastSessionsQuerySchema), controller.lastSessions);
+workoutsRouter.get(
+  "/exercises/:id/summary",
+  requireAuth,
+  validateQuery(exerciseSummaryQuerySchema),
+  controller.exerciseSummary,
+);

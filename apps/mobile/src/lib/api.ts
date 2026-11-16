@@ -1,4 +1,7 @@
+import { ApiError } from "./api-error";
 import { authClient } from "./auth-client";
+
+export { ApiError, isUnreachable } from "./api-error";
 
 // The one place the app talks to the LevelUp API.
 // Every request goes through here, so base URL, timeouts, the session cookie
@@ -13,21 +16,9 @@ if (!baseUrl) {
   );
 }
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number | null, // null = never reached the server
-    // The API's stable error code (e.g. "UsernameTaken"). Branch on this, never on
-    // `message`: messages are for humans and may be reworded at any time.
-    public readonly code: string | null = null,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
 
 async function request<T>(
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
   timeoutMs = 8000,
@@ -78,8 +69,20 @@ async function request<T>(
   }
 }
 
-export const apiGet = <T>(path: string) => request<T>("GET", path);
+// The API version this build of the app speaks. Callers pass paths without it ("/workouts"),
+// so moving to /v2 one day is a change here, not in every screen.
+const API_VERSION = "/v1";
+
+export const apiGet = <T>(path: string) => request<T>("GET", `${API_VERSION}${path}`);
 export const apiPost = <T>(path: string, body: unknown) =>
-  request<T>("POST", path, body);
+  request<T>("POST", `${API_VERSION}${path}`, body);
 export const apiPatch = <T>(path: string, body: unknown) =>
-  request<T>("PATCH", path, body);
+  request<T>("PATCH", `${API_VERSION}${path}`, body);
+export const apiPut = <T>(path: string, body: unknown) =>
+  request<T>("PUT", `${API_VERSION}${path}`, body);
+/** 204 No Content: resolves with nothing. */
+export const apiDelete = (path: string) => request<null>("DELETE", `${API_VERSION}${path}`);
+
+/** For the few routes outside the versioned API: today only GET /health. */
+export const apiGetUnversioned = <T>(path: string) => request<T>("GET", path);
+
