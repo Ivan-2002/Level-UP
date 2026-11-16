@@ -2,7 +2,7 @@ import { bodyweightOnDate, liftedKg, setXp, xpBodyweightOnDate, type XpBodyweigh
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
 import { applyDailyCap, judgeSession, jumpCappedXp, jumpCheckValue, plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
-import { SIM_EXERCISES } from "./exercises.js";
+import { SIM_EXERCISES, type SimExercise } from "./exercises.js";
 import type { PlannedExercise, Session, SimPlayer } from "./players.js";
 
 // Plays a player's training through the REAL rules in @levelup/shared, week by week.
@@ -43,7 +43,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const atDay = (day: number, hourUtc: number) => new Date(SIGN_UP.getTime() + day * DAY_MS + (hourUtc - 7) * 60 * 60 * 1000);
 
-export function simulate(player: SimPlayer, weeks = 104): SimResult {
+/**
+ * How a set's XP is worked out. Default: the shared setXp. Pluggable only to COMPARE
+ * candidate formulas (docs: Milestone 5 balancing); the game always uses the shared one.
+ * `best`: the player's best estimated 1RM for this exercise before this session (the
+ * jump-cap baseline), or null the first time.
+ */
+export type SimSetXp = (set: { reps: number; weightKg: number }, xpBodyweightKg: number, exercise: SimExercise, best: number | null) => number;
+
+const sharedSetXp: SimSetXp = (set, xpBodyweightKg, exercise) => setXp(set, xpBodyweightKg, exercise);
+
+export function simulate(player: SimPlayer, weeks = 104, options: { setXp?: SimSetXp; xpForLevel?: (level: number) => number } = {}): SimResult {
+  const formula = options.setXp ?? sharedSetXp;
+  const levelXp = options.xpForLevel ?? xpForLevel;
   const bodyweights: XpBodyweightEntry[] = [];
   const reached = Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>;
   const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, jumpCappedSets: 0, cappedDays: 0, heldBackXp: 0, firstWeekSessionXp: [] as number[] };
@@ -56,7 +68,7 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
 
   const checkLevels = (day: number) => {
     for (const level of SIM_LEVELS) {
-      if (reached[level] === null && result.setXp + result.bonusXp >= xpForLevel(level)) reached[level] = { session: result.sessions - 1, day };
+      if (reached[level] === null && result.setXp + result.bonusXp >= levelXp(level)) reached[level] = { session: result.sessions - 1, day };
     }
   };
 
@@ -75,7 +87,7 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
       const strength = Math.min(player.growth.max, 1 + player.growth.perWeek * week);
 
       const bodyweight = { xp: xpBodyweightOnDate(bodyweights, startedAt), typed: bodyweightOnDate(bodyweights, startedAt) };
-      const { setXps, flagged, jumpCapped } = scoreSession(session, strength, bodyweight, baselines);
+      const { setXps, flagged, jumpCapped } = scoreSession(session, strength, bodyweight, baselines, formula);
       const dayXp = setXps.reduce((a, b) => a + b, 0);
       // One session a day, so nothing was awarded earlier that day.
       const capped = applyDailyCap(0, setXps);
@@ -110,7 +122,7 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
 
 /** Set XP of one session on its own (no history), at `strength` x the starting loads. */
 export function sessionSetXp(session: Session, strength: number, bodyweightKg: number): number {
-  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, new Map()).setXps.reduce((a, b) => a + b, 0);
+  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, new Map(), sharedSetXp).setXps.reduce((a, b) => a + b, 0);
 }
 
 /**
@@ -124,6 +136,7 @@ function scoreSession(
   strength: number,
   bodyweight: { xp: number; typed: number },
   baselines: Map<string, number | null>,
+  formula: SimSetXp,
 ): { setXps: number[]; flagged: number; jumpCapped: number } {
   const setXps: number[] = [];
   let flagged = 0;
@@ -136,10 +149,11 @@ function scoreSession(
       continue;
     }
     const value = jumpCheckValue({ reps: set.reps, loadKg: liftedKg(set.weightKg, bodyweight.typed, exercise.bodyweightRatio) }, exercise.repsUnit);
-    const judged = judgeSession(baselines.get(planned.slug) ?? null, Array.from({ length: planned.sets }, () => value));
+    const best = baselines.get(planned.slug) ?? null;
+    const judged = judgeSession(best, Array.from({ length: planned.sets }, () => value));
     baselines.set(planned.slug, judged.baselineAfter);
     jumpCapped += judged.aboveHistory.filter(Boolean).length;
-    const full = setXp(set, bodyweight.xp, exercise);
+    const full = formula(set, bodyweight.xp, exercise, best);
     for (const factor of judged.factors) setXps.push(jumpCappedXp(full, factor));
   }
   return { setXps, flagged, jumpCapped };
