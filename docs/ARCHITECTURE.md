@@ -1,6 +1,6 @@
 # Level Up — Project Context & Architecture
 
-_Last updated: 2026-11-11 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
+_Last updated: 2026-11-16 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
 
 ## Vision & MVP scope
 
@@ -131,7 +131,7 @@ These tables cover the MVP. Better Auth creates and owns its own user, session a
 | workout | id, user_id, client_id (unique per user), routine_id (optional link; cleared if the routine is deleted), name, started_at, finished_at | One gym session; client_id makes "Finish" safe to retry. History is ordered by started_at |
 | workout_exercise | id, workout_id, exercise_id, order, rest_sec | Which exercises were done, in order (exercises in history can't be deleted) |
 | workout_set | id, workout_exercise_id, reps, weight_kg (3 decimals), set_order, completed_at, is_flagged, flag_reason | Each set performed. weight_kg is per dumbbell for dumbbell lifts and added weight for bodyweight exercises; plank logs seconds in reps for now |
-| xp_event | id, user_id, amount, source, source_id, body_part, created_at | The XP ledger: one row per XP gain (one per completed set for workout XP). Unique on (source, source_id), so a repeated request can never award XP twice |
+| xp_event | id, user_id, amount, source, source_id, body_part, earned_on (local date, Milestone 5), created_at | The XP ledger: one row per XP gain (one per completed set for workout XP). Unique on (source, source_id), so a repeated request can never award XP twice. `earned_on` is the local calendar day the workout STARTED (the daily cap's day); `created_at` is only when the server received it |
 | weekly_goal | id, user_id, week_start (local Monday), kind (goal or warm_up), target, days_trained, met, streak_after, met_by_workout_id, closed_at | One row per player per week, created lazily (no cron job). Unique on (user_id, week_start). Bonuses use its id as the ledger source_id |
 | user_achievement | user_id, key (e.g. streak_12), source_id, awarded_at | Badges, awarded once each (primary key user_id + key) |
 | avatar_stage | level_required, name, asset_key | Growth stages of the avatar, stored as data |
@@ -162,8 +162,11 @@ That puts level 2 at 100 XP, level 5 at 800 XP, level 10 at 2,700 XP and level 2
 
 **Limits against fake or inflated workouts** (values to tune later):
 
-- **Daily soft cap:** full XP up to a daily limit, then 25% XP beyond it, with a hard ceiling at twice the limit. A soft cap rewards a genuinely big day without making a fake 1,000-pull-up day worth it.
-- **Plausibility checks per set:** reps or weight far beyond a realistic range for that exercise earn no XP and are flagged instead of rejected, so honest typos can be fixed.
+- **Daily soft cap:** full XP up to a daily limit, then 25% XP beyond it, with a hard ceiling at twice the limit. A soft cap rewards a genuinely big day without making a fake 1,000-pull-up day worth it. Three rules keep it honest:
+  - **The cap's day is the day the workout started**, in the player's time zone (the same rule as training days), stored on each ledger row as `xp_event.earned_on`. `created_at` is when the server received the row, so an offline workout synced two days late would otherwise count against the wrong day.
+  - **Lock, then count.** Finish locks the player's profile row (`SELECT ... FOR UPDATE`, as the weekly rollover does) BEFORE it sums the day's XP and awards more. Without the lock, two Finishes arriving together could each see room under the cap.
+  - **Old workouts earn no XP.** `startedAt` comes from the phone, so a cheat could spread fake workouts over past days, each under its own cap. A workout that started more than 14 days before the server received it is still saved (history and PRs), but earns no XP. Future times are already rejected by the shared schema.
+- **Plausibility checks per set:** reps or weight far beyond a realistic range for that exercise earn no XP and are flagged instead of rejected, so honest typos can be fixed. Status (2026-11-16): the shared schema has global limits (`REPS_MAX`, `WEIGHT_MAX_KG`) and Finish already skips flagged sets for XP and PRs, but nothing sets `is_flagged` yet. Per-exercise ranges arrive with Milestone 5; until then the daily cap is the main defence.
 - **Special events later:** marathons and other big efforts get their own XP source with its own limits, rather than raising the daily cap for everyone.
 - **Server-side only:** all caps run in the progression service, so they can be tuned without an app update.
 
@@ -202,7 +205,13 @@ These are designed in from day one but switched on when the milestone needs them
 | Errors and crashes | Sentry in the app and the API | Before beta |
 | Hosting | API in a Docker container on a managed host; managed Postgres with backups | Before beta |
 | App builds | Expo EAS builds, store submission, over-the-air updates | Before beta |
-| Security | Rate limiting on auth routes, Helmet headers, input validation on every route | Milestone 2 onwards |
+| Security | Helmet headers, input validation on every route | Milestone 2 onwards |
+| Rate limiting | Better Auth's own limiter on `/api/auth`; a limiter on our routes (per user, stricter on writes). Needs `trust proxy` set correctly once the API sits behind the host's proxy | Before beta |
+| API versioning | Our routes live under `/v1`; `/api/auth` and `/health` stay unversioned. Old app versions stay on phones for months, so a breaking change becomes `/v2` next to `/v1` | Before Milestone 5 |
+| Password reset and email verification | Better Auth's reset and verification flows, with a transactional email provider (still to choose) | Before beta |
+| Account deletion | `DELETE /v1/me`, asking for the password again. Every table cascades from `user`, so one delete removes everything. Required by the App Store and Google Play | Before beta |
+| Privacy | Privacy policy and store data-safety forms (bodyweight and training history are personal data: POPIA, GDPR) | Before beta |
+| Local test files | curl cookie jars and other scratch files are git-ignored (`cookies.txt`), never committed | Now |
 
 The hosting provider is still open; the shortlist is Render, Railway or Fly.io for the API, and Neon or Supabase for Postgres.
 
@@ -220,11 +229,11 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: a workout logged in airplane mode saves exactly once after reconnecting.
 4c. **Routines and active workout.** Saved routines (list, detail, builder), the active workout screen with a rest timer and notification, estimated 1RM and PRs, XP per set written to the ledger, the workout summary and exercise history. Pulls the XP ledger and PRs forward from Milestone 5.
    - Done when: starting a routine pre-fills the active workout, the rest timer is correct after the app was in the background, and Finish shows XP earned and new PRs, saved exactly once.
-5. **Progression.** Level-up screen and daily XP cap (the ledger, level formula and XP bar arrive in 4c; the weekly goal and streak arrived before 4c Phase 4).
-   - Done when: finishing a workout shows XP gained and, when earned, a level-up.
+5. **Progression.** Level-up screen, daily XP cap (`xp_event.earned_on`, lock-then-count, no XP for workouts older than 14 days) and per-exercise plausibility flags (the ledger, level formula and XP bar arrive in 4c; the weekly goal and streak arrived before 4c Phase 4). Before it starts: routes move under `/v1`.
+   - Done when: finishing a workout shows XP gained and, when earned, a level-up; two Finishes sent at the same moment can't exceed the cap; an offline workout synced days later counts against the day it was done.
 6. **Stickman avatar.** Growth stages driven by level, body parts driven by body-part XP.
    - Done when: the avatar visibly changes at levels 5, 10, 15 and 20, and untrained body parts stay thin.
-7. **Beta readiness.** Hosting, Sentry, EAS builds, testers on TestFlight and Google Play internal testing.
+7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, testers on TestFlight and Google Play internal testing.
    - Done when: five real people use it at the gym for two weeks.
 
 Later, not yet scheduled: **session backup sync**, an idempotent `PUT /sessions/:clientId` that uploads the whole in-progress session every minute or so. It protects against a lost phone and gives the server its own receive times, which the anti-cheat checks need (sets far above the player's history, or completed implausibly fast, get `is_flagged`, earn no XP and don't count as PRs until confirmed).
@@ -237,6 +246,11 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-16 | The daily cap counts XP by the local day the workout started (`xp_event.earned_on`), not by when the server received it | One more column, filled in for existing rows from their workout; late-synced offline workouts land on the right day |
+| 2026-11-16 | Finish locks the profile row before counting the day's XP | Two Finishes from one player run one after the other (milliseconds); the cap can't be beaten by sending them together |
+| 2026-11-16 | A workout that started more than 14 days before the server received it is saved but earns no XP | A phone offline for over two weeks loses that XP; backdated fake workouts can't dodge the cap. Saved rather than rejected, so the outbox never retries it forever |
+| 2026-11-16 | Our routes move under `/v1` now, before any released app exists; `/api/auth` and `/health` stay as they are | A prefix on every URL; breaking changes can ship later without breaking installed apps |
+| 2026-11-16 | Password reset, email verification, account deletion and rate limiting on our own routes are beta requirements (Milestone 7), not MVP-loop work | Test accounts can't recover a password until then; the core loop isn't slowed down |
 | 2026-11-11 | kg/lb: weights stay stored and calculated in kg with 3 decimals (DECIMAL(7,3)); the player's unit (profile.weight_unit) only changes input and display. Conversion and formatting are pure functions in `packages/shared` | Display must round (2 decimals); in exchange, one unit for all maths and history, and anything typed with up to 2 decimals in lb comes back exactly (2-decimal storage turned 135 lb into 134.99) |
 | 2026-11-12 | Finish is a confirmation sheet that asks the routine question ("Save as a routine?" for an empty workout; "Update {routine} with these changes?" listing them). The routine is saved before the workout is queued, so a new routine is linked to the workout that made it; if saving the routine fails, the player can retry or finish without it | A stray tap can't end a workout; the routine needs a connection, the workout never does |
 | 2026-11-12 | The summary shows the server's numbers once the workout syncs (the outbox now hands its response on; the last finished workout and its response are saved on the phone). Before that it shows a labelled preview (XP for sets, duration, sets, volume) worked out with the shared formulas | Works offline and after a restart; nothing is presented as awarded until the server says so |
