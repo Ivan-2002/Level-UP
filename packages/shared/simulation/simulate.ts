@@ -1,4 +1,4 @@
-import { bodyweightOnDate, setXp } from "../src/progression.js";
+import { setXp, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
 import { SIM_EXERCISES } from "./exercises.js";
@@ -36,7 +36,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const atDay = (day: number, hourUtc: number) => new Date(SIGN_UP.getTime() + day * DAY_MS + (hourUtc - 7) * 60 * 60 * 1000);
 
 export function simulate(player: SimPlayer, weeks = 104): SimResult {
-  const bodyweights: { kg: number; measuredOn: string }[] = [];
+  const bodyweights: XpBodyweightEntry[] = [];
   const reached = Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>;
   const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, firstWeekSessionXp: [] as number[] };
 
@@ -52,7 +52,9 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
 
   for (let week = 0; week < weeks; week++) {
     const typed = player.typedBodyweight ? player.typedBodyweight(week) : week === 0 ? player.bodyweightKg : null;
-    if (typed !== null) bodyweights.push({ kg: typed, measuredOn: isoDate(atDay(week * 7, 7)) });
+    // Typed on Monday morning; the server receives it right away.
+    const typedAt = atDay(week * 7, 7);
+    if (typed !== null) bodyweights.push({ kg: typed, measuredOn: isoDate(typedAt), receivedAt: typedAt.toISOString() });
 
     let daysTrained = 0;
     let bonusPaid = false;
@@ -62,7 +64,7 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
       const session = player.sessions[result.sessions % player.sessions.length]!;
       const strength = Math.min(player.growth.max, 1 + player.growth.perWeek * week);
 
-      const dayXp = sessionSetXp(session, strength, bodyweightOnDate(bodyweights, startedAt));
+      const dayXp = sessionSetXp(session, strength, xpBodyweightOnDate(bodyweights, startedAt));
       result.sessions++;
       result.setXp += dayXp;
       result.biggestDayXp = Math.max(result.biggestDayXp, dayXp);

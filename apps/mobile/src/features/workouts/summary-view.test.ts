@@ -77,10 +77,10 @@ describe("previewSummary (before the workout syncs)", () => {
     if (!ticked.ok) throw new Error(ticked.message);
 
     expect(previewSummary(ticked.value, new Date(START.getTime() + 3_600_000).toISOString(), 80)).toEqual({
-      xpSets: 60, // round(8 x 60 x 1.25 / 10)
+      xpSets: 56, // round(8 x 60 x 1.25 x 75/80 / 10): XP is relative to bodyweight
       durationSec: 3600,
       setCount: 1,
-      volumeKg: 480,
+      volumeKg: 480, // volume stays in real kilograms
     });
   });
 });

@@ -46,7 +46,8 @@ const times = (n: number, set: SetInput) => Array.from({ length: n }, () => set)
 
 describe("XP at Finish", () => {
   it("writes one ledger row per completed set, using the shared formula", async () => {
-    const user = await signUpPlayer({ bodyweightKg: 80 });
+    // 75 kg is the XP reference bodyweight (factor 1), so the arithmetic is the plain formula.
+    const user = await signUpPlayer({ bodyweightKg: 75 });
 
     // Bench (loadFactor 1.25): 8 x 60 -> round(8 x 60 x 1.25 / 10) = 60 XP per set.
     const { workout: saved, summary } = await finish(user, workout(0, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]));
@@ -60,7 +61,7 @@ describe("XP at Finish", () => {
   });
 
   it("never awards XP twice: a repeat returns the same summary and writes nothing", async () => {
-    const user = await signUpPlayer({ bodyweightKg: 80 });
+    const user = await signUpPlayer({ bodyweightKg: 75 });
     const input = workout(0, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]);
 
     const first = await finish(user, input, 201);
@@ -72,7 +73,7 @@ describe("XP at Finish", () => {
   });
 
   it("awards XP once when two identical Finishes race", async () => {
-    const user = await signUpPlayer({ bodyweightKg: 80 });
+    const user = await signUpPlayer({ bodyweightKg: 75 });
     const input = workout(0, [["barbell-bench-press", times(2, { reps: 8, weightKg: 60 })]]);
 
     await Promise.all([
@@ -84,19 +85,20 @@ describe("XP at Finish", () => {
     expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(120);
   });
 
-  it("uses the bodyweight in effect on the workout's date, so a 0 kg pull-up still earns XP", async () => {
+  it("uses the bodyweight in effect on the workout's date, and XP is relative to it", async () => {
     const user = await signUpPlayer(); // no bodyweight at sign-up
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 70, measuredOn: isoDate(Date.now() - 10 * DAY) });
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 90 });
 
-    // 5 days ago the 70 kg entry was in effect: round(10 x (0 + 70 x 1.0) x 1.25 / 10) = 88.
-    const { summary } = await finish(user, workout(5, [["pull-up", [{ reps: 10, weightKg: 0 }]]]));
+    // 5 days ago the 70 kg entry was in effect: round(8 x 60 x 1.25 x (75 / 70) / 10) = 64.
+    // (At today's 90 kg the same sets would earn 50.)
+    const { summary } = await finish(user, workout(5, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
 
     expect(summary.bodyweightKg).toBe(70);
-    expect(summary.xp.sets).toBe(88);
+    expect(summary.xp.sets).toBe(64);
   });
 
-  it("falls back to 75 kg when no bodyweight was ever entered", async () => {
+  it("falls back to 75 kg when no bodyweight was ever entered, and a 0 kg pull-up still earns XP", async () => {
     const user = await signUpPlayer();
 
     const { summary } = await finish(user, workout(0, [["pull-up", [{ reps: 10, weightKg: 0 }]]]));

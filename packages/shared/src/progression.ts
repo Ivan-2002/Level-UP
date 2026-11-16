@@ -21,13 +21,81 @@ export type ExerciseTuning = { loadFactor: number; bodyweightRatio: number };
  * The bodyweight to use for a workout on `date` (any ISO date-time; its UTC date counts):
  * the latest entry on or before that day. If every entry is later, the earliest one
  * (a better guess than a generic value); with no entries at all, the 75 kg fallback.
+ * The REAL value the player typed: for PRs, volume and display. XP uses xpBodyweightOnDate.
  */
 export function bodyweightOnDate(entries: { kg: number; measuredOn: string }[], date: string): number {
-  if (entries.length === 0) return BODYWEIGHT_FALLBACK_KG;
+  return entries.length === 0 ? BODYWEIGHT_FALLBACK_KG : entryInEffect(entries, date).kg;
+}
+
+function entryInEffect<E extends { measuredOn: string }>(entries: E[], date: string): E {
   const day = date.slice(0, 10);
   const sorted = [...entries].sort((a, b) => a.measuredOn.localeCompare(b.measuredOn));
-  const inEffect = sorted.filter((e) => e.measuredOn <= day).at(-1);
-  return (inEffect ?? sorted[0]!).kg;
+  return sorted.filter((e) => e.measuredOn <= day).at(-1) ?? sorted[0]!;
+}
+
+// --- XP bodyweight ------------------------------------------------------------------
+// Set XP is relative to bodyweight (x 75 / bodyweight), so XP rewards effort, not absolute
+// strength. That makes a LOW bodyweight worth XP, so XP doesn't trust the typed value
+// blindly. See docs/ARCHITECTURE.md, "XP per completed set".
+
+export const BODYWEIGHT_XP = {
+  /** Set XP is scaled by referenceKg / bodyweight, so a 75 kg player's XP is unchanged. */
+  referenceKg: 75,
+  /** The XP bodyweight is clamped to this range, whatever was typed. */
+  minKg: 40,
+  maxKg: 200,
+  /** An entry can LOWER the XP bodyweight by at most this share of it per week since the previous entry. */
+  maxChangePerWeek: 0.02,
+} as const;
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const clampXpBodyweight = (kg: number) => Math.min(BODYWEIGHT_XP.maxKg, Math.max(BODYWEIGHT_XP.minKg, kg));
+
+/** A bodyweight entry as XP sees it: `receivedAt` is when the server last wrote it. */
+export type XpBodyweightEntry = { kg: number; measuredOn: string; receivedAt: string };
+
+/**
+ * The bodyweight set XP uses for a workout on `date`: the same entry bodyweightOnDate
+ * picks (by measuredOn), but its value limited at the moment the server received it.
+ *
+ * Walking the entries in the order the server received them, each entry:
+ * - RAISES the value at once: a higher bodyweight never earns more XP (loaded lifts
+ *   earn less, bodyweight exercises the same), so there's nothing to protect.
+ * - LOWERS it by at most 2% of the value per week since the previous entry. The
+ *   allowance builds up with time, not per entry: 5 kg lost over two months and entered
+ *   once passes in full; 80 -> 40 kg overnight moves about 0.2 kg.
+ *
+ * Why receive time, not measuredOn: the player chooses measuredOn, so a backdated entry
+ * could otherwise claim months of allowance. Re-entering a date replaces that entry and
+ * gives it a new receivedAt, so an edited entry moves to the end of the walk instead of
+ * becoming an unchecked first entry. The first entry received is taken as typed:
+ * there's nothing to check it against.
+ */
+export function xpBodyweightOnDate(entries: XpBodyweightEntry[], date: string): number {
+  if (entries.length === 0) return BODYWEIGHT_FALLBACK_KG;
+  return limitedOnReceipt(entries).get(entryInEffect(entries, date))!;
+}
+
+/** Every entry's XP value at the moment it was received. */
+function limitedOnReceipt(entries: XpBodyweightEntry[]): Map<XpBodyweightEntry, number> {
+  const byReceipt = [...entries].sort((a, b) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt));
+  const limited = new Map<XpBodyweightEntry, number>();
+  let value: number | null = null;
+  let previousAt = 0;
+  for (const entry of byReceipt) {
+    const typed = clampXpBodyweight(entry.kg);
+    const at = Date.parse(entry.receivedAt);
+    if (value === null || typed >= value) {
+      value = typed;
+    } else {
+      const weeks = Math.max(0, at - previousAt) / WEEK_MS;
+      value = Math.max(typed, value - value * BODYWEIGHT_XP.maxChangePerWeek * weeks);
+    }
+    previousAt = at;
+    limited.set(entry, value);
+  }
+  return limited;
 }
 
 const round = (value: number, decimals: number) => {
@@ -51,11 +119,17 @@ export function effectiveKg(weightKg: number, bodyweightKg: number, tuning: Exer
 }
 
 /**
- * XP for one completed set: round(reps x effective kg / 10).
+ * XP for one completed set: round(reps x effective kg x (75 / bodyweight) / 10).
+ * `xpBodyweightKg`: the server passes xpBodyweightOnDate; it is clamped to 40-200 kg here.
+ *
+ * Relative to bodyweight: a 60 kg player benching 40 kg x 8 earns the same as a 90 kg
+ * player benching 60 kg x 8. A pure bodyweight exercise earns the same at any bodyweight:
+ * its load IS your bodyweight, which then divides out.
  * One function on purpose: swapping the XP formula later means changing only this.
  */
-export function setXp(set: { reps: number; weightKg: number }, bodyweightKg: number, tuning: ExerciseTuning): number {
-  return Math.round((set.reps * effectiveKg(set.weightKg, bodyweightKg, tuning)) / 10);
+export function setXp(set: { reps: number; weightKg: number }, xpBodyweightKg: number, tuning: ExerciseTuning): number {
+  const bodyweightKg = clampXpBodyweight(xpBodyweightKg);
+  return Math.round((set.reps * effectiveKg(set.weightKg, bodyweightKg, tuning) * BODYWEIGHT_XP.referenceKg) / bodyweightKg / 10);
 }
 
 // Weekly goal and streak bonuses: see weekly-goal.ts.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addToRecordBook,
   bodyweightOnDate,
+  BODYWEIGHT_XP,
   clampRestSec,
   coachAdvice,
   coachHintText,
@@ -13,6 +14,7 @@ import {
   resolveRestSec,
   setXp,
   volumeKg,
+  xpBodyweightOnDate,
   DEFAULT_INCREMENTS,
 } from "./index.js";
 
@@ -20,18 +22,39 @@ const squat = { loadFactor: 1.0, bodyweightRatio: 0 };
 const pullUp = { loadFactor: 1.25, bodyweightRatio: 1.0 };
 const lateralRaise = { loadFactor: 5.0, bodyweightRatio: 0 };
 
-describe("setXp = round(reps x effective kg / 10)", () => {
+const bench = { loadFactor: 1.25, bodyweightRatio: 0 };
+
+describe("setXp = round(reps x effective kg x (75 / bodyweight) / 10)", () => {
+  // At the 75 kg reference the bodyweight factor is 1, so these are the plain formula.
   it("matches the formula for a loaded lift", () => {
-    expect(setXp({ reps: 8, weightKg: 100 }, 80, squat)).toBe(80); // 8 x 100 / 10
+    expect(setXp({ reps: 8, weightKg: 100 }, 75, squat)).toBe(80); // 8 x 100 / 10
   });
 
   it("doesn't penalise bodyweight: a 0 kg pull-up still earns XP from your body", () => {
-    expect(setXp({ reps: 8, weightKg: 0 }, 80, pullUp)).toBe(80); // 8 x (0 + 80) x 1.25 / 10
-    expect(setXp({ reps: 8, weightKg: 10 }, 80, pullUp)).toBe(90); // added weight counts too
+    expect(setXp({ reps: 8, weightKg: 0 }, 75, pullUp)).toBe(75); // 8 x (0 + 75) x 1.25 / 10
+    expect(setXp({ reps: 8, weightKg: 10 }, 75, pullUp)).toBe(85); // added weight counts too
   });
 
   it("lifts light isolation work with its factor, so a hard set earns about as much as a squat set", () => {
-    expect(setXp({ reps: 15, weightKg: 10 }, 80, lateralRaise)).toBe(75);
+    expect(setXp({ reps: 15, weightKg: 10 }, 75, lateralRaise)).toBe(75);
+  });
+
+  it("is relative to bodyweight: the same lift is worth more to a lighter player", () => {
+    expect(setXp({ reps: 8, weightKg: 100 }, 80, squat)).toBe(75); // x 75/80
+    // 40 kg at 60 kg bodyweight is the same effort as 60 kg at 90 kg: same XP.
+    expect(setXp({ reps: 8, weightKg: 40 }, 60, bench)).toBe(50);
+    expect(setXp({ reps: 8, weightKg: 60 }, 90, bench)).toBe(50);
+  });
+
+  it("gives a pure bodyweight exercise the same XP at any bodyweight", () => {
+    for (const bodyweightKg of [50, 75, 80, 120]) {
+      expect(setXp({ reps: 8, weightKg: 0 }, bodyweightKg, pullUp)).toBe(75);
+    }
+  });
+
+  it("clamps the bodyweight to 40-200 kg", () => {
+    expect(setXp({ reps: 8, weightKg: 100 }, 20, squat)).toBe(setXp({ reps: 8, weightKg: 100 }, 40, squat));
+    expect(setXp({ reps: 8, weightKg: 100 }, 300, squat)).toBe(setXp({ reps: 8, weightKg: 100 }, 200, squat));
   });
 });
 
@@ -201,5 +224,71 @@ describe("bodyweightOnDate", () => {
   it("uses the earliest entry for a workout before any entry, and 75 kg with none at all", () => {
     expect(bodyweightOnDate(entries, "2026-09-01T07:00:00.000Z")).toBe(82);
     expect(bodyweightOnDate([], "2026-09-01T07:00:00.000Z")).toBe(75);
+  });
+});
+
+describe("xpBodyweightOnDate: a low bodyweight can't be typed in quickly", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const START = Date.parse("2026-01-05T08:00:00.000Z");
+  const dayIso = (day: number) => new Date(START + day * DAY).toISOString();
+  /** An entry typed on `day` (measured that day) and received by the server then. */
+  const entry = (kg: number, day: number, receivedDay = day) => ({ kg, measuredOn: dayIso(day).slice(0, 10), receivedAt: dayIso(receivedDay) });
+
+  it("takes the first entry as typed (clamped), and 75 kg with none", () => {
+    expect(xpBodyweightOnDate([entry(62, 0)], dayIso(3))).toBe(62);
+    expect(xpBodyweightOnDate([entry(35, 0)], dayIso(3))).toBe(BODYWEIGHT_XP.minKg);
+    expect(xpBodyweightOnDate([], dayIso(3))).toBe(75);
+  });
+
+  it("leaves an honest slow loss untouched: 80 -> 72 kg over 10 weeks, entered weekly", () => {
+    const weekly = Array.from({ length: 11 }, (_, week) => entry(80 - 0.8 * week, week * 7));
+    for (let week = 0; week <= 10; week++) {
+      expect(xpBodyweightOnDate(weekly, dayIso(week * 7 + 1))).toBeCloseTo(80 - 0.8 * week, 6);
+    }
+  });
+
+  it("lets an infrequent update through in full: 5 kg lost over 8 weeks, entered once", () => {
+    expect(xpBodyweightOnDate([entry(80, 0), entry(75, 56)], dayIso(57))).toBe(75);
+  });
+
+  it("barely moves on 80 -> 40 kg overnight", () => {
+    const value = xpBodyweightOnDate([entry(80, 0), entry(40, 1)], dayIso(2));
+    expect(value).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 6); // about 79.77
+  });
+
+  it("applies an increase at once (bulking, or fixing a too-low typo)", () => {
+    expect(xpBodyweightOnDate([entry(70, 0), entry(85, 1)], dayIso(2))).toBe(85);
+  });
+
+  it("gives a backdated entry no allowance: its gap is measured from when it was received", () => {
+    // Entries on day 0 and day 56; then, on day 57, an entry of 40 kg backdated to day 1.
+    const entries = [entry(80, 0), entry(80, 56), entry(40, 1, 57)];
+    // A workout on day 2 uses the day-1 entry, limited by ONE day since the day-56 entry.
+    expect(xpBodyweightOnDate(entries, dayIso(2))).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 6);
+    // Later workouts use the latest measured entry, as before.
+    expect(xpBodyweightOnDate(entries, dayIso(60))).toBe(80);
+  });
+
+  it("treats a same-day re-entry as if it had been typed right the first time", () => {
+    // 80 kg on day 0; on day 14, 78 kg, then corrected to 76 kg a few minutes later. The
+    // correction replaces the day-14 entry (one entry per date), with a new receivedAt.
+    const corrected = { ...entry(76, 14), receivedAt: new Date(START + 14 * DAY + 5 * 60 * 1000).toISOString() };
+    const typedRightFirstTime = entry(76, 14);
+    expect(xpBodyweightOnDate([entry(80, 0), corrected], dayIso(15))).toBeCloseTo(
+      xpBodyweightOnDate([entry(80, 0), typedRightFirstTime], dayIso(15)),
+      1,
+    );
+    // Two weeks allow 80 x 0.02 x 2 = 3.2 kg, so 76 kg lands at 76.8 for now (plus the
+    // 5 minutes' worth), and catches up over the next week.
+    expect(xpBodyweightOnDate([entry(80, 0), corrected], dayIso(15))).toBeCloseTo(76.8, 2);
+  });
+
+  it("doesn't let an edited first entry become unchecked: the edit moves to the end of the walk", () => {
+    // Sign-up 80 kg (day 0), 80 kg again on day 28; on day 70 the sign-up entry is edited to 40.
+    const edited = { ...entry(40, 0), receivedAt: dayIso(70) };
+    const entries = [edited, entry(80, 28)];
+    // The edited day-0 entry is limited by 6 weeks since day 28: 80 x (1 - 0.02 x 6) = 70.4.
+    expect(xpBodyweightOnDate(entries, dayIso(1))).toBeCloseTo(70.4, 6);
+    expect(xpBodyweightOnDate(entries, dayIso(71))).toBe(80);
   });
 });
