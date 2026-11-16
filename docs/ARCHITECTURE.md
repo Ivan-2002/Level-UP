@@ -92,16 +92,18 @@ One monorepo holds the app, the API and the shared types, managed with pnpm work
 Level-UP/
 ├── apps/
 │   ├── mobile/                 # Expo app
-│   │   ├── app/                # Expo Router screens: (auth)/, (app)/
 │   │   └── src/
-│   │       ├── components/     # reusable UI (Button, XpBar, Avatar)
-│   │       ├── features/       # auth, profile, workouts, exercises, progression, avatar
+│   │       ├── app/            # Expo Router screens: sign-in, sign-up, (app)/ behind the auth guard
+│   │       ├── components/     # reusable UI (Button, Card, SetRow, Avatar)
+│   │       ├── features/       # auth, profile, exercises, routines, workouts, progress; avatar later
+│   │       ├── theme/          # tokens, fonts, contrast checks
 │   │       ├── lib/            # API client, query client, storage
 │   │       └── stores/         # Zustand stores (active workout)
 │   └── api/                    # Express API
 │       ├── prisma/schema.prisma
 │       └── src/
-│           ├── modules/        # auth, users, exercises, workouts, progression, avatar
+│           ├── modules/        # health, users, exercises, routines, workouts, progression; avatar later
+│           ├── lib/            # Better Auth setup, Prisma client, errors, clock
 │           ├── middleware/     # auth guard, error handler, request validation
 │           ├── config/         # env loading and checks
 │           └── app.ts
@@ -114,7 +116,7 @@ Level-UP/
 └── README.md
 ```
 
-The XP-to-level formula lives in `packages/shared`, so the app can draw the XP bar with the same maths the server uses. The server still decides how much XP is awarded.
+The XP-to-level formula lives in `packages/shared`, but only the server uses it to decide levels: the API sends each player's level, XP into the level and XP needed for the next one, and the app just draws them. So the curve can be rebalanced without an app update (from Milestone 5; before that the app ran the formula itself).
 
 ## Initial data model
 
@@ -122,7 +124,7 @@ These tables cover the MVP. Better Auth creates and owns its own user, session a
 
 | Table | Key fields | Purpose |
 | --- | --- | --- |
-| profile | user_id, username (citext: unique ignoring case), total_xp (cached), avatar_stage, weight_unit (kg or lb), time_zone (IANA, from the phone), created_at (sign-up: decides the warm-up week) | Game identity for each user |
+| profile | user_id, username (citext: unique ignoring case), total_xp (cached), weight_unit (kg or lb), time_zone (IANA, from the phone), created_at (sign-up: decides the warm-up week) | Game identity for each user |
 | bodyweight_entry | id, user_id, kg (3 decimals), measured_on (date) | Bodyweight history. XP uses the entry in effect on the workout's date (75 kg fallback when there is none) |
 | exercise | id, slug, name, muscle_group, body_part, equipment, mechanic (compound or isolation), reps_unit (reps or seconds), suggested_rest_sec, load_factor, bodyweight_ratio, is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises via owner_id. Tuning values are sent to the app for display; the server recomputes |
 | exercise_preference | user_id, exercise_id, rest_sec | The player's own choices per exercise (rest time first). Highest priority: preference > routine > exercise suggestion > 120 s |
@@ -134,10 +136,10 @@ These tables cover the MVP. Better Auth creates and owns its own user, session a
 | xp_event | id, user_id, amount, source, source_id, body_part, earned_on (local date, Milestone 5), created_at | The XP ledger: one row per XP gain (one per completed set for workout XP). Unique on (source, source_id), so a repeated request can never award XP twice. `earned_on` is the local calendar day the workout STARTED (the daily cap's day); `created_at` is only when the server received it |
 | weekly_goal | id, user_id, week_start (local Monday), kind (goal or warm_up), target, days_trained, met, streak_after, met_by_workout_id, closed_at | One row per player per week, created lazily (no cron job). Unique on (user_id, week_start). Bonuses use its id as the ledger source_id |
 | user_achievement | user_id, key (e.g. streak_12), source_id, awarded_at | Badges, awarded once each (primary key user_id + key) |
-| avatar_stage | level_required, name, asset_key | Growth stages of the avatar, stored as data |
+| avatar_stage | level_required, name, asset_key | Stages of the avatar (the extras each level unlocks), stored as data. A player's stage is derived from their level, never stored on the profile (Milestone 6) |
 | cosmetic | id, slot, name, unlock_rule | Later: unlockable items (hair, outfit, pose) |
 
-**XP source (decided for Milestone 3, can change later):** volume. Workout XP comes from sets × reps × weight, plus a flat bonus for meeting the weekly goal and bigger ones at streak milestones (see the XP section). So no exercise is penalised for its natural load, each set uses an effective load: weight + (bodyweight × the exercise's bodyweight_ratio), multiplied by the exercise's load_factor. A push-up counts part of your bodyweight, a pull-up counts all of it, and a light isolation lift like a lateral raise gets a higher load_factor so a hard set earns about as much as a hard squat set. Both values are tuned per exercise in the database. Later, training several muscle groups earns more than repeating one.
+**XP source (decided for Milestone 3, can change later):** volume. Workout XP comes from sets × reps × weight, plus a flat bonus for meeting the weekly goal and bigger ones at streak milestones (see the XP section). So no exercise is penalised for its natural load, each set uses an effective load: weight + (bodyweight × the exercise's bodyweight_ratio), multiplied by the exercise's load_factor. A push-up counts part of your bodyweight, a pull-up counts all of it, and a light isolation lift like a lateral raise gets a higher load_factor so a hard set earns about as much as a hard squat set. Both values are tuned per exercise in the database. From Milestone 5 the load is also **relative to bodyweight** (see XP per completed set), so a lighter player earns as much for a hard set as a heavier, stronger one. Later, training several muscle groups earns more than repeating one.
 
 ## XP & level system
 
@@ -149,15 +151,25 @@ XP to reach level n = 100 × (n − 1)^1.5
 
 That puts level 2 at 100 XP, level 5 at 800 XP, level 10 at 2,700 XP and level 20 at about 8,300 XP. These numbers are a first guess to tune once real workouts are logged.
 
+**Being replaced in Milestone 5.** Real sessions earn about 1,500 XP, so this curve reaches level 20 in under two weeks. The proposal is about 1,000 × (n − 1)^1.85 (level 5 in about 3 weeks, level 10 in about 3 months, level 20 in about a year), with the weekly bonus (+60) and streak milestones (+500 / +1,200 / +3,000) below scaled up to match. Final numbers come from the balancing simulation; this section is rewritten when they are agreed.
+
 - **Where XP comes from:** workout volume plus the weekly goal and streak milestones (MVP); muscle-group variety, quests and achievements later, each as a new `source` in the ledger.
 - **Weekly goal** (all values in `WEEKLY_GOAL`, `packages/shared/src/weekly-goal.ts`): everyone starts at 2 training days a week; met → next week +1 (max 4), missed → −1 (min 2). A training day is a workout with at least 3 completed sets, counted once per local calendar day, by the day the workout started. Weeks run Monday to Sunday in the player's time zone. Meeting the goal pays a flat +60 XP at once (mid-week), once per week. The week of sign-up is a warm-up (set XP only, no bonus, no streak, target unchanged) unless sign-up was on its Monday.
 - **Streak:** consecutive weeks with the goal met; a missed week resets it to 0. Milestones pay +500 (12 weeks), +1,200 (26) and +3,000 (52) every time they're reached, also after a reset; the badge is awarded once. Weekly and streak bonuses are outside the daily XP cap. A future "rest week" pass is one more week kind that pauses target and streak, like the warm-up.
 - **Rollover is lazy:** `GET /weekly-goal` (opening the app) and Finish close every week that ended since the last visit, in order, then open the current one. The app waits until its outbox is empty before asking, because a closed week is final: a workout that arrives after its week closed earns set XP only.
-- **XP per completed set** = round(reps × effective kg / 10), where effective kg = (kg + bodyweight × `bodyweight_ratio`) × `load_factor`. Bodyweight is the entry in effect on the workout's date (75 kg if none). A 0 kg pull-up therefore still earns XP. This is one function in `packages/shared`, so it is easy to swap.
-- **Personal records** (calculated on read from logged sets): estimated 1RM by Epley, kg × (1 + reps / 30), on effective kg; a single rep counts as the weight lifted. Sets above 12 reps don't count toward estimated-1RM PRs; they are tracked as "most reps at a weight". Timed exercises (plank) use the longest hold. Bodyweight sets are shown as "BW + x kg".
+- **XP per completed set** = round(reps × effective kg × (75 / bodyweight) / 10), where effective kg = (kg + bodyweight × `bodyweight_ratio`) × `load_factor` (relative to bodyweight from Milestone 5; before that the 75 / bodyweight factor was missing). Bodyweight is the entry in effect on the workout's date (75 kg if none). A 0 kg pull-up therefore still earns XP.
+  - **Why relative to bodyweight:** XP rewards effort, not absolute strength. A 60 kg player benching 40 kg × 8 and a 90 kg player benching 60 kg × 8 earn the same. The 75 kg reference keeps a 75 kg player's numbers unchanged, so the daily cap and level curve stay in the same range.
+  - Pure bodyweight exercises earn the same at any bodyweight (a pull-up's load is your bodyweight, which then divides out), which is fair: everyone lifts themselves.
+  - **Anti-cheat:** entering a low bodyweight would inflate barbell XP (an 80 kg lifter claiming 40 kg would double it). So XP uses an **XP bodyweight**: the recorded history, walked in date order, where each new entry can move the value by at most 2% per week of time since the previous entry, and the result is clamped to 40-200 kg. The allowance builds up with time, not per entry, so infrequent updates are fine: 5 kg lost over two months and entered once moves fully (an 80 kg player has about 13 kg of allowance after 8 weeks), and so does 10 kg lost during a year away. Only change that is faster than about 2% a week lags, and it catches up over the following weeks. A fake overnight drop takes months to pay off.
+  - The time between entries is measured by when the SERVER received them (`created_at`), not the date the player typed (`measured_on`), so backdating an entry can't create allowance. It is a pure function over the bodyweight history in `packages/shared` (`BODYWEIGHT_XP.maxChangePerWeek`), tested and included in the simulation.
+  - The app still shows and stores the bodyweight the player typed; only XP uses the limited value. The first entry is taken as typed (a new account can't be checked against anything). Old workouts keep the value in effect on their date, as before.
+  - PRs, estimated 1RM, volume and "BW + x kg" always use real kilograms; the bodyweight factor applies to XP only.
+  - Trade-off: a heavier, stronger player earns a little less per kg lifted than before. This is one function in `packages/shared`, so it is easy to swap.
+- **Personal records** (calculated on read from logged sets): estimated 1RM by Epley, kg × (1 + reps / 30), on lifted kg (logged weight plus the bodyweight share; real kilograms, never XP's scaled load); a single rep counts as the weight lifted. Sets above 12 reps don't count toward estimated-1RM PRs; they are tracked as "most reps at a weight". Timed exercises (plank) use the longest hold. Bodyweight sets are shown as "BW + x kg".
 - **Coach hint** (fixed rules, no AI): double progression. Raise the weight only when every set hit its target reps last time; the increment is configured per equipment type (default +2.5 kg barbell and machine, +1 kg per dumbbell).
 - **Who calculates it:** the progression service on the server, in the same database transaction that saves the workout. The app runs the same shared functions only to show live XP, PRs and hints during a workout; the server recomputes and is the only one that awards anything.
-- **Where the formula lives:** `packages/shared`, with unit tests, so app and server agree on level boundaries.
+- **Where the formula lives:** `packages/shared`, with unit tests. The server is the only one that turns XP into levels; the app shows the level progress the API sends (`level`, `xpIntoLevel`, `xpForNextLevel`). The app still uses the shared set formula for the live XP preview during a workout.
+- **Balancing is tested with a simulation, not only unit tests.** A committed script (`packages/shared`, run with one command) prints XP per session, days to the daily cap and time to each level for set player types: beginner, intermediate, advanced, a light lifter (about 60 kg) and a bodyweight-only player. It is rerun whenever an XP constant changes, and its output is pasted into the decision-log entry for that change. Real tuning happens in the beta.
 - **Level-up moment:** the "Finish workout" response returns XP gained, old level and new level, so the app can play the level-up screen without a second request.
 
 **Limits against fake or inflated workouts** (values to tune later):
@@ -166,7 +178,14 @@ That puts level 2 at 100 XP, level 5 at 800 XP, level 10 at 2,700 XP and level 2
   - **The cap's day is the day the workout started**, in the player's time zone (the same rule as training days), stored on each ledger row as `xp_event.earned_on`. `created_at` is when the server received the row, so an offline workout synced two days late would otherwise count against the wrong day.
   - **Lock, then count.** Finish locks the player's profile row (`SELECT ... FOR UPDATE`, as the weekly rollover does) BEFORE it sums the day's XP and awards more. Without the lock, two Finishes arriving together could each see room under the cap.
   - **Old workouts earn no XP.** `startedAt` comes from the phone, so a cheat could spread fake workouts over past days, each under its own cap. A workout that started more than 14 days before the server received it is still saved (history and PRs), but earns no XP. Future times are already rejected by the shared schema.
-- **Plausibility checks per set:** reps or weight far beyond a realistic range for that exercise earn no XP and are flagged instead of rejected, so honest typos can be fixed. Status (2026-11-16): the shared schema has global limits (`REPS_MAX`, `WEIGHT_MAX_KG`) and Finish already skips flagged sets for XP and PRs, but nothing sets `is_flagged` yet. Per-exercise ranges arrive with Milestone 5; until then the daily cap is the main defence.
+- **Plausibility checks per set:** reps or weight far beyond a realistic range for that exercise earn no XP and are flagged instead of rejected, so honest typos can be fixed. Status (2026-11-16): the shared schema has global limits (`REPS_MAX`, `WEIGHT_MAX_KG`) and Finish already skips flagged sets for XP and PRs, but nothing sets `is_flagged` yet. Per-exercise ranges arrive with Milestone 5; until then the daily cap is the main defence. Timed exercises get their own maximum (seconds), separate from `REPS_MAX`.
+- **Jumps against the player's own history** (Milestone 5): a set far above the player's best for that exercise earns XP as if it were exactly at the 25% line, is marked (`flag_reason` above_history; not `is_flagged`, because it still earns capped XP) and isn't a PR. Two comparisons, so no rep range slips through:
+  - **Sets of 1 to 12 reps:** estimated 1RM against the player's best estimated 1RM.
+  - **Sets above 12 reps** (which estimated 1RM ignores): the set's volume, reps × lifted kg, against the player's best single-set volume. So 60 kg × 8 last week and 60 kg × 80 this week is caught.
+  - **Timed exercises:** seconds held against the longest hold. An honest big jump still earns XP; 60 kg one week and 500 kg the next earns almost nothing extra.
+  - The baseline for the next check uses the capped value, so a lifter who really got stronger catches up within a few sessions instead of staying capped forever. A cheat gains at most 25% per session, still inside the daily cap and the absolute limits.
+  - The first session of an exercise has no history, so only the absolute limits apply.
+  - The 25% is a constant in `xp-limits.ts`, tuned with the simulation and the beta. Retuning changes future workouts only; XP already in the ledger is final.
 - **Special events later:** marathons and other big efforts get their own XP source with its own limits, rather than raising the daily cap for everyone.
 - **Server-side only:** all caps run in the progression service, so they can be tuned without an app update.
 
@@ -174,21 +193,30 @@ That puts level 2 at 100 XP, level 5 at 800 XP, level 10 at 2,700 XP and level 2
 
 The first avatar is a stickman drawn in code with `react-native-svg`. No art assets are needed, and growth is just numbers: limb thickness, shoulder width and head size change with the stage. Later we can swap the renderer for layered 2D art (and possibly 3D after that) without changing the data model.
 
-**Each body part grows on its own.** Every exercise belongs to a body part (chest, back, shoulders, arms, core, legs), and its XP also counts toward that part. Skip leg day and the stickman's legs stay thin while the arms grow. The overall level and stage below still come from total XP; the body parts decide the shape.
+**Each body part grows on its own.** Every exercise belongs to a body part (chest, back, shoulders, arms, core, legs), and its XP also counts toward that part. Skip leg day and the stickman's legs stay thin while the arms grow.
 
-- Body-part XP is tracked in the ledger (`xp_event.body_part`) with a cached total per part, so it can be rebalanced like overall XP.
+**Level unlocks, body-part XP shapes** (decided 2026-11-16). The two never mix:
+
+- **Overall level** (from total XP) unlocks things: stages, titles, cosmetics, the headband, the cape, the glow. It never makes a limb bigger.
+- **Body shape** comes only from body-part XP. A player who only trains upper body has a high level, a cape and thin legs.
+- **Untrained parts shrink slowly.** After a two-week grace period, a body part's development declines slowly, so a few weeks off cost a little and only about a year without training brings it back to the starting shape. XP and level are never lost; only the shape changes. Calculated on read from the ledger's dates (no scheduled job), like the weekly goal. The exact decay curve is set in Milestone 6 with the simulation.
+- **Starting shape (open, decided in Milestone 6):** an experienced lifter shouldn't start as a thin stickman. Proposal: calibrate the starting shape from the first two weeks of logged lifts relative to bodyweight, rather than a self-reported baseline, which anyone could exaggerate. Either way it sets the starting shape only; everyone starts at level 1.
+
+- Body-part XP is tracked in the ledger (`xp_event.body_part`, with `earned_on` as its date), so it can be rebalanced like overall XP. Shrinking needs to know WHEN each part was trained, so a plain total per part isn't enough: development is calculated from the dated rows, and any cache holds the value plus the date it was last trained (Milestone 6).
 - The avatar takes one development value per body part (for example 0 to 1) and draws each limb from it. The same values will drive the layered 2D or 3D art later.
 - To encourage balanced training, the home screen points out the weakest body part, and the later variety bonus gives extra XP for training neglected parts.
 
 | Stage | Unlocks at | Look |
 | --- | --- | --- |
-| Rookie | Level 1 | Thin lines, narrow shoulders |
-| Regular | Level 5 | Thicker limbs, slightly wider shoulders |
-| Athlete | Level 10 | Broad shoulders, chest and arm shapes appear |
-| Champion | Level 15 | Full build plus a headband |
-| Legend | Level 20 | Full build plus a cape and a glow |
+| Rookie | Level 1 | Plain stickman |
+| Regular | Level 5 | Wristbands and a title |
+| Athlete | Level 10 | Sports outfit |
+| Champion | Level 15 | Headband |
+| Legend | Level 20 | Cape and a glow |
 
-- The `Avatar` component takes a stage config (stroke width, shoulder width, extras), never a level, so the art and the rules stay separate.
+Stages add extras only; limb size, shoulder width and chest come from body-part development. Stage levels are rechecked against the new level curve in Milestone 5.
+
+- The `Avatar` component takes a stage config (extras) and one development value per body part, never a level, so the art and the rules stay separate.
 - Stage thresholds live in the `avatar_stage` table and can be tuned without a release.
 - A small growth animation plays on the level-up screen when the stage changes.
 
@@ -229,16 +257,20 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: a workout logged in airplane mode saves exactly once after reconnecting.
 4c. **Routines and active workout.** Saved routines (list, detail, builder), the active workout screen with a rest timer and notification, estimated 1RM and PRs, XP per set written to the ledger, the workout summary and exercise history. Pulls the XP ledger and PRs forward from Milestone 5.
    - Done when: starting a routine pre-fills the active workout, the rest timer is correct after the app was in the background, and Finish shows XP earned and new PRs, saved exactly once.
-5. **Progression.** Level-up screen, daily XP cap (`xp_event.earned_on`, lock-then-count, no XP for workouts older than 14 days) and per-exercise plausibility flags (the ledger, level formula and XP bar arrive in 4c; the weekly goal and streak arrived before 4c Phase 4). Before it starts: routes move under `/v1`.
+5. **Progression.** Level-up screen, XP relative to bodyweight, a stretched level curve with rescaled weekly and streak bonuses, the API sending level progress, the balancing simulation, daily XP cap (`xp_event.earned_on`, lock-then-count, no XP for workouts older than 14 days), per-exercise plausibility flags and the jump cap against the player's history (the ledger, level formula and XP bar arrive in 4c; the weekly goal and streak arrived before 4c Phase 4). Before it starts: routes move under `/v1`.
    - Done when: finishing a workout shows XP gained and, when earned, a level-up; two Finishes sent at the same moment can't exceed the cap; an offline workout synced days later counts against the day it was done.
-6. **Stickman avatar.** Growth stages driven by level, body parts driven by body-part XP.
-   - Done when: the avatar visibly changes at levels 5, 10, 15 and 20, and untrained body parts stay thin.
+6. **Stickman avatar.** Stage extras driven by level, body shape driven only by body-part XP, slow shrinking of untrained parts, and the starting-shape decision.
+   - Done when: the avatar gains its extras at each stage level, untrained body parts stay thin whatever the level, and a part untrained for months visibly shrinks.
 7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, testers on TestFlight and Google Play internal testing.
    - Done when: five real people use it at the gym for two weeks.
 
 Later, not yet scheduled: **session backup sync**, an idempotent `PUT /sessions/:clientId` that uploads the whole in-progress session every minute or so. It protects against a lost phone and gives the server its own receive times, which the anti-cheat checks need (sets far above the player's history, or completed implausibly fast, get `is_flagged`, earn no XP and don't count as PRs until confirmed).
 
+Also later: **confirm or edit a flagged set** (today a flagged typo stays flagged), and **revisit the 14-day XP window and backdating** before leaderboards.
+
 After the beta: variety bonus, quests, achievements, the rules-based coach, cosmetics, then leaderboards and social features.
+
+After the rules-based coach: **the avatar as a talking AI coach.** Players chat with their character to build plans, check progress or get motivation. It runs on our server (the API key never ships in the app) and uses our own API as its tools (read progress, create a routine); the rules coach's checks become tools it can call. Needs per-user usage limits (every message costs money) and safety guardrails for injury, pain and diet questions before it ships.
 
 ## Decision log
 
@@ -246,6 +278,13 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-16 | Set XP is relative to bodyweight: × (75 / bodyweight), with bodyweight clamped to 40-200 kg for XP | Heavier, stronger players earn a little less per kg; XP rewards effort, so a light player isn't left behind |
+| 2026-11-16 | XP bodyweight can change by at most 2% per week of time between entries (measured by server receive time); display and PRs keep the typed value | One more pure rule; a fake low bodyweight can't inflate XP quickly, while infrequent or after-a-break updates pass in full. The first entry can't be checked, and a player away for months could fake a drop on return (still bounded by the daily cap) |
+| 2026-11-16 | A set more than 25% above the player's best (estimated 1RM for 1-12 reps, single-set volume above 12 reps, longest hold for timed) earns XP at the 25% line, isn't a PR, and moves the baseline only to that line | Honest big jumps earn slightly less at first; fake jumps earn almost nothing. Tunable |
+| 2026-11-16 | The API sends level progress; the app no longer runs the level formula for display | One more field set on the profile and summary; the curve can be rebalanced without an app update |
+| 2026-11-16 | Balancing is checked by a committed simulation script, rerun on every XP constant change | A script to maintain; balance problems show up before players find them |
+| 2026-11-16 | Level and stages unlock extras only; body shape comes only from body-part XP. Untrained parts shrink slowly after 2 weeks (back to the start after about a year); XP and level never decrease | More avatar rules; the avatar shows real training balance, and time off isn't punished hard |
+| 2026-11-16 | Talking AI coach planned after the rules-based coach, server-side, using our API as tools | Not in the MVP; no AI costs or safety work before the core loop is proven |
 | 2026-11-16 | The daily cap counts XP by the local day the workout started (`xp_event.earned_on`), not by when the server received it | One more column, filled in for existing rows from their workout; late-synced offline workouts land on the right day |
 | 2026-11-16 | Finish locks the profile row before counting the day's XP | Two Finishes from one player run one after the other (milliseconds); the cap can't be beaten by sending them together |
 | 2026-11-16 | A workout that started more than 14 days before the server received it is saved but earns no XP | A phone offline for over two weeks loses that XP; backdated fake workouts can't dodge the cap. Saved rather than rejected, so the outbox never retries it forever |
