@@ -86,6 +86,13 @@ describe("simulate", () => {
     }
   });
 
+  it("applies the daily cap to each day's set XP", () => {
+    // One 3,000 XP day (a single 8 x 3,750 kg-equivalent set isn't possible, so 30 sets of
+    // 100 XP): 2,500 at full rate + 25% of 500 = 2,625.
+    const bigDay = simulate({ ...twiceAWeek, trainingDays: [0], sessions: [[{ slug: "barbell-back-squat", sets: 30, reps: 10, kg: 100 }]] }, 1);
+    expect(bigDay).toMatchObject({ setXp: 2625, cappedDays: 1, heldBackXp: 375 });
+  });
+
   it("is deterministic", () => {
     expect(simulate(twiceAWeek, 10)).toEqual(simulate(twiceAWeek, 10));
   });

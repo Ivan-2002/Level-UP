@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyDailyCap,
+  DAILY_XP_CAP,
   DEFAULT_PLAUSIBILITY,
   EQUIPMENT,
   flagReasonText,
   HOLD_MAX_SEC,
+  isTooOldForXp,
   judgeSession,
   jumpBaseline,
   jumpCappedXp,
@@ -14,6 +17,7 @@ import {
   plausibilityLimits,
   repsMaxFor,
   WEIGHT_MAX_KG,
+  XP_SOURCES_UNDER_DAILY_CAP,
 } from "./index.js";
 
 const machineCompound = { equipment: "machine", mechanic: "compound", repsUnit: "reps" } as const;
@@ -136,5 +140,66 @@ describe("jump cap: estimated 1RM (Epley) at every rep count, or seconds for tim
       "Far above your best for this exercise (estimated 1RM 100 kg), so it earns XP as 125 kg for now and doesn't count as a PR. Keep it up: the full value catches up within a few sessions.",
     );
     expect(jumpCapText(60, "seconds", "kg")).toContain("(longest hold 60 s), so it earns XP as 75 s");
+  });
+});
+
+describe("applyDailyCap: full XP to 2,500, 25% beyond, never more than 5,000 a day", () => {
+  it("leaves a normal day alone", () => {
+    expect(applyDailyCap(0, [60, 60, 60])).toEqual({ awarded: [60, 60, 60], heldBack: 0 });
+    expect(applyDailyCap(2400, [100])).toEqual({ awarded: [100], heldBack: 0 }); // lands exactly on the limit
+  });
+
+  it("splits a set that crosses the limit: full rate up to 2,500, 25% for the rest", () => {
+    // 100 of 200 fit under the limit; the other 100 earn 25.
+    expect(applyDailyCap(2400, [200])).toEqual({ awarded: [125], heldBack: 75 });
+  });
+
+  it("pays 25% for a set entirely in the band", () => {
+    expect(applyDailyCap(2600, [100])).toEqual({ awarded: [25], heldBack: 75 });
+  });
+
+  it("stops at the ceiling: a set crossing it earns only the room left", () => {
+    expect(applyDailyCap(4990, [100])).toEqual({ awarded: [10], heldBack: 90 }); // 25 would pass 5,000
+    expect(applyDailyCap(4990, [40])).toEqual({ awarded: [10], heldBack: 30 }); // 25% of 40 = 10 fits exactly
+  });
+
+  it("awards nothing once the day is at (or somehow past) the ceiling", () => {
+    expect(applyDailyCap(5000, [80, 80])).toEqual({ awarded: [0, 0], heldBack: 160 });
+    expect(applyDailyCap(6000, [80])).toEqual({ awarded: [0], heldBack: 80 });
+  });
+
+  it("carries the day's total from set to set, in order", () => {
+    // 2,450 before: set 1 fills the last 50 (+25 for its other 100); set 2 is all in the band.
+    expect(applyDailyCap(2450, [150, 100, 0])).toEqual({ awarded: [75, 25, 0], heldBack: 150 });
+  });
+
+  it("rounds each set's 25% like set XP (a 1 XP set in the band earns 0)", () => {
+    expect(applyDailyCap(3000, [1, 2, 3])).toEqual({ awarded: [0, 1, 1], heldBack: 4 });
+  });
+
+  it("reaches the ceiling only after about 12,500 raw XP in a day", () => {
+    const { awarded } = applyDailyCap(0, Array.from({ length: 125 }, () => 100));
+    expect(awarded.reduce((a, b) => a + b, 0)).toBe(DAILY_XP_CAP.limit * DAILY_XP_CAP.ceilingMultiple);
+    expect(applyDailyCap(0, Array.from({ length: 124 }, () => 100)).awarded.reduce((a, b) => a + b, 0)).toBeLessThan(5000);
+  });
+
+  it("covers set XP only: weekly and streak bonuses are outside it", () => {
+    expect(XP_SOURCES_UNDER_DAILY_CAP).toEqual(["workout_set"]);
+  });
+});
+
+describe("isTooOldForXp: a workout synced more than 14 days after it started earns no XP", () => {
+  const started = "2026-11-01T18:00:00.000Z";
+  const plus = (ms: number) => new Date(Date.parse(started) + ms).toISOString();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("still earns at exactly 14 days, not a millisecond later", () => {
+    expect(isTooOldForXp(started, plus(14 * DAY))).toBe(false);
+    expect(isTooOldForXp(started, plus(14 * DAY + 1))).toBe(true);
+  });
+
+  it("earns for a normal sync, and for one a few days late", () => {
+    expect(isTooOldForXp(started, plus(70 * 60 * 1000))).toBe(false);
+    expect(isTooOldForXp(started, plus(2 * DAY))).toBe(false);
   });
 });

@@ -32,11 +32,7 @@ export const WEEKLY_GOAL = {
   ] satisfies StreakMilestone[],
 } as const;
 
-/**
- * The ledger sources the future daily XP cap applies to. Weekly and streak bonuses are
- * deliberately NOT in it: hitting your goal on a big day shouldn't cost you the bonus.
- */
-export const XP_SOURCES_UNDER_DAILY_CAP = ["workout_set"] as const;
+// The daily XP cap (and which ledger sources it covers) lives in xp-limits.ts.
 
 /**
  * goal    = a normal week: counts for the target and the streak.

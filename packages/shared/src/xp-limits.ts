@@ -7,8 +7,8 @@ import { HOLD_MAX_SEC, type Equipment, type Mechanic, type RepsUnit } from "./wo
 // or inflated workouts"). Pure rules; the server applies them at Finish and is the only
 // one that awards anything. The app runs the same rules to preview XP honestly.
 //
-// This file grows through Milestone 5: plausibility limits, the jump cap against the
-// player's own history, then the daily cap and the 14-day rule.
+// In the order Finish applies them: plausibility limits, the jump cap against the
+// player's own history, then (once the set XP is known) the 14-day rule and the daily cap.
 // ---------------------------------------------------------------------------
 
 // --- Plausibility: absolute limits per exercise --------------------------------------
@@ -185,4 +185,79 @@ export function jumpCapText(baseline: number, repsUnit: RepsUnit, weightUnit: We
       ? [`longest hold ${Math.round(baseline)} s`, `${Math.round(line)} s`]
       : [`estimated 1RM ${formatWeight(baseline, weightUnit, { decimals: 1 })}`, formatWeight(line, weightUnit, { decimals: 1 })];
   return `Far above your best for this exercise (${best}), so it earns XP as ${counted} for now and doesn't count as a PR. Keep it up: the full value catches up within a few sessions.`;
+}
+
+// --- Daily cap ------------------------------------------------------------------------
+//
+// Full XP up to a daily limit, then 25% beyond it, and never more than twice the limit
+// awarded in one day. A soft cap rewards a genuinely big day without making a fake
+// 1,000-pull-up day worth it. 2,500 was checked with the simulation: an intermediate
+// session uses about 60% of it; only an advanced lifter's 100-minute leg day reaches it.
+//
+// The cap's DAY is the local calendar day the workout started (xp_event.earned_on), and
+// the server locks the player's profile row before counting it, so two Finishes sent
+// together run one after the other and can't both see room under the cap.
+
+export const DAILY_XP_CAP = {
+  /** Set XP per day at the full rate. */
+  limit: 2500,
+  /** The share of XP beyond the limit that is still awarded. */
+  bandRate: 0.25,
+  /** Never more than limit x this awarded in one day. */
+  ceilingMultiple: 2,
+} as const;
+
+/**
+ * The ledger sources the daily cap applies to. Weekly and streak bonuses are deliberately
+ * NOT in it: hitting your goal on a big day shouldn't cost you the bonus.
+ */
+export const XP_SOURCES_UNDER_DAILY_CAP = ["workout_set"] as const;
+
+export type DailyCapResult = {
+  /** Per set, in the order given: the XP actually awarded. */
+  awarded: number[];
+  /** XP the cap held back from these sets (shown to the player so a capped day doesn't feel like a bug). */
+  heldBack: number;
+};
+
+/**
+ * Applies the daily cap to a workout's set XP, in the order the sets were completed.
+ * `dayXpBefore` = set XP already AWARDED that day (from earlier workouts).
+ *
+ * Each set takes its full-rate share first (up to the limit), then 25% of the rest
+ * (rounded like set XP), stopping at the ceiling. Rounding per set can lose up to half
+ * an XP on a set in the 25% band; in exchange each ledger row can be explained on its own.
+ */
+export function applyDailyCap(dayXpBefore: number, setXp: number[]): DailyCapResult {
+  const { limit, bandRate, ceilingMultiple } = DAILY_XP_CAP;
+  const ceiling = limit * ceilingMultiple;
+  let day = dayXpBefore;
+  let heldBack = 0;
+  const awarded = setXp.map((xp) => {
+    const full = Math.min(xp, Math.max(0, limit - day));
+    const band = Math.min(Math.round((xp - full) * bandRate), Math.max(0, ceiling - day - full));
+    const amount = full + band;
+    day += amount;
+    heldBack += xp - amount;
+    return amount;
+  });
+  return { awarded, heldBack };
+}
+
+// --- Old workouts earn no XP ----------------------------------------------------------
+//
+// startedAt comes from the phone, so a cheat could spread fake workouts over past days,
+// each under its own daily cap. A workout that started more than 14 days before the
+// server received it is still saved (history, PRs) but earns no set XP. Saved rather than
+// rejected, so the outbox never retries it forever. Future start times are already
+// rejected by the Finish schema.
+
+/** A workout may sync this long after it started and still earn XP. */
+export const XP_MAX_WORKOUT_AGE_DAYS = 14;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** True if the workout started more than 14 days before the server received it. */
+export function isTooOldForXp(startedAt: string | Date, receivedAt: string | Date): boolean {
+  return new Date(receivedAt).getTime() - new Date(startedAt).getTime() > XP_MAX_WORKOUT_AGE_DAYS * DAY_MS;
 }

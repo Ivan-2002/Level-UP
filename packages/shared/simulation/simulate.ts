@@ -1,7 +1,7 @@
 import { bodyweightOnDate, liftedKg, setXp, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
-import { judgeSession, jumpCappedXp, jumpCheckValue, plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
+import { applyDailyCap, judgeSession, jumpCappedXp, jumpCheckValue, plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
 import { SIM_EXERCISES } from "./exercises.js";
 import type { PlannedExercise, Session, SimPlayer } from "./players.js";
 
@@ -17,9 +17,9 @@ export type LevelReached = { session: number; day: number };
 
 export type SimResult = {
   player: string;
-  /** Set XP of each session in the first week, before any cap. */
+  /** Set XP of each session in the first week, before the daily cap. */
   firstWeekSessionXp: number[];
-  /** Biggest single day of set XP, before any cap. */
+  /** Biggest single day of set XP, before the daily cap. */
   biggestDayXp: number;
   reached: Record<SimLevel, LevelReached | null>;
   totalXp: number;
@@ -31,6 +31,9 @@ export type SimResult = {
   flaggedSets: number;
   /** Sets the jump cap held to the line (above_history). Should be 0 for every honest player. */
   jumpCappedSets: number;
+  /** Days the daily cap held XP back, and how much in total. */
+  cappedDays: number;
+  heldBackXp: number;
 };
 
 /** Sign-up on a Monday morning (UTC), so the first week is a normal goal week, not a warm-up. */
@@ -43,7 +46,7 @@ const atDay = (day: number, hourUtc: number) => new Date(SIGN_UP.getTime() + day
 export function simulate(player: SimPlayer, weeks = 104): SimResult {
   const bodyweights: XpBodyweightEntry[] = [];
   const reached = Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>;
-  const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, jumpCappedSets: 0, firstWeekSessionXp: [] as number[] };
+  const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, jumpCappedSets: 0, cappedDays: 0, heldBackXp: 0, firstWeekSessionXp: [] as number[] };
   /** Each exercise's jump-cap baseline, replayed session by session as the server does. */
   const baselines = new Map<string, number | null>();
 
@@ -72,11 +75,16 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
       const strength = Math.min(player.growth.max, 1 + player.growth.perWeek * week);
 
       const bodyweight = { xp: xpBodyweightOnDate(bodyweights, startedAt), typed: bodyweightOnDate(bodyweights, startedAt) };
-      const { xp: dayXp, flagged, jumpCapped } = scoreSession(session, strength, bodyweight, baselines);
+      const { setXps, flagged, jumpCapped } = scoreSession(session, strength, bodyweight, baselines);
+      const dayXp = setXps.reduce((a, b) => a + b, 0);
+      // One session a day, so nothing was awarded earlier that day.
+      const capped = applyDailyCap(0, setXps);
       result.flaggedSets += flagged;
       result.jumpCappedSets += jumpCapped;
       result.sessions++;
-      result.setXp += dayXp;
+      result.setXp += dayXp - capped.heldBack;
+      result.heldBackXp += capped.heldBack;
+      if (capped.heldBack > 0) result.cappedDays++;
       result.biggestDayXp = Math.max(result.biggestDayXp, dayXp);
       if (week === 0) result.firstWeekSessionXp.push(dayXp);
 
@@ -102,7 +110,7 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
 
 /** Set XP of one session on its own (no history), at `strength` x the starting loads. */
 export function sessionSetXp(session: Session, strength: number, bodyweightKg: number): number {
-  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, new Map()).xp;
+  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, new Map()).setXps.reduce((a, b) => a + b, 0);
 }
 
 /**
@@ -116,8 +124,8 @@ function scoreSession(
   strength: number,
   bodyweight: { xp: number; typed: number },
   baselines: Map<string, number | null>,
-): { xp: number; flagged: number; jumpCapped: number } {
-  let xp = 0;
+): { setXps: number[]; flagged: number; jumpCapped: number } {
+  const setXps: number[] = [];
   let flagged = 0;
   let jumpCapped = 0;
   for (const planned of session) {
@@ -132,9 +140,9 @@ function scoreSession(
     baselines.set(planned.slug, judged.baselineAfter);
     jumpCapped += judged.aboveHistory.filter(Boolean).length;
     const full = setXp(set, bodyweight.xp, exercise);
-    xp += judged.factors.reduce((sum, factor) => sum + jumpCappedXp(full, factor), 0);
+    for (const factor of judged.factors) setXps.push(jumpCappedXp(full, factor));
   }
-  return { xp, flagged, jumpCapped };
+  return { setXps, flagged, jumpCapped };
 }
 
 function setAtStrength(planned: PlannedExercise, strength: number): { reps: number; weightKg: number } {
