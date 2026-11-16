@@ -93,6 +93,17 @@ const bodyweightOnly: Session = [
   ex("plank", 3, 60, 0),
 ];
 
+// Rep-range switching at the SAME strength, with loads from a standard %1RM table rather
+// than from Epley itself (which would be circular): squat 1RM 125 kg, bench 95, row 90.
+// Heavy 5 reps at 87%, medium 10 at 75%, light 20 at 57.5%, very light 30 at 50%.
+const atPercent = (slug: SimExerciseSlug, oneRepMax: number, reps: number, percent: number, sets = 4) =>
+  ex(slug, sets, reps, Math.round(oneRepMax * percent * 2) / 2);
+const repRangeDay = (reps: number, percent: number): Session => [
+  atPercent("barbell-back-squat", 125, reps, percent),
+  atPercent("barbell-bench-press", 95, reps, percent),
+  atPercent("barbell-row", 90, reps, percent),
+];
+
 const MON_WED_FRI = [0, 2, 4];
 
 export const SIM_PLAYERS: SimPlayer[] = [
@@ -114,6 +125,14 @@ export const SIM_PLAYERS: SimPlayer[] = [
     growth: { perWeek: 0.002, max: 1.1 },
   },
   { name: "Bodyweight-only (75 kg, 3x/wk)", bodyweightKg: 75, trainingDays: MON_WED_FRI, sessions: [bodyweightOnly], growth: { perWeek: 0.003, max: 1.15 } },
+  {
+    // Honest: never gets stronger, but changes rep range every session. Must never be jump-capped.
+    name: "Rep-range switcher (80 kg, 3x/wk, 5 / 10 / 20 / 30 reps)",
+    bodyweightKg: 80,
+    trainingDays: MON_WED_FRI,
+    sessions: [repRangeDay(5, 0.87), repRangeDay(10, 0.75), repRangeDay(20, 0.575), repRangeDay(30, 0.5)],
+    growth: { perWeek: 0, max: 1 },
+  },
   {
     // The "fake bodyweight drop" trick: an 80 kg intermediate who types 40 kg every week.
     name: "Cheat: intermediate typing 40 kg weekly",

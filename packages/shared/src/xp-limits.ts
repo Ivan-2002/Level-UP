@@ -7,8 +7,8 @@ import { HOLD_MAX_SEC, type Equipment, type Mechanic, type RepsUnit } from "./wo
 // or inflated workouts"). Pure rules; the server applies them at Finish and is the only
 // one that awards anything. The app runs the same rules to preview XP honestly.
 //
-// This file grows through Milestone 5: plausibility limits (here), then the jump cap
-// against the player's own history, the daily cap and the 14-day rule.
+// This file grows through Milestone 5: plausibility limits, the jump cap against the
+// player's own history, then the daily cap and the 14-day rule.
 // ---------------------------------------------------------------------------
 
 // --- Plausibility: absolute limits per exercise --------------------------------------
@@ -65,15 +65,21 @@ export function plausibilityLimits(exercise: PlausibilityExercise): Plausibility
 // Stored in workout_set.flag_reason as a code; the TEXT is built when it's shown, in the
 // player's unit. A code (not a database enum) so adding a reason needs no migration.
 
-export const FLAG_REASONS = ["weight_above_range", "reps_above_range"] as const;
+//
+// - weight_above_range, reps_above_range: implausible (plausibilityFlag). The set is
+//   is_flagged: 0 XP, not a PR.
+// - above_history: far above the player's own best (the jump cap below). NOT is_flagged:
+//   the set still earns XP, capped at the 25% line, and isn't a PR.
+export const FLAG_REASONS = ["weight_above_range", "reps_above_range", "above_history"] as const;
 export const flagReasonSchema = z.enum(FLAG_REASONS);
 export type FlagReason = z.infer<typeof flagReasonSchema>;
+export type PlausibilityFlagReason = Exclude<FlagReason, "above_history">;
 
 /**
  * Why this set is implausible, or null if it isn't. A set over both limits reports the
  * weight (one reason per set; the weight is the likelier typo).
  */
-export function plausibilityFlag(set: { reps: number; weightKg: number }, limits: PlausibilityLimits): FlagReason | null {
+export function plausibilityFlag(set: { reps: number; weightKg: number }, limits: PlausibilityLimits): PlausibilityFlagReason | null {
   if (set.weightKg > limits.maxWeightKg) return "weight_above_range";
   if (set.reps > limits.maxReps) return "reps_above_range";
   return null;
@@ -81,7 +87,7 @@ export function plausibilityFlag(set: { reps: number; weightKg: number }, limits
 
 /** The sentence the summary shows for a flagged set, e.g. "320 kg is above the 300 kg limit for this exercise." */
 export function flagReasonText(
-  reason: FlagReason,
+  reason: PlausibilityFlagReason,
   set: { reps: number; weightKg: number },
   limits: PlausibilityLimits,
   weightUnit: WeightUnit,
@@ -93,4 +99,90 @@ export function flagReasonText(
     case "reps_above_range":
       return `${set.reps} reps is above the ${limits.maxReps}-rep limit for this exercise, ${outcome}`;
   }
+}
+
+// --- Jump cap: against the player's own history -----------------------------------------
+//
+// A set far above the player's own best for that exercise is either a big honest day or
+// a fake one. It earns XP as if it were exactly at the line (best + 25%), is marked
+// above_history (not is_flagged), and isn't a PR. The baseline then moves only up to the
+// line, so a lifter who really got stronger catches up within a few sessions, while a
+// fake jump gains at most 25% per session.
+//
+// What's compared:
+// - Reps exercises: estimated 1RM by Epley, load x (1 + reps / 30), at EVERY rep count.
+//   (Single-set volume was considered and rejected: it punishes an honest switch of rep
+//   range. A best of 100 kg x 5 has volume 500 and an e1RM of ~117 kg; 60 kg x 20 has
+//   volume 1,200 but an e1RM of only 100 kg, so it is no jump at all.) The rule that sets
+//   above 12 reps don't count applies to PR DISPLAY only.
+// - Timed exercises: seconds held, against the longest hold.
+//
+// The load is LIFTED kilograms (logged weight plus the bodyweight share), real kilograms,
+// as for PRs. Sets that plausibilityFlag flagged are left out of both sides.
+
+export const JUMP_CAP = {
+  /** A set more than this share above the player's best is capped at the line. */
+  maxJump: 0.25,
+} as const;
+
+/** Epley for any number of reps; a single rep is the weight lifted. Not rounded. */
+export function epleyOneRepMax(loadKg: number, reps: number): number {
+  return reps <= 1 ? loadKg : loadKg * (1 + reps / 30);
+}
+
+/** What the jump cap compares for one set: estimated 1RM (kg), or seconds for a timed exercise. */
+export function jumpCheckValue(set: { reps: number; loadKg: number }, repsUnit: RepsUnit): number {
+  return repsUnit === "seconds" ? set.reps : epleyOneRepMax(set.loadKg, set.reps);
+}
+
+export type JumpJudgement = {
+  /** Per set: 1 = full XP; below 1 = its XP is scaled to the line (line / the set's value). */
+  factors: number[];
+  /** Per set: true if it was above the line (flag_reason above_history, not a PR). */
+  aboveHistory: boolean[];
+  /** The best to compare the NEXT session with. */
+  baselineAfter: number | null;
+};
+
+/**
+ * Judges one session's sets of an exercise against the best from EARLIER sessions.
+ * The baseline is fixed for the whole session: if it moved after every set, five sets
+ * could each be +25% (3x in one session). No baseline (first session, or nothing above
+ * 0 yet) = nothing to compare with: only the absolute limits apply.
+ */
+export function judgeSession(baseline: number | null, values: number[]): JumpJudgement {
+  const sessionBest = values.length > 0 ? Math.max(...values) : null;
+  if (baseline === null || baseline <= 0) {
+    return { factors: values.map(() => 1), aboveHistory: values.map(() => false), baselineAfter: sessionBest ?? baseline };
+  }
+  const line = baseline * (1 + JUMP_CAP.maxJump);
+  return {
+    factors: values.map((v) => (v > line ? line / v : 1)),
+    aboveHistory: values.map((v) => v > line),
+    baselineAfter: sessionBest === null ? baseline : Math.max(baseline, Math.min(sessionBest, line)),
+  };
+}
+
+/** The baseline after replaying these earlier sessions (oldest first) through judgeSession. */
+export function jumpBaseline(sessions: number[][]): number | null {
+  return sessions.reduce<number | null>((baseline, values) => judgeSession(baseline, values).baselineAfter, null);
+}
+
+/** A set's XP after the jump cap, rounded like set XP. */
+export function jumpCappedXp(xp: number, factor: number): number {
+  return Math.round(xp * factor);
+}
+
+/**
+ * The summary's sentence for a jump-capped set, e.g. "Far above your best for this exercise
+ * (estimated 1RM 100 kg), so it earns XP as 125 kg for now. Keep it up: the full value
+ * catches up within a few sessions."
+ */
+export function jumpCapText(baseline: number, repsUnit: RepsUnit, weightUnit: WeightUnit): string {
+  const line = baseline * (1 + JUMP_CAP.maxJump);
+  const [best, counted] =
+    repsUnit === "seconds"
+      ? [`longest hold ${Math.round(baseline)} s`, `${Math.round(line)} s`]
+      : [`estimated 1RM ${formatWeight(baseline, weightUnit, { decimals: 1 })}`, formatWeight(line, weightUnit, { decimals: 1 })];
+  return `Far above your best for this exercise (${best}), so it earns XP as ${counted} for now and doesn't count as a PR. Keep it up: the full value catches up within a few sessions.`;
 }

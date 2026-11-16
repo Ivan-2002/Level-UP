@@ -23,10 +23,11 @@ const rows = SIM_PLAYERS.map((p) => simulate(p, WEEKS)).map((r) =>
     ...SIM_LEVELS.map((l) => when(r.reached[l])),
     `${r.longestStreak} wk`,
     `${Math.round((100 * r.bonusXp) / r.totalXp)}%`,
+    `${r.flaggedSets} / ${r.jumpCappedSets}`,
   ].join(" | "),
 );
 
-const header = ["Player", "Session XP, week 1", "Biggest day", ...SIM_LEVELS.map((l) => `Level ${l}`), "Longest streak", "From bonuses"];
+const header = ["Player", "Session XP, week 1", "Biggest day", ...SIM_LEVELS.map((l) => `Level ${l}`), "Longest streak", "From bonuses", "Flagged / jump-capped sets"];
 
 console.log(`Balance simulation, ${WEEKS} weeks\n`);
 console.log(`| ${header.join(" | ")} |`);

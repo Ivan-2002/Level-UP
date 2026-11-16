@@ -72,6 +72,20 @@ describe("simulate", () => {
     }
   });
 
+  it("applies the jump cap per exercise against earlier sessions", () => {
+    // 8 x 60 kg squats, then 8 x 100 kg: estimated 1RM 76 -> 126.7 kg, above the 95 kg line.
+    const jumper = simulate({ ...twiceAWeek, sessions: [squat(60), squat(100)] }, 1);
+    expect(jumper.jumpCappedSets).toBe(1);
+    expect(jumper.setXp).toBe(48 + Math.round(80 * (76 * 1.25) / (100 * (1 + 8 / 30))));
+  });
+
+  it("never jump-caps the honest player types, rep-range switcher included, over two years", () => {
+    const fakers = SIM_PLAYERS.filter((p) => p.typedBodyweight !== undefined);
+    for (const player of SIM_PLAYERS.filter((p) => !fakers.includes(p))) {
+      expect({ player: player.name, capped: simulate(player).jumpCappedSets }).toEqual({ player: player.name, capped: 0 });
+    }
+  });
+
   it("is deterministic", () => {
     expect(simulate(twiceAWeek, 10)).toEqual(simulate(twiceAWeek, 10));
   });

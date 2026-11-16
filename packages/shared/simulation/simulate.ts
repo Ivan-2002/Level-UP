@@ -1,7 +1,7 @@
-import { setXp, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
+import { bodyweightOnDate, liftedKg, setXp, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
-import { plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
+import { judgeSession, jumpCappedXp, jumpCheckValue, plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
 import { SIM_EXERCISES } from "./exercises.js";
 import type { PlannedExercise, Session, SimPlayer } from "./players.js";
 
@@ -29,6 +29,8 @@ export type SimResult = {
   sessions: number;
   /** Sets the plausibility limits flagged (0 XP). Should be 0 for every honest player. */
   flaggedSets: number;
+  /** Sets the jump cap held to the line (above_history). Should be 0 for every honest player. */
+  jumpCappedSets: number;
 };
 
 /** Sign-up on a Monday morning (UTC), so the first week is a normal goal week, not a warm-up. */
@@ -41,7 +43,9 @@ const atDay = (day: number, hourUtc: number) => new Date(SIGN_UP.getTime() + day
 export function simulate(player: SimPlayer, weeks = 104): SimResult {
   const bodyweights: XpBodyweightEntry[] = [];
   const reached = Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>;
-  const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, firstWeekSessionXp: [] as number[] };
+  const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, jumpCappedSets: 0, firstWeekSessionXp: [] as number[] };
+  /** Each exercise's jump-cap baseline, replayed session by session as the server does. */
+  const baselines = new Map<string, number | null>();
 
   let kind: WeekKind = firstWeekKind(SIGN_UP, TIME_ZONE);
   let target = 2;
@@ -67,8 +71,10 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
       const session = player.sessions[result.sessions % player.sessions.length]!;
       const strength = Math.min(player.growth.max, 1 + player.growth.perWeek * week);
 
-      const { xp: dayXp, flagged } = scoreSession(session, strength, xpBodyweightOnDate(bodyweights, startedAt));
+      const bodyweight = { xp: xpBodyweightOnDate(bodyweights, startedAt), typed: bodyweightOnDate(bodyweights, startedAt) };
+      const { xp: dayXp, flagged, jumpCapped } = scoreSession(session, strength, bodyweight, baselines);
       result.flaggedSets += flagged;
+      result.jumpCappedSets += jumpCapped;
       result.sessions++;
       result.setXp += dayXp;
       result.biggestDayXp = Math.max(result.biggestDayXp, dayXp);
@@ -94,22 +100,41 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
   return { player: player.name, reached, totalXp: result.setXp + result.bonusXp, ...result };
 }
 
-/** Set XP of one session, at `strength` x the starting loads (reps, for bodyweight moves). */
+/** Set XP of one session on its own (no history), at `strength` x the starting loads. */
 export function sessionSetXp(session: Session, strength: number, bodyweightKg: number): number {
-  return scoreSession(session, strength, bodyweightKg).xp;
+  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, new Map()).xp;
 }
 
-/** Set XP of one session, and how many of its sets the plausibility limits flagged (0 XP). */
-function scoreSession(session: Session, strength: number, bodyweightKg: number): { xp: number; flagged: number } {
+/**
+ * Set XP of one session, in the server's order: plausibility flags (0 XP), then the jump
+ * cap against each exercise's baseline (which this updates), then the set formula.
+ * `bodyweight.xp` is the XP bodyweight (for set XP); `bodyweight.typed` is the real one
+ * (for lifted kg, as PRs use).
+ */
+function scoreSession(
+  session: Session,
+  strength: number,
+  bodyweight: { xp: number; typed: number },
+  baselines: Map<string, number | null>,
+): { xp: number; flagged: number; jumpCapped: number } {
   let xp = 0;
   let flagged = 0;
+  let jumpCapped = 0;
   for (const planned of session) {
     const exercise = SIM_EXERCISES[planned.slug];
     const set = setAtStrength(planned, strength);
-    if (plausibilityFlag(set, plausibilityLimits(exercise)) !== null) flagged += planned.sets;
-    else xp += planned.sets * setXp(set, bodyweightKg, exercise);
+    if (plausibilityFlag(set, plausibilityLimits(exercise)) !== null) {
+      flagged += planned.sets;
+      continue;
+    }
+    const value = jumpCheckValue({ reps: set.reps, loadKg: liftedKg(set.weightKg, bodyweight.typed, exercise.bodyweightRatio) }, exercise.repsUnit);
+    const judged = judgeSession(baselines.get(planned.slug) ?? null, Array.from({ length: planned.sets }, () => value));
+    baselines.set(planned.slug, judged.baselineAfter);
+    jumpCapped += judged.aboveHistory.filter(Boolean).length;
+    const full = setXp(set, bodyweight.xp, exercise);
+    xp += judged.factors.reduce((sum, factor) => sum + jumpCappedXp(full, factor), 0);
   }
-  return { xp, flagged };
+  return { xp, flagged, jumpCapped };
 }
 
 function setAtStrength(planned: PlannedExercise, strength: number): { reps: number; weightKg: number } {
