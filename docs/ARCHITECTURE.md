@@ -274,6 +274,8 @@ Later, not yet scheduled: **session backup sync**, an idempotent `PUT /sessions/
 
 Also later: **confirm or edit a flagged set** (today a flagged typo stays flagged), and **revisit the 14-day XP window and backdating** before leaderboards.
 
+Also later: **content beyond level 20** (further avatar stages, titles, cosmetics). Levels themselves have no maximum: `xpForLevel` and `levelFromXp` have no cap, and nothing in the API, the database or the app assumes 20 is the top (checked 2026-11-16).
+
 After the beta: variety bonus, quests, achievements, the rules-based coach, cosmetics, then leaderboards and social features.
 
 After the rules-based coach: **the avatar as a talking AI coach.** Players chat with their character to build plans, check progress or get motivation. It runs on our server (the API key never ships in the app) and uses our own API as its tools (read progress, create a routine); the rules coach's checks become tools it can call. Needs per-user usage limits (every message costs money) and safety guardrails for injury, pain and diet questions before it ships.
