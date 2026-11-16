@@ -1,6 +1,6 @@
 import {
   clampRestSec,
-  REPS_MAX,
+  repsMaxFor,
   REST_STEP_SEC,
   resolveRestSec,
   routineInputSchema,
@@ -86,11 +86,11 @@ export function moveExercise(draft: RoutineDraft, key: string, direction: -1 | 1
   return { ...draft, exercises };
 }
 
-/** One step more or fewer sets (1 to 10) or reps (1 to the reps limit; 5 s for timed exercises). */
+/** One step more or fewer sets (1 to 10) or reps (1 to 100; for timed exercises 5 s steps up to 600 s). */
 export function stepTarget(draft: RoutineDraft, key: string, field: "targetSets" | "targetReps", direction: -1 | 1): RoutineDraft {
   return mapExercise(draft, key, (e) => {
     const step = field === "targetSets" ? 1 : repsStep(e.exercise);
-    const max = field === "targetSets" ? TARGET_SETS_MAX : REPS_MAX;
+    const max = field === "targetSets" ? TARGET_SETS_MAX : repsMaxFor(e.exercise.repsUnit);
     return { ...e, [field]: Math.min(max, Math.max(step === 1 ? 1 : step, e[field] + direction * step)) };
   });
 }

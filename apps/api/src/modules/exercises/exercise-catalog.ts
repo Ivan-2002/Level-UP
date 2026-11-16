@@ -27,7 +27,7 @@ import type { BodyPart, Equipment, Mechanic, RepsUnit } from "@levelup/shared";
 // LOGGING CONVENTIONS the app must show in its UI:
 // - Dumbbell weight is PER DUMBBELL (the number printed on it). Factors account for that.
 // - Bodyweight exercises log ADDED weight (belt, vest); 0 for plain reps.
-// - Plank logs seconds held in the reps field (so at most 100 s per set for now). It is
+// - Plank logs seconds held in the reps field (at most HOLD_MAX_SEC = 600 s per set). It is
 //   marked repsUnit: "seconds" so the app can label the column, without hard-coding names.
 
 export type CatalogExercise = {

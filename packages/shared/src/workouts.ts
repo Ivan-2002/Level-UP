@@ -32,7 +32,21 @@ export type RepsUnit = z.infer<typeof repsUnitSchema>;
 // --- Limits (server-enforced; the app shows them as form hints) -------------
 
 export const REPS_MIN = 1;
+/** The most repetitions in one set. */
 export const REPS_MAX = 100;
+/** Timed exercises (plank) log seconds in `reps`, with their own maximum: 10 minutes. */
+export const HOLD_MAX_SEC = 600;
+/**
+ * The largest `reps` value of ANY unit. Schemas that can't see the exercise (a set in
+ * POST /workouts, a routine target) use this; the server then checks repsMaxFor once it
+ * has loaded the exercise, and the app checks repsMaxFor as the player types.
+ */
+export const REPS_MAX_ANY_UNIT = Math.max(REPS_MAX, HOLD_MAX_SEC);
+
+/** The most `reps` a set (or a routine target) can have for this exercise. */
+export function repsMaxFor(repsUnit: RepsUnit): number {
+  return repsUnit === "seconds" ? HOLD_MAX_SEC : REPS_MAX;
+}
 export const WEIGHT_MIN_KG = 0; // 0 = bodyweight only (push-ups) or an empty bar
 export const WEIGHT_MAX_KG = 500;
 export const MAX_SETS_PER_WORKOUT = 100;
@@ -56,7 +70,8 @@ export const workoutSetInputSchema = z.object({
     .number({ error: "Reps must be a number." })
     .int("Reps must be a whole number.")
     .min(REPS_MIN, `Reps must be at least ${REPS_MIN}.`)
-    .max(REPS_MAX, `Reps must be at most ${REPS_MAX}.`),
+    // The exercise isn't known here; the server checks repsMaxFor (100 reps, 600 s) next.
+    .max(REPS_MAX_ANY_UNIT, `Reps must be at most ${REPS_MAX_ANY_UNIT}.`),
   weightKg: z
     .number({ error: "Weight must be a number." })
     .min(WEIGHT_MIN_KG, "Weight can't be negative.")

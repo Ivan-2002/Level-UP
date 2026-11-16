@@ -1,4 +1,5 @@
-import type { CreateExerciseInput, Exercise, ListExercisesQuery } from "@levelup/shared";
+import { repsMaxFor, type CreateExerciseInput, type Exercise, type ListExercisesQuery } from "@levelup/shared";
+import { AppError } from "../../lib/errors.js";
 import type { Db } from "../../lib/prisma.js";
 import * as repo from "./exercises.repository.js";
 
@@ -20,6 +21,19 @@ export async function listExercises(userId: string, query: ListExercisesQuery = 
 export async function findUsableExercises(userId: string, ids: string[], db?: Db): Promise<Map<string, Exercise>> {
   const rows = await repo.findUsableExercisesByIds(userId, [...new Set(ids)], db);
   return new Map(rows.map((row) => [row.id, toExercise(row)]));
+}
+
+/**
+ * Throws if `reps` is over this exercise's limit: 100 reps, or 600 seconds for a timed
+ * exercise. Request schemas can't apply it (they don't know the exercise), so workouts and
+ * routines call this once they've loaded their exercises. `where` names the set in the
+ * message, e.g. "Plank, set 2".
+ */
+export function assertRepsWithinLimit(exercise: Exercise, reps: number, where: string): void {
+  const max = repsMaxFor(exercise.repsUnit);
+  if (reps <= max) return;
+  const unit = exercise.repsUnit === "seconds" ? "seconds" : "reps";
+  throw new AppError("invalid", "RepsOutOfRange", `${where}: at most ${max} ${unit}.`);
 }
 
 // Custom exercises get CONSERVATIVE XP tuning, chosen by the server (never the client):

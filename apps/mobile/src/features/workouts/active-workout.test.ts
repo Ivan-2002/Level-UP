@@ -105,7 +105,16 @@ describe("active workout", () => {
 
       const result = toggleSetDone(w, exerciseKey, setKey, START);
 
-      expect(result).toEqual({ ok: false, message: "Seconds must be a whole number from 1 to 100." });
+      expect(result).toEqual({ ok: false, message: "Seconds must be a whole number from 1 to 600." });
+    });
+
+    it("gives timed exercises their own limit: a 5-minute plank is fine, 601 s isn't", () => {
+      let w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), plank, sequentialIds());
+      const { exerciseKey, setKey } = onlySet(w);
+
+      expect(toggleSetDone(updateSet(w, exerciseKey, setKey, { reps: "300" }), exerciseKey, setKey, START).ok).toBe(true);
+      w = updateSet(w, exerciseKey, setKey, { reps: "601" });
+      expect(toggleSetDone(w, exerciseKey, setKey, START)).toEqual({ ok: false, message: "Seconds must be a whole number from 1 to 600." });
     });
 
     it("accepts empty kg as bodyweight (0) and a comma as the decimal point", () => {

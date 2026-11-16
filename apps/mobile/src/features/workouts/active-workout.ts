@@ -4,7 +4,7 @@ import {
   finishWorkoutSchema,
   fromInputWeight,
   MAX_WORKOUT_DURATION_MS,
-  REPS_MAX,
+  repsMaxFor,
   REPS_MIN,
   REST_STEP_SEC,
   resolveRestSec,
@@ -223,8 +223,9 @@ function parseDecimal(text: string): number {
 export function parseSet(set: DraftSet, exercise: Exercise, unit: WeightUnit): Result<{ reps: number; weightKg: number }> {
   const label = exercise.repsUnit === "seconds" ? "Seconds" : "Reps";
   const reps = parseDecimal(set.reps);
-  if (set.reps.trim() === "" || !Number.isInteger(reps) || reps < REPS_MIN || reps > REPS_MAX) {
-    return { ok: false, message: `${label} must be a whole number from ${REPS_MIN} to ${REPS_MAX}.` };
+  const max = repsMaxFor(exercise.repsUnit); // 100 reps, or 600 s for a timed exercise
+  if (set.reps.trim() === "" || !Number.isInteger(reps) || reps < REPS_MIN || reps > max) {
+    return { ok: false, message: `${label} must be a whole number from ${REPS_MIN} to ${max}.` };
   }
   // Empty weight means 0: a plain bodyweight set is then just "enter reps, tick".
   const typed = set.weight.trim() === "" ? 0 : parseDecimal(set.weight);

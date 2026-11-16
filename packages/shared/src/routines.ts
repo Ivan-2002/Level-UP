@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { restSecSchema } from "./progression.js";
-import { exerciseSchema, REPS_MAX } from "./workouts.js";
+import { exerciseSchema, REPS_MAX_ANY_UNIT } from "./workouts.js";
 
 // ---------------------------------------------------------------------------
 // Routines: saved plans. A workout COPIES a routine's exercises when it starts, so
@@ -14,7 +14,8 @@ export const TARGET_SETS_MAX = 10;
 export const routineExerciseInputSchema = z.object({
   exerciseId: z.uuid("Unknown exercise."),
   targetSets: z.number().int().min(1, "At least 1 set.").max(TARGET_SETS_MAX, `At most ${TARGET_SETS_MAX} sets.`),
-  targetReps: z.number().int().min(1, "At least 1 rep.").max(REPS_MAX, `At most ${REPS_MAX} reps.`),
+  // The exercise isn't known here: the server checks repsMaxFor (100 reps, 600 s) per exercise.
+  targetReps: z.number().int().min(1, "At least 1 rep.").max(REPS_MAX_ANY_UNIT, `At most ${REPS_MAX_ANY_UNIT}.`),
   /** null or missing = use the exercise's suggestion (or the player's own preference). */
   restSec: restSecSchema.nullable().optional(),
 });

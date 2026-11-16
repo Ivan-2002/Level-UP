@@ -48,6 +48,7 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
   // 2. XP needs a character to go to, and every exercise must be usable by this user.
   await usersService.requireProfile(userId);
   const exercises = await usableExercisesOrThrow(userId, input.exercises.map((e) => e.exerciseId));
+  assertRepsFitExercises(input, exercises);
 
   // 3. Save everything in one transaction. Every module writes through `tx`.
   try {
@@ -131,6 +132,14 @@ async function usableExercisesOrThrow(userId: string, ids: string[]): Promise<Ma
   const unknown = [...new Set(ids)].filter((id) => !exercises.has(id));
   if (unknown.length > 0) throw new AppError("invalid", "UnknownExercise", `Unknown exercise: ${unknown.join(", ")}`);
   return exercises;
+}
+
+/** Reps (or seconds, for timed exercises) within each exercise's own limit. */
+function assertRepsFitExercises(input: FinishWorkoutInput, exercises: Map<string, Exercise>): void {
+  for (const e of input.exercises) {
+    const exercise = exerciseOf(exercises, e.exerciseId);
+    e.sets.forEach((set, i) => exercisesService.assertRepsWithinLimit(exercise, set.reps, `${exercise.name}, set ${i + 1}`));
+  }
 }
 
 /** XP for every completed, non-flagged set, using the shared formula. */
