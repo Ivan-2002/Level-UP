@@ -6,13 +6,13 @@ import { app, signUpUser, type TestUser } from "../../test/helpers.js";
 const validCharacter = { username: "IvanLifts", bodyweightKg: 75.5, timeZone: "Africa/Johannesburg" };
 
 function createProfile(user: TestUser, body: object) {
-  return request(app).post("/profile").set("Cookie", user.cookie).send(body);
+  return request(app).post("/v1/profile").set("Cookie", user.cookie).send(body);
 }
 
 describe("profile routes without a session", () => {
   it.each([
-    ["GET", () => request(app).get("/profile")],
-    ["POST", () => request(app).post("/profile").send(validCharacter)],
+    ["GET", () => request(app).get("/v1/profile")],
+    ["POST", () => request(app).post("/v1/profile").send(validCharacter)],
   ])("%s /profile returns 401", async (_method, send) => {
     const res = await send();
 
@@ -25,7 +25,7 @@ describe("GET /profile", () => {
   it("returns 404 ProfileNotFound before a character exists", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).get("/profile").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("ProfileNotFound");
@@ -51,7 +51,7 @@ describe("POST /profile", () => {
       createdAt: expect.any(String),
     });
 
-    const fetched = await request(app).get("/profile").set("Cookie", user.cookie);
+    const fetched = await request(app).get("/v1/profile").set("Cookie", user.cookie);
     expect(fetched.status).toBe(200);
     expect(fetched.body).toEqual(created.body);
   });
@@ -137,7 +137,7 @@ describe("POST /profile", () => {
 
   it("rejects malformed JSON with 400 instead of a server error", async () => {
     const res = await request(app)
-      .post("/profile")
+      .post("/v1/profile")
       .set("Cookie", user.cookie)
       .set("Content-Type", "application/json")
       .send('{"username":');
@@ -149,7 +149,7 @@ describe("POST /profile", () => {
   it("saves nothing when validation fails", async () => {
     await createProfile(user, { ...validCharacter, timeZone: "Nowhere" });
 
-    const res = await request(app).get("/profile").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
     expect(res.status).toBe(404);
   });
 });
@@ -170,16 +170,16 @@ describe("weight unit (kg / lb)", () => {
   it("can be changed later with PATCH /profile, leaving everything else as it was", async () => {
     await createProfile(user, validCharacter);
 
-    const res = await request(app).patch("/profile").set("Cookie", user.cookie).send({ weightUnit: "lb" });
+    const res = await request(app).patch("/v1/profile").set("Cookie", user.cookie).send({ weightUnit: "lb" });
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ username: "IvanLifts", timeZone: "Africa/Johannesburg", bodyweightKg: 75.5, weightUnit: "lb" });
-    expect((await request(app).get("/profile").set("Cookie", user.cookie)).body.weightUnit).toBe("lb");
+    expect((await request(app).get("/v1/profile").set("Cookie", user.cookie)).body.weightUnit).toBe("lb");
   });
 
   it("rejects an unknown unit, an empty change, and a missing character", async () => {
     await createProfile(user, validCharacter);
-    const patch = (as: TestUser, body: object) => request(app).patch("/profile").set("Cookie", as.cookie).send(body);
+    const patch = (as: TestUser, body: object) => request(app).patch("/v1/profile").set("Cookie", as.cookie).send(body);
 
     const unknown = await patch(user, { weightUnit: "stone" });
     const empty = await patch(user, {});
@@ -191,6 +191,6 @@ describe("weight unit (kg / lb)", () => {
   });
 
   it("needs a session", async () => {
-    expect((await request(app).patch("/profile").send({ weightUnit: "lb" })).status).toBe(401);
+    expect((await request(app).patch("/v1/profile").send({ weightUnit: "lb" })).status).toBe(401);
   });
 });

@@ -20,15 +20,15 @@ const pushDay = (): RoutineInput => ({
   ],
 });
 
-const create = (as: TestUser, body: unknown) => request(app).post("/routines").set("Cookie", as.cookie).send(body as object);
+const create = (as: TestUser, body: unknown) => request(app).post("/v1/routines").set("Cookie", as.cookie).send(body as object);
 
 describe("routines without a session", () => {
   it.each([
-    ["GET /routines", () => request(app).get("/routines")],
-    ["POST /routines", () => request(app).post("/routines").send({})],
-    ["GET /routines/:id", () => request(app).get(`/routines/${randomUUID()}`)],
-    ["PUT /routines/:id", () => request(app).put(`/routines/${randomUUID()}`).send({})],
-    ["DELETE /routines/:id", () => request(app).delete(`/routines/${randomUUID()}`)],
+    ["GET /routines", () => request(app).get("/v1/routines")],
+    ["POST /routines", () => request(app).post("/v1/routines").send({})],
+    ["GET /routines/:id", () => request(app).get(`/v1/routines/${randomUUID()}`)],
+    ["PUT /routines/:id", () => request(app).put(`/v1/routines/${randomUUID()}`).send({})],
+    ["DELETE /routines/:id", () => request(app).delete(`/v1/routines/${randomUUID()}`)],
   ])("%s returns 401", async (_route, send) => {
     expect((await send()).status).toBe(401);
   });
@@ -74,7 +74,7 @@ describe("GET /routines", () => {
     await create(user, { name: "Pull day", exercises: [{ exerciseId: ids["pull-up"]!, targetSets: 4, targetReps: 8 }] });
     await create(await signUpUser(), { ...pushDay(), name: "Someone else's" });
 
-    const res = await request(app).get("/routines").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/routines").set("Cookie", user.cookie);
 
     expect(res.status).toBe(200);
     expect(routineListSchema.parse(res.body).items.map((r) => [r.name, r.exerciseCount, r.lastDoneAt])).toEqual([
@@ -88,36 +88,36 @@ describe("one routine", () => {
   it("can be read, replaced and deleted", async () => {
     const { id } = (await create(user, pushDay())).body;
 
-    const read = await request(app).get(`/routines/${id}`).set("Cookie", user.cookie);
+    const read = await request(app).get(`/v1/routines/${id}`).set("Cookie", user.cookie);
     expect(read.status).toBe(200);
 
     const replaced = await request(app)
-      .put(`/routines/${id}`)
+      .put(`/v1/routines/${id}`)
       .set("Cookie", user.cookie)
       .send({ name: "Push day v2", exercises: [{ exerciseId: ids["overhead-press"]!, targetSets: 5, targetReps: 5, restSec: 180 }] });
     expect(replaced.status).toBe(200);
     expect(replaced.body.name).toBe("Push day v2");
     expect(replaced.body.exercises.map((e: { exercise: { name: string } }) => e.exercise.name)).toEqual(["Overhead Press"]);
 
-    const deleted = await request(app).delete(`/routines/${id}`).set("Cookie", user.cookie);
+    const deleted = await request(app).delete(`/v1/routines/${id}`).set("Cookie", user.cookie);
     expect(deleted.status).toBe(204);
-    expect((await request(app).get(`/routines/${id}`).set("Cookie", user.cookie)).status).toBe(404);
+    expect((await request(app).get(`/v1/routines/${id}`).set("Cookie", user.cookie)).status).toBe(404);
   });
 
   it("is a 404 for another user on read, replace and delete, and stays unchanged", async () => {
     const { id } = (await create(user, pushDay())).body;
     const intruder = await signUpUser();
 
-    const read = await request(app).get(`/routines/${id}`).set("Cookie", intruder.cookie);
-    const replaced = await request(app).put(`/routines/${id}`).set("Cookie", intruder.cookie).send({ ...pushDay(), name: "Hacked" });
-    const deleted = await request(app).delete(`/routines/${id}`).set("Cookie", intruder.cookie);
+    const read = await request(app).get(`/v1/routines/${id}`).set("Cookie", intruder.cookie);
+    const replaced = await request(app).put(`/v1/routines/${id}`).set("Cookie", intruder.cookie).send({ ...pushDay(), name: "Hacked" });
+    const deleted = await request(app).delete(`/v1/routines/${id}`).set("Cookie", intruder.cookie);
 
     expect([read.status, replaced.status, deleted.status]).toEqual([404, 404, 404]);
     expect(read.body).toEqual({ error: "RoutineNotFound", message: "Routine not found." });
-    expect((await request(app).get(`/routines/${id}`).set("Cookie", user.cookie)).body.name).toBe("Push day");
+    expect((await request(app).get(`/v1/routines/${id}`).set("Cookie", user.cookie)).body.name).toBe("Push day");
   });
 
   it("is a 404 for an id that isn't a UUID", async () => {
-    expect((await request(app).get("/routines/push-day").set("Cookie", user.cookie)).status).toBe(404);
+    expect((await request(app).get("/v1/routines/push-day").set("Cookie", user.cookie)).status).toBe(404);
   });
 });

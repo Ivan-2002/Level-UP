@@ -19,7 +19,7 @@ beforeEach(async () => {
 async function log(as: TestUser, daysAgo: number, exercises: [string, [reps: number, kg: number][]][]) {
   const startedAt = Date.now() - daysAgo * DAY - 2 * 3_600_000;
   const res = await request(app)
-    .post("/workouts")
+    .post("/v1/workouts")
     .set("Cookie", as.cookie)
     .send({
       clientId: randomUUID(),
@@ -32,13 +32,13 @@ async function log(as: TestUser, daysAgo: number, exercises: [string, [reps: num
 }
 
 const summary = async (exerciseId: string, query = "") => {
-  const res = await request(app).get(`/exercises/${exerciseId}/summary${query}`).set("Cookie", user.cookie);
+  const res = await request(app).get(`/v1/exercises/${exerciseId}/summary${query}`).set("Cookie", user.cookie);
   return { status: res.status, body: res.body };
 };
 
 describe("GET /exercises/:id/summary", () => {
   it("needs a session", async () => {
-    expect((await request(app).get(`/exercises/${ids["deadlift"]}/summary`)).status).toBe(401);
+    expect((await request(app).get(`/v1/exercises/${ids["deadlift"]}/summary`)).status).toBe(401);
   });
 
   it("is empty for an exercise never done", async () => {
@@ -114,7 +114,7 @@ describe("GET /exercises/recent", () => {
     await log(user, 1, [["barbell-bench-press", [[8, 60]]], ["deadlift", [[5, 125]]]]);
     await log(await signUpPlayer(), 0, [["plank", [[60, 0]]]]); // someone else's
 
-    const res = await request(app).get("/exercises/recent").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/exercises/recent").set("Cookie", user.cookie);
 
     expect(res.status).toBe(200);
     expect(recentExerciseListSchema.parse(res.body).items.map((i) => [i.exercise.name, i.lastSets])).toEqual([
@@ -125,12 +125,12 @@ describe("GET /exercises/recent", () => {
   });
 
   it("needs a session", async () => {
-    expect((await request(app).get("/exercises/recent")).status).toBe(401);
+    expect((await request(app).get("/v1/exercises/recent")).status).toBe(401);
   });
 });
 
 describe("GET /exercises/last-sessions", () => {
-  const last = (query: string, as = user) => request(app).get(`/exercises/last-sessions${query}`).set("Cookie", as.cookie);
+  const last = (query: string, as = user) => request(app).get(`/v1/exercises/last-sessions${query}`).set("Cookie", as.cookie);
 
   it("returns each exercise's most recent session in one request, in the order asked", async () => {
     await log(user, 3, [["deadlift", [[5, 120]]]]);
@@ -158,6 +158,6 @@ describe("GET /exercises/last-sessions", () => {
   it("validates the ids and needs a session", async () => {
     expect((await last("")).status).toBe(400);
     expect((await last("?ids=bench")).status).toBe(400);
-    expect((await request(app).get(`/exercises/last-sessions?ids=${ids["deadlift"]}`)).status).toBe(401);
+    expect((await request(app).get(`/v1/exercises/last-sessions?ids=${ids["deadlift"]}`)).status).toBe(401);
   });
 });

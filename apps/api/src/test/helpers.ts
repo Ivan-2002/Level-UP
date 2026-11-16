@@ -48,7 +48,7 @@ export async function signUpPlayer(options: { bodyweightKg?: number; timeZone?: 
   const user = await signUpUser();
   playerCount += 1;
   const res = await request(app)
-    .post("/profile")
+    .post("/v1/profile")
     .set("Cookie", user.cookie)
     .send({ username: `player_${playerCount}`, bodyweightKg: options.bodyweightKg, timeZone: options.timeZone });
   if (res.status !== 201) throw new Error(`Test profile failed (${res.status}): ${res.text}`);

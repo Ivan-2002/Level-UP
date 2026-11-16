@@ -10,7 +10,7 @@ describe("GET /exercises", () => {
   });
 
   it("returns 401 without a session", async () => {
-    const res = await request(app).get("/exercises");
+    const res = await request(app).get("/v1/exercises");
 
     expect(res.status).toBe(401);
   });
@@ -18,7 +18,7 @@ describe("GET /exercises", () => {
   it("returns the whole built-in library in the shared response shape", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).get("/exercises").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/exercises").set("Cookie", user.cookie);
 
     expect(res.status).toBe(200);
     const { items } = exerciseListSchema.parse(res.body); // throws if the contract drifted
@@ -30,7 +30,7 @@ describe("GET /exercises", () => {
   it("marks plank as timed (seconds) and everything else as counted reps", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).get("/exercises").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/exercises").set("Cookie", user.cookie);
 
     const timed = res.body.items.filter((e: { repsUnit: string }) => e.repsUnit === "seconds");
     expect(timed.map((e: { name: string }) => e.name)).toEqual(["Plank"]);
@@ -39,7 +39,7 @@ describe("GET /exercises", () => {
   it("includes the XP tuning values and rest suggestion the app needs for live display", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).get("/exercises").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/exercises").set("Cookie", user.cookie);
 
     expect(res.body.items).toContainEqual(
       expect.objectContaining({
@@ -57,7 +57,7 @@ describe("GET /exercises", () => {
   it("searches name OR muscle group, ignoring case, every word must match", async () => {
     const user = await signUpUser();
     const search = async (q: string) =>
-      (await request(app).get(`/exercises?search=${encodeURIComponent(q)}`).set("Cookie", user.cookie)).body.items.map(
+      (await request(app).get(`/v1/exercises?search=${encodeURIComponent(q)}`).set("Cookie", user.cookie)).body.items.map(
         (e: { name: string }) => e.name,
       );
 
@@ -70,7 +70,7 @@ describe("GET /exercises", () => {
   it("filters by body part, combined with search", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).get("/exercises?bodyPart=core&search=plank").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/exercises?bodyPart=core&search=plank").set("Cookie", user.cookie);
 
     expect(res.body.items.map((e: { name: string }) => e.name)).toEqual(["Plank"]);
   });
@@ -78,7 +78,7 @@ describe("GET /exercises", () => {
   it("rejects an unknown body part with 400", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).get("/exercises?bodyPart=wings").set("Cookie", user.cookie);
+    const res = await request(app).get("/v1/exercises?bodyPart=wings").set("Cookie", user.cookie);
 
     expect(res.status).toBe(400);
     expect(res.body.issues[0].path).toBe("bodyPart");
@@ -95,7 +95,7 @@ describe("POST /exercises (custom exercise)", () => {
   it("creates it with conservative server-chosen XP tuning", async () => {
     const user = await signUpUser();
 
-    const res = await request(app).post("/exercises").set("Cookie", user.cookie).send(custom);
+    const res = await request(app).post("/v1/exercises").set("Cookie", user.cookie).send(custom);
 
     expect(res.status).toBe(201);
     expect(exerciseSchema.parse(res.body)).toMatchObject({
@@ -112,7 +112,7 @@ describe("POST /exercises (custom exercise)", () => {
     const user = await signUpUser();
 
     const res = await request(app)
-      .post("/exercises")
+      .post("/v1/exercises")
       .set("Cookie", user.cookie)
       .send({ ...custom, loadFactor: 50, bodyweightRatio: 1 });
 
@@ -123,7 +123,7 @@ describe("POST /exercises (custom exercise)", () => {
     const user = await signUpUser();
 
     const res = await request(app)
-      .post("/exercises")
+      .post("/v1/exercises")
       .set("Cookie", user.cookie)
       .send({ name: "Archer Push-up", muscleGroup: "Chest", bodyPart: "chest", equipment: "bodyweight", mechanic: "compound" });
 
@@ -133,10 +133,10 @@ describe("POST /exercises (custom exercise)", () => {
   it("shows a custom exercise only to its owner", async () => {
     const owner = await signUpUser();
     const someoneElse = await signUpUser();
-    await request(app).post("/exercises").set("Cookie", owner.cookie).send(custom);
+    await request(app).post("/v1/exercises").set("Cookie", owner.cookie).send(custom);
 
     const names = async (user: typeof owner) =>
-      (await request(app).get("/exercises?search=landmine").set("Cookie", user.cookie)).body.items.map((e: { name: string }) => e.name);
+      (await request(app).get("/v1/exercises?search=landmine").set("Cookie", user.cookie)).body.items.map((e: { name: string }) => e.name);
 
     expect(await names(owner)).toEqual(["Landmine Press"]);
     expect(await names(someoneElse)).toEqual([]);
@@ -145,8 +145,8 @@ describe("POST /exercises (custom exercise)", () => {
   it("validates the body and needs a session", async () => {
     const user = await signUpUser();
 
-    const invalid = await request(app).post("/exercises").set("Cookie", user.cookie).send({ ...custom, name: "X", equipment: "rock" });
-    const anonymous = await request(app).post("/exercises").send(custom);
+    const invalid = await request(app).post("/v1/exercises").set("Cookie", user.cookie).send({ ...custom, name: "X", equipment: "rock" });
+    const anonymous = await request(app).post("/v1/exercises").send(custom);
 
     expect(invalid.status).toBe(400);
     expect(invalid.body.issues.map((i: { path: string }) => i.path)).toEqual(["name", "equipment"]);

@@ -69,12 +69,20 @@ async function request<T>(
   }
 }
 
-export const apiGet = <T>(path: string) => request<T>("GET", path);
+// The API version this build of the app speaks. Callers pass paths without it ("/workouts"),
+// so moving to /v2 one day is a change here, not in every screen.
+const API_VERSION = "/v1";
+
+export const apiGet = <T>(path: string) => request<T>("GET", `${API_VERSION}${path}`);
 export const apiPost = <T>(path: string, body: unknown) =>
-  request<T>("POST", path, body);
+  request<T>("POST", `${API_VERSION}${path}`, body);
 export const apiPatch = <T>(path: string, body: unknown) =>
-  request<T>("PATCH", path, body);
-export const apiPut = <T>(path: string, body: unknown) => request<T>("PUT", path, body);
+  request<T>("PATCH", `${API_VERSION}${path}`, body);
+export const apiPut = <T>(path: string, body: unknown) =>
+  request<T>("PUT", `${API_VERSION}${path}`, body);
 /** 204 No Content: resolves with nothing. */
-export const apiDelete = (path: string) => request<null>("DELETE", path);
+export const apiDelete = (path: string) => request<null>("DELETE", `${API_VERSION}${path}`);
+
+/** For the few routes outside the versioned API: today only GET /health. */
+export const apiGetUnversioned = <T>(path: string) => request<T>("GET", path);
 

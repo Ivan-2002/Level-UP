@@ -37,7 +37,7 @@ function workout(daysAgo: number, exercises: [slug: string, sets: SetInput[]][],
 }
 
 async function finish(user: TestUser, body: FinishWorkoutInput, expectedStatus = 201) {
-  const res = await request(app).post("/workouts").set("Cookie", user.cookie).send(body);
+  const res = await request(app).post("/v1/workouts").set("Cookie", user.cookie).send(body);
   expect(res.status, res.text).toBe(expectedStatus);
   return finishWorkoutResponseSchema.parse(res.body);
 }
@@ -76,8 +76,8 @@ describe("XP at Finish", () => {
     const input = workout(0, [["barbell-bench-press", times(2, { reps: 8, weightKg: 60 })]]);
 
     await Promise.all([
-      request(app).post("/workouts").set("Cookie", user.cookie).send(input),
-      request(app).post("/workouts").set("Cookie", user.cookie).send(input),
+      request(app).post("/v1/workouts").set("Cookie", user.cookie).send(input),
+      request(app).post("/v1/workouts").set("Cookie", user.cookie).send(input),
     ]);
 
     expect(await prisma.xpEvent.count()).toBe(2);
@@ -86,8 +86,8 @@ describe("XP at Finish", () => {
 
   it("uses the bodyweight in effect on the workout's date, so a 0 kg pull-up still earns XP", async () => {
     const user = await signUpPlayer(); // no bodyweight at sign-up
-    await request(app).post("/bodyweight").set("Cookie", user.cookie).send({ kg: 70, measuredOn: isoDate(Date.now() - 10 * DAY) });
-    await request(app).post("/bodyweight").set("Cookie", user.cookie).send({ kg: 90 });
+    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 70, measuredOn: isoDate(Date.now() - 10 * DAY) });
+    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 90 });
 
     // 5 days ago the 70 kg entry was in effect: round(10 x (0 + 70 x 1.0) x 1.25 / 10) = 88.
     const { summary } = await finish(user, workout(5, [["pull-up", [{ reps: 10, weightKg: 0 }]]]));
@@ -154,7 +154,7 @@ describe("summary stats", () => {
   it("compares duration, sets and volume with the previous workout of the same routine", async () => {
     const user = await signUpPlayer({ bodyweightKg: 80 });
     const routine = await request(app)
-      .post("/routines")
+      .post("/v1/routines")
       .set("Cookie", user.cookie)
       .send({ name: "Push day", exercises: [{ exerciseId: ids["barbell-bench-press"], targetSets: 3, targetReps: 8 }] });
     const routineId = routine.body.id as string;
@@ -175,9 +175,9 @@ describe("summary stats", () => {
     const user = await signUpPlayer({ bodyweightKg: 80 });
     const saved = await finish(user, workout(0, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
 
-    const again = await request(app).get(`/workouts/${saved.workout.id}/summary`).set("Cookie", user.cookie);
+    const again = await request(app).get(`/v1/workouts/${saved.workout.id}/summary`).set("Cookie", user.cookie);
     const intruder = await signUpPlayer();
-    const theirs = await request(app).get(`/workouts/${saved.workout.id}/summary`).set("Cookie", intruder.cookie);
+    const theirs = await request(app).get(`/v1/workouts/${saved.workout.id}/summary`).set("Cookie", intruder.cookie);
 
     expect(again.body).toEqual(saved);
     expect(theirs.status).toBe(404);
@@ -187,7 +187,7 @@ describe("summary stats", () => {
 describe("routine link", () => {
   async function createRoutine(user: TestUser) {
     const res = await request(app)
-      .post("/routines")
+      .post("/v1/routines")
       .set("Cookie", user.cookie)
       .send({ name: "Pull day", exercises: [{ exerciseId: ids["pull-up"], targetSets: 3, targetReps: 8 }] });
     return res.body.id as string;
@@ -203,7 +203,7 @@ describe("routine link", () => {
     await finish(user, older); // synced late
 
     expect(saved.workout.routineId).toBe(routineId);
-    const routine = await request(app).get(`/routines/${routineId}`).set("Cookie", user.cookie);
+    const routine = await request(app).get(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
     expect(routine.body.lastDoneAt).toBe(recent.startedAt);
   });
 
@@ -215,13 +215,13 @@ describe("routine link", () => {
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId: othersRoutine }));
 
     expect(saved.workout.routineId).toBeNull();
-    expect((await request(app).get(`/routines/${othersRoutine}`).set("Cookie", owner.cookie)).body.lastDoneAt).toBeNull();
+    expect((await request(app).get(`/v1/routines/${othersRoutine}`).set("Cookie", owner.cookie)).body.lastDoneAt).toBeNull();
   });
 
   it("drops a link to a routine deleted while you trained offline", async () => {
     const user = await signUpPlayer();
     const routineId = await createRoutine(user);
-    await request(app).delete(`/routines/${routineId}`).set("Cookie", user.cookie);
+    await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
 
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId }));
 
@@ -233,9 +233,9 @@ describe("routine link", () => {
     const routineId = await createRoutine(user);
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId }));
 
-    await request(app).delete(`/routines/${routineId}`).set("Cookie", user.cookie);
+    await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
 
-    const res = await request(app).get(`/workouts/${saved.workout.id}`).set("Cookie", user.cookie);
+    const res = await request(app).get(`/v1/workouts/${saved.workout.id}`).set("Cookie", user.cookie);
     expect(res.status).toBe(200);
     expect(res.body.routineId).toBeNull();
   });
@@ -252,7 +252,7 @@ describe("rest times and completion times", () => {
     input.exercises[1] = { ...input.exercises[1]!, restSec: 60 }; // the suggestion, untouched
 
     const { workout: saved } = await finish(user, input);
-    const library = await request(app).get("/exercises").set("Cookie", user.cookie);
+    const library = await request(app).get("/v1/exercises").set("Cookie", user.cookie);
     const pref = (name: string) => library.body.items.find((e: { name: string }) => e.name === name).restPreferenceSec;
 
     expect(saved.exercises.map((e) => e.restSec)).toEqual([165, 60]);
@@ -273,7 +273,7 @@ describe("rest times and completion times", () => {
     const input = workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]]);
     input.exercises[0]!.sets[0]!.completedAt = iso(Date.parse(input.startedAt) - MINUTE);
 
-    const res = await request(app).post("/workouts").set("Cookie", user.cookie).send(input);
+    const res = await request(app).post("/v1/workouts").set("Cookie", user.cookie).send(input);
 
     expect(res.status).toBe(400);
     expect(res.body.issues[0].path).toBe("exercises.0.sets.0.completedAt");
@@ -299,7 +299,7 @@ describe("weights stay exact for lb players (stored in kg, 3 decimals)", () => {
       user,
       workout(0, [["barbell-bench-press", lbs.map((lb) => ({ reps: 5, weightKg: fromInputWeight(lb, "lb") }))]]),
     );
-    const reread = await request(app).get(`/workouts/${saved.id}`).set("Cookie", user.cookie);
+    const reread = await request(app).get(`/v1/workouts/${saved.id}`).set("Cookie", user.cookie);
 
     const sets = reread.body.exercises[0].sets as { weightKg: number }[];
     expect(sets.map((s) => s.weightKg)).toEqual([61.235, 102.058, 20.979]);
@@ -309,7 +309,7 @@ describe("weights stay exact for lb players (stored in kg, 3 decimals)", () => {
   it("keeps a lb bodyweight exact too", async () => {
     const user = await signUpPlayer();
 
-    const res = await request(app).post("/bodyweight").set("Cookie", user.cookie).send({ kg: fromInputWeight(180, "lb") });
+    const res = await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: fromInputWeight(180, "lb") });
 
     expect(res.body.kg).toBe(81.647);
     expect(toDisplayWeight(res.body.kg, "lb")).toBe(180);

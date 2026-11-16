@@ -41,7 +41,7 @@ function validWorkout(overrides: Partial<FinishWorkoutInput> = {}): FinishWorkou
 }
 
 function finish(as: TestUser, body: unknown) {
-  return request(app).post("/workouts").set("Cookie", as.cookie).send(body as object);
+  return request(app).post("/v1/workouts").set("Cookie", as.cookie).send(body as object);
 }
 
 /** n sets of the same exercise, for the set-limit tests. */
@@ -55,9 +55,9 @@ function workoutWithSets(n: number) {
 
 describe("workout routes without a session", () => {
   it.each([
-    ["POST /workouts", () => request(app).post("/workouts").send({})],
-    ["GET /workouts", () => request(app).get("/workouts")],
-    ["GET /workouts/:id", () => request(app).get(`/workouts/${randomUUID()}`)],
+    ["POST /workouts", () => request(app).post("/v1/workouts").send({})],
+    ["GET /workouts", () => request(app).get("/v1/workouts")],
+    ["GET /workouts/:id", () => request(app).get(`/v1/workouts/${randomUUID()}`)],
   ])("%s returns 401", async (_route, send) => {
     const res = await send();
 
@@ -102,7 +102,7 @@ describe("POST /workouts", () => {
   it("can be read back with GET /workouts/:id", async () => {
     const created = await finish(user, validWorkout());
 
-    const res = await request(app).get(`/workouts/${created.body.workout.id}`).set("Cookie", user.cookie);
+    const res = await request(app).get(`/v1/workouts/${created.body.workout.id}`).set("Cookie", user.cookie);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(created.body.workout);
@@ -231,7 +231,7 @@ describe("GET /workouts/:id", () => {
     const theirs = await finish(user, validWorkout({ name: "Private session" }));
     const intruder = await signUpPlayer();
 
-    const res = await request(app).get(`/workouts/${theirs.body.workout.id}`).set("Cookie", intruder.cookie);
+    const res = await request(app).get(`/v1/workouts/${theirs.body.workout.id}`).set("Cookie", intruder.cookie);
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "WorkoutNotFound", message: "Workout not found." });
@@ -240,7 +240,7 @@ describe("GET /workouts/:id", () => {
 
   it("returns 404 for an id that doesn't exist, or isn't even a UUID", async () => {
     for (const id of [randomUUID(), "not-a-uuid"]) {
-      const res = await request(app).get(`/workouts/${id}`).set("Cookie", user.cookie);
+      const res = await request(app).get(`/v1/workouts/${id}`).set("Cookie", user.cookie);
       expect(res.status, id).toBe(404);
     }
   });
@@ -256,7 +256,7 @@ describe("GET /workouts (history)", () => {
   }
 
   async function getPage(as: TestUser, query: string) {
-    const res = await request(app).get(`/workouts${query}`).set("Cookie", as.cookie);
+    const res = await request(app).get(`/v1/workouts${query}`).set("Cookie", as.cookie);
     expect(res.status).toBe(200);
     return workoutPageSchema.parse(res.body);
   }
@@ -325,7 +325,7 @@ describe("GET /workouts (history)", () => {
     ["a page size over 50", "?limit=51", "ValidationError"],
     ["a page size of 0", "?limit=0", "ValidationError"],
   ])("rejects %s with 400", async (_case, query, error) => {
-    const res = await request(app).get(`/workouts${query}`).set("Cookie", user.cookie);
+    const res = await request(app).get(`/v1/workouts${query}`).set("Cookie", user.cookie);
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe(error);

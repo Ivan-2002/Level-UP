@@ -29,7 +29,7 @@ async function train(user: TestUser, local: string, options: { sets?: number; cl
   const finishedAt = new Date(startedAt.getTime() + 3_600_000);
   setNow(finishedAt);
   const res = await request(app)
-    .post("/workouts")
+    .post("/v1/workouts")
     .set("Cookie", user.cookie)
     .send({
       clientId: options.clientId ?? randomUUID(),
@@ -44,7 +44,7 @@ async function train(user: TestUser, local: string, options: { sets?: number; cl
 /** Opens the app at a local moment: the rollover happens here. */
 async function openApp(user: TestUser, local: string): Promise<WeeklyGoalStatus> {
   setNow(at(local));
-  const res = await request(app).get("/weekly-goal").set("Cookie", user.cookie);
+  const res = await request(app).get("/v1/weekly-goal").set("Cookie", user.cookie);
   expect(res.status, res.text).toBe(200);
   return weeklyGoalStatusSchema.parse(res.body);
 }
@@ -61,8 +61,8 @@ const totalXp = async (user: TestUser) => (await prisma.profile.findUniqueOrThro
 
 describe("GET /weekly-goal", () => {
   it("needs a session and a character", async () => {
-    expect((await request(app).get("/weekly-goal")).status).toBe(401);
-    const res = await request(app).get("/weekly-goal").set("Cookie", (await signUpUser()).cookie);
+    expect((await request(app).get("/v1/weekly-goal")).status).toBe(401);
+    const res = await request(app).get("/v1/weekly-goal").set("Cookie", (await signUpUser()).cookie);
     expect([res.status, res.body.error]).toEqual([409, "ProfileRequired"]);
   });
 
@@ -75,7 +75,7 @@ describe("GET /weekly-goal", () => {
   it("handles two requests at once (opening the app while a Finish is saving)", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
     setNow(at("2026-10-19T09:00:00")); // two weeks to roll over
-    const get = () => request(app).get("/weekly-goal").set("Cookie", user.cookie);
+    const get = () => request(app).get("/v1/weekly-goal").set("Cookie", user.cookie);
 
     const responses = await Promise.all([get(), get(), get()]);
 
@@ -267,7 +267,7 @@ describe("edge cases", () => {
   it("follows the phone to a new time zone (PATCH /profile)", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
 
-    const res = await request(app).patch("/profile").set("Cookie", user.cookie).send({ timeZone: "America/New_York" });
+    const res = await request(app).patch("/v1/profile").set("Cookie", user.cookie).send({ timeZone: "America/New_York" });
 
     expect([res.status, res.body.timeZone]).toEqual([200, "America/New_York"]);
   });
