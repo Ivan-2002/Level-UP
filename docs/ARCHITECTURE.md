@@ -245,6 +245,7 @@ These are designed in from day one but switched on when the milestone needs them
 | Password reset and email verification | Better Auth's reset and verification flows, with a transactional email provider (still to choose) | Before beta |
 | Account deletion | `DELETE /v1/me`, asking for the password again. Every table cascades from `user`, so one delete removes everything. Required by the App Store and Google Play | Before beta |
 | Privacy | Privacy policy and store data-safety forms (bodyweight and training history are personal data: POPIA, GDPR) | Before beta |
+| Minimum age | Minimum age at sign-up (13 or 16, to be decided) with an age check, and the app store age rating. The XP and bodyweight rules are designed for adults and older teens | Before beta |
 | Local test files | curl cookie jars and other scratch files are git-ignored (`cookies.txt`), never committed | Now |
 
 The hosting provider is still open; the shortlist is Render, Railway or Fly.io for the API, and Neon or Supabase for Postgres.
@@ -267,7 +268,7 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: finishing a workout shows XP gained and, when earned, a level-up; two Finishes sent at the same moment can't exceed the cap; an offline workout synced days later counts against the day it was done.
 6. **Stickman avatar.** Stage extras driven by level, body shape driven only by body-part XP, slow shrinking of untrained parts, and the starting-shape decision.
    - Done when: the avatar gains its extras at each stage level, untrained body parts stay thin whatever the level, and a part untrained for months visibly shrinks.
-7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, testers on TestFlight and Google Play internal testing.
+7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, minimum age at sign-up (13 or 16, to be decided) with an age check and the app store age rating, testers on TestFlight and Google Play internal testing. The XP and bodyweight rules are designed for adults and older teens.
    - Done when: five real people use it at the gym for two weeks.
 
 Later, not yet scheduled: **session backup sync**, an idempotent `PUT /sessions/:clientId` that uploads the whole in-progress session every minute or so. It protects against a lost phone and gives the server its own receive times, which the anti-cheat checks need (sets far above the player's history, or completed implausibly fast, get `is_flagged`, earn no XP and don't count as PRs until confirmed).
@@ -286,6 +287,7 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-16 | A minimum age at sign-up (13 or 16, to be decided) with an age check, and the app store age rating, are beta requirements (Milestone 7); no code before then | Younger players are out of scope: the XP and bodyweight rules are designed for adults and older teens |
 | 2026-11-16 | Timed exercises get their own maximum: 600 s (`HOLD_MAX_SEC`), reps stay at 100 (`REPS_MAX`), chosen per exercise by `repsMaxFor`. Over the limit is rejected (400 `RepsOutOfRange`), like today's 100-rep limit, not flagged | Request schemas only know the larger of the two limits, so the precise check runs in the service after the exercises load (one extra step, in the exercises service, shared by workouts and routines) |
 | 2026-11-16 | Phase 1b: `setXp` is relative to bodyweight and clamps it to 40-200 kg; `xpBodyweightOnDate` limits each entry at the moment it was received (2% a week, decreases only) and picks the entry in effect by `measured_on`. Simulation after 1b: intermediate (80 kg) 1,402-1,482 XP a session (was 1,497-1,580), light 60 kg lifter identical to it (was 1,122-1,185), advanced (90 kg) 2,069-2,818 (was 2,482-3,378), beginner (75 kg) and bodyweight-only unchanged. The fake-drop player's biggest day is 3,203, double an honest one, until the daily cap (1f) | The server passes the TYPED bodyweight until Phase 3 wires the walk (it needs `received_at`, Phase 2); the branch isn't merged before then |
 | 2026-11-16 | Balancing simulation committed (`pnpm --filter @levelup/shared sim`, in `packages/shared/simulation/`, its own package export so the app never bundles it). It runs the real shared rules; its copy of the exercise tuning is checked against the API catalog by a test. Baseline on the 4c rules (104 weeks): level 20 in 4 days (advanced) to 7 weeks (beginner), 2 weeks for intermediate, light and bodyweight-only; longest streak 1-2 weeks for everyone below 4 days a week; bonuses 1-2% of XP; biggest day 738 (beginner) to 3,378 (advanced) | A copied tuning table plus a test, instead of moving the catalog into shared |
