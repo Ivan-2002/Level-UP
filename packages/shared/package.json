@@ -5,13 +5,16 @@
   "type": "module",
   "description": "Types and pure functions shared by the LevelUp app and API.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./simulation": "./simulation/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sim": "tsx simulation/run.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "vitest": "^5.1.0"
   },
   "dependencies": {
