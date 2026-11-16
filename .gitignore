@@ -27,3 +27,6 @@ apps/mobile/android/
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Local test scratch files (curl cookie jars hold live session tokens)
+cookies.txt
