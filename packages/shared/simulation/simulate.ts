@@ -1,6 +1,7 @@
 import { setXp, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
+import { plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
 import { SIM_EXERCISES } from "./exercises.js";
 import type { PlannedExercise, Session, SimPlayer } from "./players.js";
 
@@ -26,6 +27,8 @@ export type SimResult = {
   bonusXp: number;
   longestStreak: number;
   sessions: number;
+  /** Sets the plausibility limits flagged (0 XP). Should be 0 for every honest player. */
+  flaggedSets: number;
 };
 
 /** Sign-up on a Monday morning (UTC), so the first week is a normal goal week, not a warm-up. */
@@ -38,7 +41,7 @@ const atDay = (day: number, hourUtc: number) => new Date(SIGN_UP.getTime() + day
 export function simulate(player: SimPlayer, weeks = 104): SimResult {
   const bodyweights: XpBodyweightEntry[] = [];
   const reached = Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>;
-  const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, firstWeekSessionXp: [] as number[] };
+  const result = { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, firstWeekSessionXp: [] as number[] };
 
   let kind: WeekKind = firstWeekKind(SIGN_UP, TIME_ZONE);
   let target = 2;
@@ -64,7 +67,8 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
       const session = player.sessions[result.sessions % player.sessions.length]!;
       const strength = Math.min(player.growth.max, 1 + player.growth.perWeek * week);
 
-      const dayXp = sessionSetXp(session, strength, xpBodyweightOnDate(bodyweights, startedAt));
+      const { xp: dayXp, flagged } = scoreSession(session, strength, xpBodyweightOnDate(bodyweights, startedAt));
+      result.flaggedSets += flagged;
       result.sessions++;
       result.setXp += dayXp;
       result.biggestDayXp = Math.max(result.biggestDayXp, dayXp);
@@ -92,16 +96,30 @@ export function simulate(player: SimPlayer, weeks = 104): SimResult {
 
 /** Set XP of one session, at `strength` x the starting loads (reps, for bodyweight moves). */
 export function sessionSetXp(session: Session, strength: number, bodyweightKg: number): number {
-  return session.reduce((sum, planned) => sum + planned.sets * oneSetXp(planned, strength, bodyweightKg), 0);
+  return scoreSession(session, strength, bodyweightKg).xp;
 }
 
-function oneSetXp(planned: PlannedExercise, strength: number, bodyweightKg: number): number {
+/** Set XP of one session, and how many of its sets the plausibility limits flagged (0 XP). */
+function scoreSession(session: Session, strength: number, bodyweightKg: number): { xp: number; flagged: number } {
+  let xp = 0;
+  let flagged = 0;
+  for (const planned of session) {
+    const exercise = SIM_EXERCISES[planned.slug];
+    const set = setAtStrength(planned, strength);
+    if (plausibilityFlag(set, plausibilityLimits(exercise)) !== null) flagged += planned.sets;
+    else xp += planned.sets * setXp(set, bodyweightKg, exercise);
+  }
+  return { xp, flagged };
+}
+
+function setAtStrength(planned: PlannedExercise, strength: number): { reps: number; weightKg: number } {
   const exercise = SIM_EXERCISES[planned.slug];
   // Bodyweight moves get stronger by doing more reps; loaded ones by adding weight.
   const growsReps = planned.kg === 0 && exercise.bodyweightRatio > 0;
-  const reps = growsReps ? Math.round(planned.reps * strength) : planned.reps;
-  const weightKg = growsReps ? planned.kg : Math.round(planned.kg * strength * 2) / 2;
-  return setXp({ reps, weightKg }, bodyweightKg, exercise);
+  return {
+    reps: growsReps ? Math.round(planned.reps * strength) : planned.reps,
+    weightKg: growsReps ? planned.kg : Math.round(planned.kg * strength * 2) / 2,
+  };
 }
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);

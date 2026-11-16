@@ -11,6 +11,8 @@ describe("the balancing simulation's exercise tuning", () => {
 
     expect(entry, `${slug} is not in the catalog`).toBeDefined();
     expect({
+      equipment: entry!.equipment,
+      mechanic: entry!.mechanic,
       loadFactor: Number(entry!.loadFactor),
       bodyweightRatio: Number(entry!.bodyweightRatio ?? 0),
       repsUnit: entry!.repsUnit ?? "reps",

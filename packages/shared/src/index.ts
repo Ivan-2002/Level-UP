@@ -16,6 +16,7 @@ export * from "./progression.js";
 export * from "./routines.js";
 export * from "./units.js";
 export * from "./weekly-goal.js";
+export * from "./xp-limits.js";
 
 /** Response of GET /health. */
 export type HealthResponse = {

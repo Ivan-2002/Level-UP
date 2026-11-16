@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WEEKLY_GOAL } from "../src/weekly-goal.js";
-import type { SimPlayer } from "./players.js";
+import { SIM_PLAYERS, type SimPlayer } from "./players.js";
 import { sessionSetXp, simulate } from "./simulate.js";
 
 // The simulation's numbers end up in the decision log, so the simulation itself is tested:
@@ -56,6 +56,20 @@ describe("simulate", () => {
     // bodyweight has moved only 2% (80 -> 78.4 kg), not halved: 2 x 75 x 80/78.4 = 2 x 77.
     expect(faker.firstWeekSessionXp).toEqual(honest.firstWeekSessionXp);
     expect(faker.setXp - honest.setXp).toBe(2 * 77);
+  });
+
+  it("applies the plausibility limits: an implausible set earns nothing", () => {
+    // 400 kg is above the barbell compound DEFAULT (350). The real back squat gets its own,
+    // higher limit from the catalog in Phase 2; the simulation's copy has no overrides yet.
+    const result = simulate({ ...twiceAWeek, sessions: [squat(400)] }, 1);
+    expect(result.flaggedSets).toBe(2);
+    expect(result.setXp).toBe(0);
+  });
+
+  it("never flags a set of the honest player types, over two years of getting stronger", () => {
+    for (const player of SIM_PLAYERS) {
+      expect({ player: player.name, flagged: simulate(player).flaggedSets }).toEqual({ player: player.name, flagged: 0 });
+    }
   });
 
   it("is deterministic", () => {
