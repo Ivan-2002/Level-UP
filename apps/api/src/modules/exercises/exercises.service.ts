@@ -72,6 +72,8 @@ function toExercise(row: repo.ExerciseRow): Exercise {
     suggestedRestSec: row.suggestedRestSec,
     loadFactor: row.loadFactor.toNumber(), // Postgres DECIMAL -> plain number
     bodyweightRatio: row.bodyweightRatio.toNumber(),
+    maxPlausibleWeightKg: row.maxPlausibleWeightKg?.toNumber() ?? null,
+    maxPlausibleReps: row.maxPlausibleReps,
     isCustom: row.isCustom,
     restPreferenceSec: row.preferences[0]?.restSec ?? null,
   };

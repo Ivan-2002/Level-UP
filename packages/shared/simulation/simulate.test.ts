@@ -62,9 +62,8 @@ describe("simulate", () => {
   });
 
   it("applies the plausibility limits: an implausible set earns nothing", () => {
-    // 400 kg is above the barbell compound DEFAULT (350); the real back squat gets its own,
-    // higher limit from the catalog in Phase 2 (the simulation's copy has no overrides yet).
-    const result = simulate({ ...twiceAWeek, sessions: [squat(400)] }, 1);
+    // 460 kg is above the back squat's own limit (450, overriding the barbell compound 350).
+    const result = simulate({ ...twiceAWeek, sessions: [squat(460)] }, 1);
     expect(result).toMatchObject({ flaggedSets: 2, setXp: 0 });
   });
 

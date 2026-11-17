@@ -191,6 +191,11 @@ model Exercise {
   // XP tuning (Milestone 5): effective load = (weight + bodyweight x bodyweightRatio) x loadFactor
   loadFactor       Decimal              @db.Decimal(4, 2)
   bodyweightRatio  Decimal              @default(0) @db.Decimal(3, 2)
+  // Plausibility limits (Milestone 5): a set above either is flagged (0 XP, not a PR). Null =
+  // the default for the exercise's equipment x mechanic (packages/shared, xp-limits.ts).
+  // Logged weight: per dumbbell, or ADDED weight for bodyweight exercises.
+  maxPlausibleWeightKg Decimal?        @db.Decimal(7, 3)
+  maxPlausibleReps     Int?
   isCustom         Boolean              @default(false)
   ownerId          String? // set only for custom exercises (later)
   owner            User?                @relation(fields: [ownerId], references: [id], onDelete: Cascade)

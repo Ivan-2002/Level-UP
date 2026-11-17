@@ -16,6 +16,8 @@ describe("the balancing simulation's exercise tuning", () => {
       loadFactor: Number(entry!.loadFactor),
       bodyweightRatio: Number(entry!.bodyweightRatio ?? 0),
       repsUnit: entry!.repsUnit ?? "reps",
+      maxPlausibleWeightKg: entry!.maxPlausibleWeightKg ?? null,
+      maxPlausibleReps: entry!.maxPlausibleReps ?? null,
     }).toEqual(sim);
   });
 });

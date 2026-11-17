@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  exerciseSchema,
   finishWorkoutSchema,
   HOLD_MAX_SEC,
   listWorkoutsQuerySchema,
@@ -29,6 +30,16 @@ function issueMessages(input: unknown) {
   const result = finishWorkoutSchema.safeParse(input);
   return result.success ? [] : result.error.issues.map((i) => i.message);
 }
+
+describe("exerciseSchema", () => {
+  it("still parses an exercise cached before the plausibility overrides existed", () => {
+    const cachedBeforeMilestone5 = {
+      id: EXERCISE_ID, name: "Back Squat", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "barbell", repsUnit: "reps",
+      mechanic: "compound", suggestedRestSec: 180, loadFactor: 1, bodyweightRatio: 0, isCustom: false, restPreferenceSec: null,
+    };
+    expect(exerciseSchema.parse(cachedBeforeMilestone5)).toMatchObject({ maxPlausibleWeightKg: null, maxPlausibleReps: null });
+  });
+});
 
 describe("reps limits by unit", () => {
   it("allows 100 reps, or 600 seconds for a timed exercise", () => {

@@ -80,9 +80,9 @@ export async function upsertRestPreferences(
  */
 export async function upsertCatalog(entries: CatalogExercise[]): Promise<void> {
   await prisma.$transaction(
-    entries.map(({ slug, repsUnit = "reps", ...rest }) => {
-      // Always written, so removing repsUnit from a catalog entry resets it to "reps".
-      const fields = { ...rest, repsUnit };
+    entries.map(({ slug, repsUnit = "reps", maxPlausibleWeightKg = null, maxPlausibleReps = null, ...rest }) => {
+      // Always written, so removing repsUnit or an override from a catalog entry resets it.
+      const fields = { ...rest, repsUnit, maxPlausibleWeightKg, maxPlausibleReps };
       return prisma.exercise.upsert({
         where: { slug },
         create: { slug, ...fields },

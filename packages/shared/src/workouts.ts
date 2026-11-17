@@ -177,6 +177,12 @@ export const exerciseSchema = z.object({
   suggestedRestSec: z.number().int(),
   loadFactor: z.number(),
   bodyweightRatio: z.number(),
+  /**
+   * Plausibility overrides (xp-limits.ts); null = the equipment x mechanic default. The
+   * default(null) lets exercise lists cached by older app versions still parse.
+   */
+  maxPlausibleWeightKg: z.number().nullable().default(null),
+  maxPlausibleReps: z.number().int().nullable().default(null),
   isCustom: z.boolean(),
   /** The player's own rest time for this exercise (highest priority), or null. */
   restPreferenceSec: z.number().int().nullable(),

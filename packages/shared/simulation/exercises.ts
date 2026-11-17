@@ -9,27 +9,34 @@ import type { Equipment, Mechanic, RepsUnit } from "../src/workouts.js";
 // TOWARDS shared). The API has a test that fails if any value here stops matching the
 // catalog, so the copy can't drift silently.
 
-export type SimExercise = ExerciseTuning & { equipment: Equipment; mechanic: Mechanic; repsUnit: RepsUnit };
+export type SimExercise = ExerciseTuning & {
+  equipment: Equipment;
+  mechanic: Mechanic;
+  repsUnit: RepsUnit;
+  maxPlausibleWeightKg: number | null;
+  maxPlausibleReps: number | null;
+};
 
-const x = (equipment: Equipment, mechanic: Mechanic, loadFactor: number, bodyweightRatio = 0, repsUnit: RepsUnit = "reps"): SimExercise => ({
-  equipment,
-  mechanic,
-  loadFactor,
-  bodyweightRatio,
-  repsUnit,
-});
+const x = (
+  equipment: Equipment,
+  mechanic: Mechanic,
+  loadFactor: number,
+  bodyweightRatio = 0,
+  repsUnit: RepsUnit = "reps",
+  maxPlausibleWeightKg: number | null = null,
+): SimExercise => ({ equipment, mechanic, loadFactor, bodyweightRatio, repsUnit, maxPlausibleWeightKg, maxPlausibleReps: null });
 
 export const SIM_EXERCISES = {
   // Legs
-  "barbell-back-squat": x("barbell", "compound", 1),
+  "barbell-back-squat": x("barbell", "compound", 1, 0, "reps", 450),
   "romanian-deadlift": x("barbell", "compound", 1.1),
-  "leg-press": x("machine", "compound", 0.5),
+  "leg-press": x("machine", "compound", 0.5, 0, "reps", 500),
   "leg-extension": x("machine", "isolation", 1.3),
   "lying-leg-curl": x("machine", "isolation", 1.7),
   "walking-lunge": x("dumbbell", "compound", 0.9, 0.75),
-  "standing-calf-raise": x("machine", "isolation", 0.7),
+  "standing-calf-raise": x("machine", "isolation", 0.7, 0, "reps", 300),
   // Back
-  deadlift: x("barbell", "compound", 1.2),
+  deadlift: x("barbell", "compound", 1.2, 0, "reps", 450),
   "pull-up": x("bodyweight", "compound", 1.25, 1),
   "lat-pulldown": x("cable", "compound", 1.3),
   "barbell-row": x("barbell", "compound", 1.4),
