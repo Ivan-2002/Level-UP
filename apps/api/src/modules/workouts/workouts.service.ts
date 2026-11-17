@@ -7,7 +7,6 @@ import {
   levelFromXp,
   liftedKg,
   localDate,
-  setXp,
   volumeKg,
   type Exercise,
   type FinishSummary,
@@ -20,7 +19,7 @@ import {
 } from "@levelup/shared";
 import { now } from "../../lib/clock.js";
 import { AppError } from "../../lib/errors.js";
-import { prisma } from "../../lib/prisma.js";
+import { prisma, type Db } from "../../lib/prisma.js";
 import * as exercisesService from "../exercises/exercises.service.js";
 import * as progressionService from "../progression/progression.service.js";
 import * as weeklyGoalService from "../progression/weekly-goal.service.js";
@@ -63,6 +62,17 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         input.routineId && (await routinesService.routineBelongsTo(tx, userId, input.routineId)) ? input.routineId : null;
       const startedAt = new Date(input.startedAt);
 
+      // Score every set BEFORE saving, so each set is stored with its flag and tag. History
+      // is read inside the transaction, after the lock: a Finish that got here first is
+      // already committed and counts as history.
+      const score = await progressionService.scoreWorkout(tx, userId, {
+        startedAt,
+        sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg }))),
+        exercises,
+        pastSessions: await pastSessions(tx, userId, [...exercises.keys()], startedAt),
+      });
+      const scored = [...score.sets];
+
       const row = await repo.insertWorkout(tx, {
         userId,
         clientId: input.clientId,
@@ -70,11 +80,18 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         routineId,
         startedAt,
         finishedAt: new Date(input.finishedAt),
-        exercises: input.exercises,
+        xpHeldBack: 0,
+        xpHeldBackReason: null,
+        exercises: input.exercises.map((e) => ({
+          ...e,
+          sets: e.sets.map((set) => {
+            const { isFlagged, flagReason, tag } = scored.shift()!;
+            return { ...set, isFlagged, flagReason, xpTag: tag };
+          }),
+        })),
       });
 
-      const bodyweightKg = bodyweightOnDate(await usersService.bodyweightHistory(userId, tx), input.startedAt);
-      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, bodyweightKg), localDate(startedAt, timeZone));
+      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, score.sets), localDate(startedAt, timeZone));
       // Rolls the weeks over and, if this workout meets this week's goal, pays the bonus.
       await weeklyGoalService.syncWeeklyGoal(tx, userId, {
         now: now(),
@@ -150,18 +167,27 @@ function assertRepsFitExercises(input: FinishWorkoutInput, exercises: Map<string
   }
 }
 
-/** XP for every completed, non-flagged set, using the shared formula. */
-function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, bodyweightKg: number) {
-  return row.exercises.flatMap((we) => {
-    const exercise = exerciseOf(exercises, we.exerciseId);
-    return we.sets
-      .filter((s) => !s.isFlagged)
-      .map((s) => ({
-        setId: s.id,
-        bodyPart: exercise.bodyPart,
-        amount: setXp({ reps: s.reps, weightKg: s.weightKg.toNumber() }, bodyweightKg, exercise),
-      }));
-  });
+/**
+ * Each exercise's earlier sessions (workouts that started before this one), oldest first.
+ * An exercise done twice in one workout (a superset) is ONE session, as in scoring.
+ */
+async function pastSessions(db: Db, userId: string, exerciseIds: string[], startedAt: Date) {
+  const rows = await repo.findExerciseHistory(userId, exerciseIds, { startedAt }, db);
+  const sessions = new Map<string, Map<string, progressionService.PastSession>>();
+  for (const row of rows) {
+    const byWorkout = sessions.get(row.exerciseId) ?? new Map<string, progressionService.PastSession>();
+    const session = byWorkout.get(row.workout.id) ?? { startedAt: row.workout.startedAt, sets: [] };
+    session.sets.push(...row.sets.map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() })));
+    byWorkout.set(row.workout.id, session);
+    sessions.set(row.exerciseId, byWorkout);
+  }
+  return new Map([...sessions].map(([exerciseId, byWorkout]) => [exerciseId, [...byWorkout.values()]]));
+}
+
+/** The ledger awards: each saved set (in the order logged) with the XP scoring gave it. */
+function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, scored: { xp: number }[]) {
+  const saved = row.exercises.flatMap((we) => we.sets.map((s) => ({ setId: s.id, bodyPart: exerciseOf(exercises, we.exerciseId).bodyPart })));
+  return saved.map((s, i) => ({ ...s, amount: scored[i]!.xp }));
 }
 
 /** Rest times the PLAYER chose. If an exercise appears twice, the later choice wins. */
