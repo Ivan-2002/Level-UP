@@ -42,6 +42,18 @@ export async function sumBonusXp(sourceId: string): Promise<{ weeklyGoal: number
   return { weeklyGoal: of("weekly_goal"), streakMilestone: of("streak_milestone") };
 }
 
+/**
+ * XP already recorded on one local day (`earnedOn`, "YYYY-MM-DD") from these sources: what
+ * the daily cap has used up. Uses the (userId, earnedOn) index.
+ */
+export async function sumXpOnDay(db: Db, userId: string, earnedOn: string, sources: readonly XpSource[]): Promise<number> {
+  const result = await db.xpEvent.aggregate({
+    where: { userId, earnedOn: toDate(earnedOn), source: { in: [...sources] } },
+    _sum: { amount: true },
+  });
+  return result._sum.amount ?? 0;
+}
+
 /** XP awarded for these sets. */
 export async function sumSetXp(setIds: string[]): Promise<number> {
   const result = await prisma.xpEvent.aggregate({

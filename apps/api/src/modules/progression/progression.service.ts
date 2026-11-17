@@ -1,6 +1,8 @@
 import {
+  applyDailyCap,
   bodyweightOnDate,
   exerciseXpHistory,
+  isTooOldForXp,
   scoreSessionSets,
   xpBodyweightOnDate,
   type BodyPart,
@@ -8,7 +10,9 @@ import {
   type ScoredSet,
   type ScoringExercise,
   type SessionSet,
+  XP_SOURCES_UNDER_DAILY_CAP,
 } from "@levelup/shared";
+import type { XpHeldBackReason } from "../../generated/prisma/client.js";
 import type { Db } from "../../lib/prisma.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./progression.repository.js";
@@ -24,6 +28,10 @@ export type PastSession = { startedAt: Date; sets: { reps: number; weightKg: num
 
 export type WorkoutToScore = {
   startedAt: Date;
+  /** When the server received it (the 14-day rule). */
+  receivedAt: Date;
+  /** The local day it started ("YYYY-MM-DD"): the daily cap's day. */
+  earnedOn: string;
   /** Every set of the workout, in the order logged (exercise by exercise). */
   sets: SessionSet[];
   exercises: Map<string, ScoringExercise>;
@@ -32,8 +40,12 @@ export type WorkoutToScore = {
 };
 
 export type WorkoutScore = {
-  /** One per input set, in the same order. */
+  /** One per input set, in the same order: what scoring decided (flags, tags, XP before the day's limits). */
   sets: ScoredSet[];
+  /** One per input set: the XP actually awarded, after the 14-day rule and the daily cap. */
+  awardedXp: number[];
+  /** Set XP the workout didn't get, and why; null when it got it all. */
+  heldBack: { amount: number; reason: XpHeldBackReason } | null;
   /** The real bodyweight in effect that day (lifted kg, PRs, the summary). */
   bodyweightKg: number;
 };
@@ -41,8 +53,13 @@ export type WorkoutScore = {
 /**
  * Scores a workout's sets with the shared pipeline (plausibility, jump cap, effort, tags,
  * the 10-set limit, set XP), using the XP bodyweight on its start date and the player's
- * history with each exercise. Reads only; Finish stores the result. Pass the Finish
- * transaction as `db`.
+ * history with each exercise; then applies the day's limits: no set XP for a workout that
+ * started more than 14 days before it arrived, else the daily cap against the XP already
+ * recorded on its day. Reads only; Finish stores the result.
+ *
+ * Call it inside the Finish transaction (`db`) AFTER locking the player's profile row: the
+ * lock makes two Finishes for one player run one after the other, so the second one counts
+ * the first one's XP and can't also fit under the cap.
  */
 export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToScore): Promise<WorkoutScore> {
   const bodyweights = await usersService.bodyweightHistory(userId, db);
@@ -66,8 +83,19 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
     history,
     bodyweight: { xp: xpBodyweightOnDate(bodyweights, date), typed },
   });
-  return { sets: score.sets, bodyweightKg: typed };
+  const setXp = score.sets.map((s) => s.xp);
+  const scored = setXp.reduce((a, b) => a + b, 0);
+
+  if (isTooOldForXp(workout.startedAt, workout.receivedAt)) {
+    return { sets: score.sets, awardedXp: setXp.map(() => 0), heldBack: heldBack(scored, "too_old"), bodyweightKg: typed };
+  }
+  const dayXpBefore = await repo.sumXpOnDay(db, userId, workout.earnedOn, XP_SOURCES_UNDER_DAILY_CAP);
+  const capped = applyDailyCap(dayXpBefore, setXp);
+  return { sets: score.sets, awardedXp: capped.awarded, heldBack: heldBack(capped.heldBack, "daily_cap"), bodyweightKg: typed };
 }
+
+// Zero means nothing was held back: no reason (the database's CHECK insists on that).
+const heldBack = (amount: number, reason: XpHeldBackReason) => (amount > 0 ? { amount, reason } : null);
 
 export type SetXpAward = { setId: string; amount: number; bodyPart: BodyPart };
 

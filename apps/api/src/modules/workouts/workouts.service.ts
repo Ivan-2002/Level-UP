@@ -61,12 +61,15 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
       const routineId =
         input.routineId && (await routinesService.routineBelongsTo(tx, userId, input.routineId)) ? input.routineId : null;
       const startedAt = new Date(input.startedAt);
+      const earnedOn = localDate(startedAt, timeZone);
 
       // Score every set BEFORE saving, so each set is stored with its flag and tag. History
       // is read inside the transaction, after the lock: a Finish that got here first is
       // already committed and counts as history.
       const score = await progressionService.scoreWorkout(tx, userId, {
         startedAt,
+        receivedAt: now(),
+        earnedOn,
         sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg }))),
         exercises,
         pastSessions: await pastSessions(tx, userId, [...exercises.keys()], startedAt),
@@ -80,8 +83,8 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         routineId,
         startedAt,
         finishedAt: new Date(input.finishedAt),
-        xpHeldBack: 0,
-        xpHeldBackReason: null,
+        xpHeldBack: score.heldBack?.amount ?? 0,
+        xpHeldBackReason: score.heldBack?.reason ?? null,
         exercises: input.exercises.map((e) => ({
           ...e,
           sets: e.sets.map((set) => {
@@ -91,7 +94,7 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         })),
       });
 
-      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, score.sets), localDate(startedAt, timeZone));
+      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, score.awardedXp), earnedOn);
       // Rolls the weeks over and, if this workout meets this week's goal, pays the bonus.
       await weeklyGoalService.syncWeeklyGoal(tx, userId, {
         now: now(),
@@ -184,10 +187,10 @@ async function pastSessions(db: Db, userId: string, exerciseIds: string[], start
   return new Map([...sessions].map(([exerciseId, byWorkout]) => [exerciseId, [...byWorkout.values()]]));
 }
 
-/** The ledger awards: each saved set (in the order logged) with the XP scoring gave it. */
-function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, scored: { xp: number }[]) {
+/** The ledger awards: each saved set (in the order logged) with the XP it was awarded. */
+function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, awardedXp: number[]) {
   const saved = row.exercises.flatMap((we) => we.sets.map((s) => ({ setId: s.id, bodyPart: exerciseOf(exercises, we.exerciseId).bodyPart })));
-  return saved.map((s, i) => ({ ...s, amount: scored[i]!.xp }));
+  return saved.map((s, i) => ({ ...s, amount: awardedXp[i]! }));
 }
 
 /** Rest times the PLAYER chose. If an exercise appears twice, the later choice wins. */
