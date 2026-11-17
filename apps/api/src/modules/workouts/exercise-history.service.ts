@@ -1,6 +1,7 @@
 import {
   bodyweightOnDate,
   BODYWEIGHT_FALLBACK_KG,
+  canBeRecord,
   estimatedOneRepMax,
   exerciseStats,
   liftedKg,
@@ -34,15 +35,16 @@ export async function exerciseSummary(userId: string, exerciseId: string, sessio
   // One session per workout, oldest first (an exercise done twice in one workout merges).
   const byWorkout = new Map<string, repo.ExerciseHistoryRow[]>();
   for (const row of history) byWorkout.set(row.workout.id, [...(byWorkout.get(row.workout.id) ?? []), row]);
-  const sessions = [...byWorkout.values()].map((rows) =>
-    toSession(rows, exercise, bodyweightOnDate(bodyweights, rows[0]!.workout.startedAt.toISOString())),
-  );
+  const groups = [...byWorkout.values()];
+  const sessions = groups.map((rows) => toSession(rows, exercise, bodyweightOnDate(bodyweights, rows[0]!.workout.startedAt.toISOString())));
 
+  // Records leave out jump-capped sets (the session list still shows every set done).
   const stats = exerciseStats(
-    sessions.map((s) => ({
-      date: s.startedAt,
-      sets: s.sets.map((set) => ({ ...set, loadKg: liftedKg(set.weightKg, s.bodyweightKg, exercise.bodyweightRatio) })),
-    })),
+    groups.map((rows, i) => {
+      const { startedAt, bodyweightKg } = sessions[i]!;
+      const sets = rows.flatMap((r) => r.sets.filter(canBeRecord)).map((set) => ({ reps: set.reps, weightKg: set.weightKg.toNumber() }));
+      return { date: startedAt, sets: sets.map((set) => ({ ...set, loadKg: liftedKg(set.weightKg, bodyweightKg, exercise.bodyweightRatio) })) };
+    }),
   );
 
   const newestFirst = [...sessions].reverse();

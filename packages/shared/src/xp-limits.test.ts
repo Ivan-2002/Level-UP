@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDailyCap,
+  canBeRecord,
   DAILY_XP_CAP,
   DEFAULT_PLAUSIBILITY,
   EQUIPMENT,
@@ -205,5 +206,14 @@ describe("isTooOldForXp: a workout synced more than 14 days after it started ear
   it("earns for a normal sync, and for one a few days late", () => {
     expect(isTooOldForXp(started, plus(70 * 60 * 1000))).toBe(false);
     expect(isTooOldForXp(started, plus(2 * DAY))).toBe(false);
+  });
+});
+
+describe("canBeRecord", () => {
+  it("leaves out implausible and jump-capped sets, and only those", () => {
+    expect(canBeRecord({ isFlagged: false, flagReason: null })).toBe(true);
+    expect(canBeRecord({ flagReason: null })).toBe(true);
+    expect(canBeRecord({ isFlagged: true, flagReason: "weight_above_range" })).toBe(false);
+    expect(canBeRecord({ isFlagged: false, flagReason: "above_history" })).toBe(false);
   });
 });

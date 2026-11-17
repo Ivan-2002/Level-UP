@@ -77,6 +77,14 @@ export type FlagReason = z.infer<typeof flagReasonSchema>;
 export type PlausibilityFlagReason = Exclude<FlagReason, "above_history">;
 
 /**
+ * Whether a stored set can count as a personal record: not implausible (is_flagged) and
+ * not jump-capped (above_history). Jump-capped sets stay in history for the jump baseline.
+ */
+export function canBeRecord(set: { isFlagged?: boolean; flagReason: string | null }): boolean {
+  return !set.isFlagged && set.flagReason !== "above_history";
+}
+
+/**
  * Why this set is implausible, or null if it isn't. A set over both limits reports the
  * weight (one reason per set; the weight is the likelier typo).
  */

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   addToRecordBook,
   bodyweightOnDate,
+  canBeRecord,
   emptyRecordBook,
   findNewRecords,
   levelFromXp,
@@ -267,6 +268,7 @@ function sessionStats(row: repo.WorkoutDetailRow, exercises: Map<string, Exercis
 /**
  * New PRs in this workout, one line per exercise and kind: the best new value against
  * the best from BEFORE this workout (so "76 -> 78 kg" even if two sets beat it).
+ * Flagged and jump-capped sets are never records, on either side (canBeRecord).
  */
 async function personalRecords(
   userId: string,
@@ -282,7 +284,7 @@ async function personalRecords(
   for (const past of history) {
     const exercise = exerciseOf(exercises, past.exerciseId);
     const bw = bodyweightOn(past.workout.startedAt);
-    const sets = past.sets.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bw, exercise.bodyweightRatio) }));
+    const sets = past.sets.filter(canBeRecord).map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bw, exercise.bodyweightRatio) }));
     books.set(past.exerciseId, addToRecordBook(books.get(past.exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit));
   }
 
@@ -291,7 +293,7 @@ async function personalRecords(
     const exercise = exerciseOf(exercises, exerciseId);
     const logged = row.exercises
       .filter((we) => we.exerciseId === exerciseId)
-      .flatMap((we) => we.sets.filter((s) => !s.isFlagged))
+      .flatMap((we) => we.sets.filter(canBeRecord)) // not implausible, not jump-capped
       .map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() }));
     const sets = logged.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg, bodyweightKg, exercise.bodyweightRatio) }));
     const records = findNewRecords(books.get(exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit);

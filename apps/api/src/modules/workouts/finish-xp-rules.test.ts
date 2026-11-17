@@ -122,6 +122,21 @@ describe("the jump cap at Finish", () => {
     // Baseline after 60 x 8 then 100 x 8: the second is capped at the line, so the baseline is the line.
     expect((await storedSets(next.workout.id))[0]!.flagReason).toBe("above_history");
   });
+
+  it("never counts a jump-capped set as a PR, in the summary or the exercise's records", async () => {
+    const user = await signUpPlayer({ bodyweightKg: 75 });
+    await finish(user, workout(3, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
+
+    const jump = await finish(user, workout(2, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }]]]));
+    // Next time, 65 x 8 (82.3 kg) beats the real best (60 x 8, 76 kg), not the capped set.
+    const next = await finish(user, workout(1, [["barbell-bench-press", [{ reps: 8, weightKg: 65 }]]]));
+    const page = await request(app).get(`/v1/exercises/${ids["barbell-bench-press"]}/summary`).set("Cookie", user.cookie);
+
+    expect(jump.summary.prs).toEqual([]);
+    expect(next.summary.prs).toEqual([expect.objectContaining({ kind: "e1rm", value: 82.3, previousValue: 76 })]);
+    expect(page.body.records.bestE1rm).toMatchObject({ weightKg: 65, reps: 8 });
+    expect(page.body.sessions).toHaveLength(3); // the capped session is still in the history list
+  });
 });
 
 describe("the 10-set limit and tags at Finish", () => {
