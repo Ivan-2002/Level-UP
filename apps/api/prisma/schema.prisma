@@ -337,11 +337,16 @@ model XpEvent {
   source    XpSource
   sourceId  String
   bodyPart  BodyPart? // which avatar part it grows; null for bonuses
+  // The player's LOCAL calendar day the XP belongs to: the day the workout started (set XP;
+  // the daily cap's day), or for a bonus the day the workout that earned it started (else
+  // the week's Monday). createdAt is only when the server received it.
+  earnedOn  DateTime  @db.Date
   createdAt DateTime  @default(now())
 
   // The same gain can never be recorded twice, even if Finish is sent again.
   @@unique([source, sourceId])
   @@index([userId, createdAt])
+  @@index([userId, earnedOn]) // "this player's XP on this day" (the daily cap)
   @@map("xp_event")
 }
 

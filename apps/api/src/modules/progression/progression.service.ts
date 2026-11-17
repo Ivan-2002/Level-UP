@@ -11,13 +11,14 @@ export type SetXpAward = { setId: string; amount: number; bodyPart: BodyPart };
 
 /**
  * Records XP for completed sets and adds it to the cached total, inside the caller's
- * transaction (Finish). Zero-XP sets get no ledger row.
+ * transaction (Finish). Zero-XP sets get no ledger row. `earnedOn`: the local day the
+ * workout started ("YYYY-MM-DD"), the daily cap's day.
  */
-export async function awardSetXp(db: Db, userId: string, awards: SetXpAward[]): Promise<number> {
+export async function awardSetXp(db: Db, userId: string, awards: SetXpAward[], earnedOn: string): Promise<number> {
   const earning = awards.filter((a) => a.amount > 0);
   await repo.insertSetXpEvents(
     db,
-    earning.map((a) => ({ userId, amount: a.amount, sourceId: a.setId, bodyPart: a.bodyPart })),
+    earning.map((a) => ({ userId, amount: a.amount, sourceId: a.setId, bodyPart: a.bodyPart, earnedOn })),
   );
   const earned = earning.reduce((sum, a) => sum + a.amount, 0);
   if (earned > 0) await usersService.addTotalXp(db, userId, earned);

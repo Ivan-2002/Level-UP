@@ -6,6 +6,7 @@ import {
   findNewRecords,
   levelFromXp,
   liftedKg,
+  localDate,
   setXp,
   volumeKg,
   type Exercise,
@@ -53,6 +54,9 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
   // 3. Save everything in one transaction. Every module writes through `tx`.
   try {
     const saved = await prisma.$transaction(async (tx) => {
+      // Lock the player's profile row first (it is held until commit), and read their zone:
+      // set XP is dated the local day the workout started.
+      const { timeZone } = await usersService.lockGoalContext(tx, userId);
       // A routine deleted (or never ours) is ignored rather than failing the whole
       // Finish: an offline workout must never become an error the outbox retries forever.
       const routineId =
@@ -70,9 +74,13 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
       });
 
       const bodyweightKg = bodyweightOnDate(await usersService.bodyweightHistory(userId, tx), input.startedAt);
-      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, bodyweightKg));
+      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, bodyweightKg), localDate(startedAt, timeZone));
       // Rolls the weeks over and, if this workout meets this week's goal, pays the bonus.
-      await weeklyGoalService.syncWeeklyGoal(tx, userId, { now: now(), daysTrainedIn: daysTrainedFor(tx, userId), metByWorkoutId: row.id });
+      await weeklyGoalService.syncWeeklyGoal(tx, userId, {
+        now: now(),
+        daysTrainedIn: daysTrainedFor(tx, userId),
+        metBy: { workoutId: row.id, startedAt },
+      });
       await exercisesService.saveRestPreferences(tx, userId, chosenRestTimes(input));
       if (routineId) await routinesService.recordRoutineDone(tx, routineId, startedAt);
       return row;

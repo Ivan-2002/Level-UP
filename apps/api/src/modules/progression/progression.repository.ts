@@ -3,7 +3,10 @@ import type { BodyPart, XpSource } from "../../generated/prisma/client.js";
 
 // The only file that queries the xp_event ledger.
 
-export type NewXpEvent = { userId: string; amount: number; sourceId: string; bodyPart: BodyPart };
+/** `earnedOn`: the player's local calendar day ("YYYY-MM-DD") the XP belongs to. */
+export type NewXpEvent = { userId: string; amount: number; sourceId: string; bodyPart: BodyPart; earnedOn: string };
+
+const toDate = (day: string) => new Date(`${day}T00:00:00Z`); // a Postgres DATE
 
 /**
  * One row per completed set. (source, sourceId) is unique, so even if this ran twice for
@@ -11,7 +14,7 @@ export type NewXpEvent = { userId: string; amount: number; sourceId: string; bod
  */
 export async function insertSetXpEvents(db: Db, events: NewXpEvent[]): Promise<void> {
   if (events.length === 0) return;
-  await db.xpEvent.createMany({ data: events.map((e) => ({ ...e, source: "workout_set" as const })) });
+  await db.xpEvent.createMany({ data: events.map((e) => ({ ...e, earnedOn: toDate(e.earnedOn), source: "workout_set" as const })) });
 }
 
 /**
@@ -20,8 +23,11 @@ export async function insertSetXpEvents(db: Db, events: NewXpEvent[]): Promise<v
  * inside a transaction (a failed INSERT would abort the whole transaction in Postgres).
  * True if it was recorded now.
  */
-export async function insertBonusXpEvent(db: Db, event: { userId: string; amount: number; source: XpSource; sourceId: string }): Promise<boolean> {
-  const { count } = await db.xpEvent.createMany({ data: [{ ...event, bodyPart: null }], skipDuplicates: true });
+export async function insertBonusXpEvent(
+  db: Db,
+  event: { userId: string; amount: number; source: XpSource; sourceId: string; earnedOn: string },
+): Promise<boolean> {
+  const { count } = await db.xpEvent.createMany({ data: [{ ...event, earnedOn: toDate(event.earnedOn), bodyPart: null }], skipDuplicates: true });
   return count === 1;
 }
 
