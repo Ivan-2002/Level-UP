@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   epleyOneRepMax,
+  exerciseXpHistory,
   MAX_XP_SETS_PER_EXERCISE,
   recentBest,
   scoreSessionSets,
   setTagText,
   setXp,
   type ExerciseXpHistory,
+  type PastExerciseSession,
   type ScoringExercise,
   type SessionSet,
 } from "./index.js";
@@ -114,5 +116,48 @@ describe("recentBest: the 12-week window for effort", () => {
     ];
     expect(recentBest(sessions, "2026-11-17")).toBe(120);
     expect(recentBest([{ date: "2026-01-01", value: 140 }], "2026-11-17")).toBeNull();
+  });
+});
+
+describe("exerciseXpHistory: history rebuilt from stored sessions", () => {
+  // Three squat sessions, the last one far above the others (so its sets are jump-capped).
+  const sessions: PastExerciseSession[] = [
+    { date: "2026-08-01", bodyweightKg: 75, sets: [{ reps: 8, weightKg: 60 }] },
+    { date: "2026-10-01", bodyweightKg: 75, sets: [{ reps: 8, weightKg: 70 }, { reps: 5, weightKg: 80 }] },
+    { date: "2026-11-10", bodyweightKg: 75, sets: [{ reps: 8, weightKg: 150 }] },
+  ];
+
+  it("matches what scoring one session after another carries forward", () => {
+    // What the simulation does: score each session with the history so far, keep the result.
+    let carried: ExerciseXpHistory = { recentBest: null, jumpBaseline: null };
+    const bests: { date: string; value: number }[] = [];
+    for (const s of sessions) {
+      const sets = s.sets.map((x) => set("squat", x.reps, x.weightKg));
+      const after = score(sets, new Map([["squat", carried]])).exercises.get("squat")!;
+      if (after.sessionBest !== null) bests.push({ date: s.date, value: after.sessionBest });
+      carried = { recentBest: recentBest(bests, "2026-11-17"), jumpBaseline: after.jumpBaselineAfter };
+    }
+
+    expect(exerciseXpHistory(sessions, squat, "2026-11-17")).toEqual(carried);
+  });
+
+  it("keeps a jump-capped session at the line, and its raw best for effort", () => {
+    const history = exerciseXpHistory(sessions, squat, "2026-11-17");
+    const before = Math.max(epleyOneRepMax(70, 8), epleyOneRepMax(80, 5));
+    expect(history.jumpBaseline).toBeCloseTo(before * 1.25);
+    expect(history.recentBest).toBeCloseTo(epleyOneRepMax(150, 8));
+  });
+
+  it("counts the bodyweight share of bodyweight exercises, and seconds for timed ones", () => {
+    const pullUp = { bodyweightRatio: 1, repsUnit: "reps" as const };
+    const at80 = exerciseXpHistory([{ date: "2026-11-10", bodyweightKg: 80, sets: [{ reps: 10, weightKg: 0 }] }], pullUp, "2026-11-17");
+    expect(at80.jumpBaseline).toBeCloseTo(epleyOneRepMax(80, 10));
+
+    const hold = exerciseXpHistory([{ date: "2026-11-10", bodyweightKg: 80, sets: [{ reps: 90, weightKg: 0 }] }], plank, "2026-11-17");
+    expect(hold).toEqual({ recentBest: 90, jumpBaseline: 90 });
+  });
+
+  it("is empty with no sessions", () => {
+    expect(exerciseXpHistory([], squat, "2026-11-17")).toEqual({ recentBest: null, jumpBaseline: null });
   });
 });

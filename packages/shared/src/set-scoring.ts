@@ -3,6 +3,7 @@ import { liftedKg, setEffort, setXp, SET_XP, type ExerciseTuning } from "./progr
 import type { RepsUnit } from "./workouts.js";
 import {
   judgeSession,
+  jumpBaseline,
   jumpCappedXp,
   jumpCheckValue,
   plausibilityFlag,
@@ -171,4 +172,29 @@ export function recentBest(sessions: { date: string; value: number }[], today: s
   const from = Date.parse(today.slice(0, 10)) - SET_XP.effortWindowDays * 24 * 60 * 60 * 1000;
   const recent = sessions.filter((s) => Date.parse(s.date.slice(0, 10)) >= from).map((s) => s.value);
   return recent.length > 0 ? Math.max(...recent) : null;
+}
+
+/** One earlier session of an exercise: its date, the bodyweight in effect then, and its non-flagged sets as logged. */
+export type PastExerciseSession = { date: string; bodyweightKg: number; sets: { reps: number; weightKg: number }[] };
+
+/**
+ * An exercise's ExerciseXpHistory before a session on `today`, rebuilt from its earlier
+ * sessions (oldest first). Leave out is_flagged sets; KEEP jump-capped ones (judgeSession
+ * caps them at the line itself). Gives the same values the simulation carries from one
+ * session to the next with scoreSessionSets' jumpBaselineAfter and sessionBest.
+ *
+ * It replays the player's whole history of the exercise: fine at today's sizes (see the
+ * performance test in the API); the planned next step is a stored row per player and
+ * exercise, updated at Finish.
+ */
+export function exerciseXpHistory(
+  sessions: PastExerciseSession[],
+  exercise: { bodyweightRatio: number; repsUnit: RepsUnit },
+  today: string,
+): ExerciseXpHistory {
+  const values = sessions.map((s) =>
+    s.sets.map((set) => jumpCheckValue({ reps: set.reps, loadKg: liftedKg(set.weightKg, s.bodyweightKg, exercise.bodyweightRatio) }, exercise.repsUnit)),
+  );
+  const bests = sessions.flatMap((s, i) => (values[i]!.length > 0 ? [{ date: s.date, value: Math.max(...values[i]!) }] : []));
+  return { recentBest: recentBest(bests, today), jumpBaseline: jumpBaseline(values) };
 }
