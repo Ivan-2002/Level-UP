@@ -239,6 +239,7 @@ These are designed in from day one but switched on when the milestone needs them
 | --- | --- | --- |
 | Code quality | ESLint, Prettier, strict TypeScript | Milestone 1.5 |
 | CI | GitHub Actions: type check, lint and tests on every push | Milestone 1.5 |
+| Pre-commit hook | `simple-git-hooks` runs `pnpm typecheck && pnpm lint` before every commit (installed by the root `prepare` script on `pnpm install`). Tests stay in CI and `pnpm check`: they need Docker Postgres | Milestone 5 |
 | Tests | Vitest unit tests for pure logic (XP formula, shared schemas); Jest (`jest-expo`, as Expo recommends) for the app's workout and outbox logic; API integration tests with Supertest against a real Postgres test database (`levelup_test`, wiped before each test; CI uses a Postgres service container) | From Milestone 2 |
 | Config and secrets | `.env` files validated at startup with Zod; never committed | Milestone 1.5 |
 | Errors and crashes | Sentry in the app and the API | Before beta |
@@ -321,6 +322,7 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-17 | A pre-commit hook (`simple-git-hooks`, not husky: one hook, configured in `package.json`, no `.husky/` scripts) runs typecheck and lint, so a commit can't land after a failed check | Adds about 4 s per commit; tests aren't in it (they need Docker), and `git commit --no-verify` still bypasses it, so CI stays the real gate |
 | 2026-11-17 | Plausibility overrides as two nullable `exercise` columns (Phase 2), filled by the catalog seed (squat 450, deadlift 450, leg press 500, calf raise 300, one-arm row 100) and sent on the exercise contract with `default(null)` | The fields are optional on read so exercise lists cached by older app versions still parse instead of being thrown away |
 | 2026-11-17 | Phase 2 (schema) closed: `xp_event.earned_on`, `bodyweight_entry.received_at`, `workout.xp_held_back` + reason, exercise plausibility overrides | The server writes `earned_on` and `received_at` already; the held-back pair and the overrides are read and written in Phase 3 |
 | 2026-11-17 | `workout.xp_held_back` + `xp_held_back_reason` (Phase 2), with a CHECK constraint in the migration (Prisma's schema can't express it) | One rule lives outside schema.prisma; a test proves the database refuses an amount without a reason, a reason without an amount, and a negative amount |

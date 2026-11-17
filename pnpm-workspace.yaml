@@ -9,4 +9,6 @@ allowBuilds:
   prisma: true
   # Optional native file watcher pulled in by Jest; Jest works without it.
   "@parcel/watcher": false
+  # Its postinstall would install the git hook; the root "prepare" script does that instead.
+  simple-git-hooks: false
 nodeLinker: hoisted
