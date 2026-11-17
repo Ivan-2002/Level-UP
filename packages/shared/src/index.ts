@@ -30,12 +30,18 @@ export type HealthResponse = {
 // Levels and XP (see docs/ARCHITECTURE.md, "XP & level system")
 // ---------------------------------------------------------------------------
 
-/** Total XP needed to REACH a level: 100 × (level − 1)^1.5. Level 1 needs 0 XP. */
+/**
+ * Total XP needed to REACH a level: 400 × (level − 1)^2.15. Level 1 needs 0 XP.
+ * Level 2 at 400 (a beginner's first session), 5 at ~7,900, 10 at ~45,000, 20 at ~225,000:
+ * about a year to level 20 for a regular player (Milestone 5 simulation). No maximum level.
+ */
+export const LEVEL_CURVE = { base: 400, exponent: 2.15 } as const;
+
 export function xpForLevel(level: number): number {
   if (!Number.isInteger(level) || level < 1) {
     throw new RangeError(`Level must be a whole number of at least 1, got ${level}`);
   }
-  return Math.round(100 * Math.pow(level - 1, 1.5));
+  return Math.round(LEVEL_CURVE.base * Math.pow(level - 1, LEVEL_CURVE.exponent));
 }
 
 /** The level a player is at with this much total XP. */

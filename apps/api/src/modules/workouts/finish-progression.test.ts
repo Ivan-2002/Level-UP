@@ -56,8 +56,17 @@ describe("XP at Finish", () => {
     expect(events.map((e) => [e.amount, e.source, e.bodyPart])).toEqual(times(3, [60, "workout_set", "chest"] as never));
     expect(events.map((e) => e.sourceId).sort()).toEqual(saved.exercises[0]!.sets.map((s) => s.id).sort());
     expect(summary.xp).toEqual({ sets: 180, weeklyGoal: 0, streakMilestone: 0, total: 180 });
-    expect(summary.level).toEqual({ before: 1, after: 2, totalXpBefore: 0, totalXpAfter: 180 }); // level 2 starts at 100
+    expect(summary.level).toEqual({ before: 1, after: 1, totalXpBefore: 0, totalXpAfter: 180 }); // level 2 starts at 400
     expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(180);
+  });
+
+  it("reports a level-up when the workout crosses a level (level 2 at 400 XP)", async () => {
+    const user = await signUpPlayer({ bodyweightKg: 75 });
+
+    // 7 x 60 XP bench sets = 420 XP.
+    const { summary } = await finish(user, workout(0, [["barbell-bench-press", times(7, { reps: 8, weightKg: 60 })]]));
+
+    expect(summary.level).toEqual({ before: 1, after: 2, totalXpBefore: 0, totalXpAfter: 420 });
   });
 
   it("never awards XP twice: a repeat returns the same summary and writes nothing", async () => {

@@ -143,15 +143,7 @@ These tables cover the MVP. Better Auth creates and owns its own user, session a
 
 ## XP & level system
 
-Level is never stored as truth: it is calculated from total XP, so the curve can be rebalanced at any time. The starting curve makes each level take a little longer than the last:
-
-```
-XP to reach level n = 100 × (n − 1)^1.5
-```
-
-That puts level 2 at 100 XP, level 5 at 800 XP, level 10 at 2,700 XP and level 20 at about 8,300 XP. These numbers are a first guess to tune once real workouts are logged.
-
-**Replaced in Milestone 5 (decided 2026-11-16, implemented in Phase 1g).** Real sessions earn about 1,500 XP, so this curve reaches level 20 in under two weeks. The new curve is:
+Level is never stored as truth: it is calculated from total XP, so the curve can be rebalanced at any time. Each level takes a little longer than the last. The first curve, 100 × (n − 1)^1.5 (level 20 at about 8,300 XP), was replaced in Milestone 5 (decided 2026-11-16, implemented 2026-11-17 as `LEVEL_CURVE` in `packages/shared/src/index.ts`): real sessions earn about 1,500 XP, so it reached level 20 in under two weeks. The curve is:
 
 ```
 XP to reach level n = 400 × (n − 1)^2.15

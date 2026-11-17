@@ -42,10 +42,10 @@ describe("simulate", () => {
   });
 
   it("records the session and day each level is reached", () => {
-    const result = simulate(twiceAWeek, 2);
+    const result = simulate({ ...twiceAWeek, sessions: [[{ slug: "barbell-back-squat", sets: 3, reps: 8, kg: 100 }]] }, 2);
 
-    // Level 2 needs 100 XP: session 1 earns 80 (not enough); session 2 (Thursday, day 3)
-    // brings 160 + the weekly bonus.
+    // Level 2 needs 400 XP: session 1 earns 240 (not enough); session 2 (Thursday, day 3)
+    // brings 480 + the weekly bonus.
     expect(result.reached[2]).toEqual({ session: 1, day: 3 });
   });
 

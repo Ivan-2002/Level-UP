@@ -9,10 +9,15 @@ describe("xpForLevel", () => {
   });
 
   it("matches the documented curve", () => {
-    expect(xpForLevel(2)).toBe(100);
-    expect(xpForLevel(5)).toBe(800);
-    expect(xpForLevel(10)).toBe(2700);
-    expect(xpForLevel(20)).toBe(8282);
+    expect(xpForLevel(2)).toBe(400);
+    expect(xpForLevel(5)).toBe(7879);
+    expect(xpForLevel(10)).toBe(45049);
+    expect(xpForLevel(20)).toBe(224585);
+  });
+
+  it("has no maximum level", () => {
+    expect(xpForLevel(50)).toBeGreaterThan(xpForLevel(49));
+    expect(levelFromXp(xpForLevel(50))).toBe(50);
   });
 
   it("rejects invalid levels", () => {
@@ -27,8 +32,8 @@ describe("levelFromXp", () => {
   });
 
   it("levels up exactly at the boundary, not one XP before", () => {
-    expect(levelFromXp(99)).toBe(1);
-    expect(levelFromXp(100)).toBe(2);
+    expect(levelFromXp(399)).toBe(1);
+    expect(levelFromXp(400)).toBe(2);
   });
 
   it("rejects negative XP", () => {
@@ -37,15 +42,15 @@ describe("levelFromXp", () => {
 });
 
 describe("levelProgress", () => {
-  it("matches the home screen design: 1,040 XP is level 5, about 75% through", () => {
-    const p = levelProgress(1040);
+  it("works out the XP bar: 10,000 XP is level 5, about 44% of the way to level 6", () => {
+    const p = levelProgress(10000);
     expect(p.level).toBe(5);
-    expect(p.levelStartXp).toBe(800);
-    expect(p.nextLevelXp).toBe(1118);
-    expect(p.progress).toBeCloseTo(0.755, 3);
+    expect(p.levelStartXp).toBe(7879);
+    expect(p.nextLevelXp).toBe(12731);
+    expect(p.progress).toBeCloseTo(0.437, 3);
   });
 
   it("is exactly 0 at the start of a level", () => {
-    expect(levelProgress(800).progress).toBe(0);
+    expect(levelProgress(7879).progress).toBe(0);
   });
 });
