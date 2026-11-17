@@ -25,13 +25,25 @@ export type SimPlayer = {
   typedBodyweight?: (week: number) => number | null;
   /** Overrides `growth`: strength in week `week`, or null for a week without training. */
   strengthAt?: (week: number) => number | null;
+  /** A cheat, not an honest player: excluded from the "never flagged, capped or limited" checks. */
+  cheat?: true;
+  /** How long to simulate, in weeks (default 104). */
+  weeks?: number;
 };
 
 const ex = (slug: SimExerciseSlug, sets: number, reps: number, kg: number): PlannedExercise => ({ slug, sets, reps, kg });
 
-/** Scales loaded exercises (not bodyweight ones) to `factor` of the weight, in 0.5 kg steps. */
-const lighter = (session: Session, factor: number): Session =>
+/** Scales loaded exercises (not plain bodyweight ones) by `factor`, in 0.5 kg steps. */
+const scaledLoads = (session: Session, factor: number): Session =>
   session.map((e) => (e.kg === 0 ? e : { ...e, kg: Math.round(e.kg * factor * 2) / 2 }));
+
+const heavyBeginnerFullBody: Session = [
+  ex("barbell-back-squat", 3, 8, 40),
+  ex("barbell-bench-press", 3, 8, 35),
+  ex("lat-pulldown", 3, 10, 45),
+  ex("leg-press", 3, 10, 80),
+  ex("dumbbell-curl", 2, 12, 8),
+];
 
 const fullBody: Session = [ex("barbell-back-squat", 3, 8, 50), ex("barbell-bench-press", 3, 8, 40), ex("lat-pulldown", 3, 10, 40), ex("dumbbell-curl", 2, 12, 8)];
 
@@ -123,7 +135,7 @@ export const SIM_PLAYERS: SimPlayer[] = [
     name: "Light (60 kg, 3x/wk, push/pull/legs at 75% loads)",
     bodyweightKg: 60,
     trainingDays: MON_WED_FRI,
-    sessions: [push, pull, legs].map((s) => lighter(s, 0.75)),
+    sessions: [push, pull, legs].map((s) => scaledLoads(s, 0.75)),
     growth: { perWeek: 0.002, max: 1.1 },
   },
   { name: "Bodyweight-only (75 kg, 3x/wk)", bodyweightKg: 75, trainingDays: MON_WED_FRI, sessions: [bodyweightOnly], growth: { perWeek: 0.003, max: 1.15 } },
@@ -136,6 +148,32 @@ export const SIM_PLAYERS: SimPlayer[] = [
     growth: { perWeek: 0, max: 1 },
   },
   {
+    // Weak for their size: squats 0.36 x bodyweight (the 75 kg beginner squats 0.67 x).
+    name: "Heavy beginner (110 kg, 2x/wk, squat 40 kg)",
+    bodyweightKg: 110,
+    trainingDays: [0, 3],
+    sessions: [heavyBeginnerFullBody],
+    growth: { perWeek: 0.01, max: 1.5 },
+  },
+  {
+    name: "Advanced (100 kg, 4x/wk, loads x1.1)",
+    bodyweightKg: 100,
+    trainingDays: [0, 1, 3, 4],
+    sessions: [advancedPush, advancedPull, advancedLegs].map((s) => scaledLoads(s, 1.1)),
+    growth: { perWeek: 0, max: 1 },
+  },
+  {
+    // A year of training, a year off (injury, life), then back at 70% of their old strength,
+    // regaining it over about 30 weeks. Effort uses a 12-week window, so they earn full XP.
+    name: "Returning (intermediate: 1 yr on, 1 yr off, back at 70%)",
+    bodyweightKg: 80,
+    trainingDays: MON_WED_FRI,
+    sessions: [push, pull, legs],
+    growth: { perWeek: 0.002, max: 1.1 },
+    strengthAt: (week) => (week < 52 ? 1 + 0.002 * week : week < 104 ? null : Math.min(1.1, 0.77 + 0.011 * (week - 104))),
+    weeks: 156,
+  },
+  {
     // The "fake bodyweight drop" trick: an 80 kg intermediate who types 40 kg every week.
     name: "Cheat: intermediate typing 40 kg weekly",
     bodyweightKg: 80,
@@ -143,5 +181,24 @@ export const SIM_PLAYERS: SimPlayer[] = [
     sessions: [push, pull, legs],
     growth: { perWeek: 0.002, max: 1.1 },
     typedBodyweight: (week) => (week === 0 ? 80 : 40),
+    cheat: true,
+  },
+  {
+    // Absurd volume: 60 hard sets a day (20 each of three lifts), 3x a week.
+    name: "Cheat: volume junkie (60 hard sets a day)",
+    bodyweightKg: 80,
+    trainingDays: MON_WED_FRI,
+    sessions: [[ex("barbell-back-squat", 20, 8, 100), ex("barbell-bench-press", 20, 8, 80), ex("barbell-row", 20, 10, 70)]],
+    growth: { perWeek: 0, max: 1 },
+    cheat: true,
+  },
+  {
+    // Farming: a new account that only ever logs 60 singles at 60 kg (so they're its "max").
+    name: "Cheat: new-account farmer (60 singles at 60 kg)",
+    bodyweightKg: 80,
+    trainingDays: MON_WED_FRI,
+    sessions: [[ex("barbell-back-squat", 60, 1, 60)]],
+    growth: { perWeek: 0, max: 1 },
+    cheat: true,
   },
 ];

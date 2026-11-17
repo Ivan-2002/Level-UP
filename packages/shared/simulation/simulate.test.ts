@@ -1,24 +1,29 @@
 import { describe, expect, it } from "vitest";
+import { setXp } from "../src/progression.js";
 import { WEEKLY_GOAL } from "../src/weekly-goal.js";
-import { SIM_PLAYERS, type SimPlayer } from "./players.js";
+import { applyDailyCap, JUMP_CAP } from "../src/xp-limits.js";
+import { SIM_EXERCISES } from "./exercises.js";
+import { SIM_PLAYERS, type PlannedExercise, type SimPlayer } from "./players.js";
 import { sessionSetXp, simulate } from "./simulate.js";
 
-// The simulation's numbers end up in the decision log, so the simulation itself is tested:
-// small players whose results can be worked out by hand.
+// The simulation's numbers end up in the decision log, so the simulation itself is tested.
+// Expected values come from the shared rules (setXp, applyDailyCap), not re-done by hand:
+// these tests check that the simulation PLAYS the rules correctly, not what they're worth.
 
-const squat = (kg: number) => [{ slug: "barbell-back-squat" as const, sets: 1, reps: 8, kg }];
+const SQUAT = SIM_EXERCISES["barbell-back-squat"];
+const sets = (n: number, reps: number, kg: number, slug: PlannedExercise["slug"] = "barbell-back-squat"): PlannedExercise => ({ slug, sets: n, reps, kg });
+const squat = (kg: number) => [sets(1, 8, kg)];
+const xp = (reps: number, weightKg: number, bodyweightKg = 75, exercise = SQUAT) => setXp({ reps, weightKg }, bodyweightKg, exercise);
 
-// At the 75 kg reference the bodyweight factor is 1, which keeps the arithmetic readable.
 describe("sessionSetXp", () => {
-  it("uses the shared set formula: 8 x 100 kg back squat (load factor 1) = 80 XP", () => {
-    expect(sessionSetXp(squat(100), 1, 75)).toBe(80);
-    expect(sessionSetXp(squat(100), 1, 80)).toBe(75); // relative to bodyweight: x 75/80
+  it("uses the shared set formula", () => {
+    expect(sessionSetXp(squat(100), 1, 75)).toBe(xp(8, 100));
+    expect(sessionSetXp(squat(100), 1, 80)).toBe(xp(8, 100, 80));
   });
 
   it("grows loaded lifts by weight and bodyweight moves by reps", () => {
-    expect(sessionSetXp(squat(100), 1.1, 75)).toBe(88); // 110 kg x 8 / 10
-    // Pull-up: 8 reps -> 10 at 1.25x strength; 10 x 75 kg x load factor 1.25 / 10 = 93.75.
-    expect(sessionSetXp([{ slug: "pull-up", sets: 1, reps: 8, kg: 0 }], 1.25, 75)).toBe(94);
+    expect(sessionSetXp(squat(100), 1.1, 75)).toBe(xp(8, 110));
+    expect(sessionSetXp([sets(1, 8, 0, "pull-up")], 1.25, 75)).toBe(xp(10, 0, 75, SIM_EXERCISES["pull-up"]));
   });
 });
 
@@ -35,63 +40,69 @@ describe("simulate", () => {
     const result = simulate(twiceAWeek, 2);
 
     // 2 days meets the target of 2 each week. Meeting it exactly keeps it at 2 (it rises
-    // only when beaten), so both weeks pay and the streak reaches 2. (Under the 4c rule the
-    // target rose to 3 and week 2 was missed.)
-    expect(result.setXp).toBe(4 * 80);
+    // only when beaten), so both weeks pay and the streak reaches 2.
+    expect(result.setXp).toBe(4 * xp(8, 100));
     expect(result.bonusXp).toBe(2 * WEEKLY_GOAL.weeklyBonusXp);
     expect(result.longestStreak).toBe(2);
   });
 
   it("records the session and day each level is reached", () => {
-    const result = simulate({ ...twiceAWeek, sessions: [[{ slug: "barbell-back-squat", sets: 3, reps: 8, kg: 100 }]] }, 2);
-
-    // Level 2 needs 400 XP: session 1 earns 240 (not enough); session 2 (Thursday, day 3)
-    // brings 480 + the weekly bonus.
+    // 3 sets a session: session 1 alone is below level 2 (400 XP); session 2 (Thursday, day 3) passes it.
+    const result = simulate({ ...twiceAWeek, sessions: [[sets(3, 8, 100)]] }, 2);
+    expect(3 * xp(8, 100)).toBeLessThan(400);
     expect(result.reached[2]).toEqual({ session: 1, day: 3 });
   });
 
   it("limits a fake bodyweight drop with the XP bodyweight rule", () => {
-    const honest = simulate({ ...twiceAWeek, bodyweightKg: 80 }, 1);
+    const honest = simulate({ ...twiceAWeek, bodyweightKg: 80 }, 2);
     const faker = simulate({ ...twiceAWeek, bodyweightKg: 80, typedBodyweight: (week) => (week === 0 ? 80 : 40) }, 2);
-    // Week 1 is identical (the 40 kg entry arrives in week 2); in week 2 the faker's XP
-    // bodyweight has moved only 2% (80 -> 78.4 kg), not halved: 2 x 75 x 80/78.4 = 2 x 77.
+    // Week 1 is identical; in week 2 the faker's XP bodyweight has moved only 2% (80 -> 78.4 kg).
     expect(faker.firstWeekSessionXp).toEqual(honest.firstWeekSessionXp);
-    expect(faker.setXp - honest.setXp).toBe(2 * 77);
+    expect(faker.setXp - honest.setXp).toBe(2 * (xp(8, 100, 78.4) - xp(8, 100, 80)));
   });
 
   it("applies the plausibility limits: an implausible set earns nothing", () => {
-    // 400 kg is above the barbell compound DEFAULT (350). The real back squat gets its own,
-    // higher limit from the catalog in Phase 2; the simulation's copy has no overrides yet.
+    // 400 kg is above the barbell compound DEFAULT (350); the real back squat gets its own,
+    // higher limit from the catalog in Phase 2 (the simulation's copy has no overrides yet).
     const result = simulate({ ...twiceAWeek, sessions: [squat(400)] }, 1);
-    expect(result.flaggedSets).toBe(2);
-    expect(result.setXp).toBe(0);
-  });
-
-  it("never flags a set of the honest player types, over two years of getting stronger", () => {
-    for (const player of SIM_PLAYERS) {
-      expect({ player: player.name, flagged: simulate(player).flaggedSets }).toEqual({ player: player.name, flagged: 0 });
-    }
+    expect(result).toMatchObject({ flaggedSets: 2, setXp: 0 });
   });
 
   it("applies the jump cap per exercise against earlier sessions", () => {
-    // 8 x 60 kg squats, then 8 x 100 kg: estimated 1RM 76 -> 126.7 kg, above the 95 kg line.
+    // 8 x 60 kg, then 8 x 100 kg: estimated 1RM 76 -> 126.7 kg, above the 95 kg line.
     const jumper = simulate({ ...twiceAWeek, sessions: [squat(60), squat(100)] }, 1);
+    const line = 60 * (1 + 8 / 30) * (1 + JUMP_CAP.maxJump);
     expect(jumper.jumpCappedSets).toBe(1);
-    expect(jumper.setXp).toBe(48 + Math.round(80 * (76 * 1.25) / (100 * (1 + 8 / 30))));
+    expect(jumper.setXp).toBe(xp(8, 60) + Math.round(xp(8, 100) * (line / (100 * (1 + 8 / 30)))));
   });
 
-  it("never jump-caps the honest player types, rep-range switcher included, over two years", () => {
-    const fakers = SIM_PLAYERS.filter((p) => p.typedBodyweight !== undefined);
-    for (const player of SIM_PLAYERS.filter((p) => !fakers.includes(p))) {
-      expect({ player: player.name, capped: simulate(player).jumpCappedSets }).toEqual({ player: player.name, capped: 0 });
+  it("gives no XP beyond 10 sets of one exercise in a session", () => {
+    const result = simulate({ ...twiceAWeek, trainingDays: [0], sessions: [[sets(12, 8, 100)]] }, 1);
+    expect(result).toMatchObject({ beyondLimitSets: 2, setXp: 10 * xp(8, 100) });
+  });
+
+  it("applies the daily cap exactly as applyDailyCap does", () => {
+    // 30 hard sets over three lifts (10 each, so none is beyond the 10-set limit): a day
+    // well above the daily limit.
+    const day: PlannedExercise[] = [sets(10, 10, 100), sets(10, 10, 100, "barbell-bench-press"), sets(10, 10, 100, "deadlift")];
+    const bigDay = simulate({ ...twiceAWeek, trainingDays: [0], sessions: [day] }, 1);
+    const perSet = day.flatMap((d) => Array.from({ length: d.sets }, () => xp(d.reps, d.kg, 75, SIM_EXERCISES[d.slug])));
+    const capped = applyDailyCap(0, perSet);
+
+    expect(capped.heldBack).toBeGreaterThan(0);
+    expect(bigDay).toMatchObject({ setXp: capped.awarded.reduce((a, b) => a + b, 0), heldBackXp: capped.heldBack, cappedDays: 1 });
+  });
+
+  it("never flags, jump-caps or limits a set of the honest player types, over their whole simulation", () => {
+    for (const player of SIM_PLAYERS.filter((p) => !p.cheat)) {
+      const r = simulate(player, player.weeks);
+      expect({ player: player.name, flagged: r.flaggedSets, capped: r.jumpCappedSets, beyond: r.beyondLimitSets }).toEqual({
+        player: player.name,
+        flagged: 0,
+        capped: 0,
+        beyond: 0,
+      });
     }
-  });
-
-  it("applies the daily cap to each day's set XP", () => {
-    // One 3,000 XP day (a single 8 x 3,750 kg-equivalent set isn't possible, so 30 sets of
-    // 100 XP): 2,500 at full rate + 25% of 500 = 2,625.
-    const bigDay = simulate({ ...twiceAWeek, trainingDays: [0], sessions: [[{ slug: "barbell-back-squat", sets: 30, reps: 10, kg: 100 }]] }, 1);
-    expect(bigDay).toMatchObject({ setXp: 2625, cappedDays: 1, heldBackXp: 375 });
   });
 
   it("is deterministic", () => {

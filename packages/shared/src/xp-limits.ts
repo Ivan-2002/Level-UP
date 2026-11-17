@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { epleyOneRepMax } from "./progression.js";
 import { formatWeight, type WeightUnit } from "./units.js";
 import { HOLD_MAX_SEC, type Equipment, type Mechanic, type RepsUnit } from "./workouts.js";
 
@@ -124,11 +125,6 @@ export const JUMP_CAP = {
   /** A set more than this share above the player's best is capped at the line. */
   maxJump: 0.25,
 } as const;
-
-/** Epley for any number of reps; a single rep is the weight lifted. Not rounded. */
-export function epleyOneRepMax(loadKg: number, reps: number): number {
-  return reps <= 1 ? loadKg : loadKg * (1 + reps / 30);
-}
 
 /** What the jump cap compares for one set: estimated 1RM (kg), or seconds for a timed exercise. */
 export function jumpCheckValue(set: { reps: number; loadKg: number }, repsUnit: RepsUnit): number {

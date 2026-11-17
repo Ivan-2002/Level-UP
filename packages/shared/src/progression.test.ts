@@ -12,49 +12,93 @@ import {
   findNewRecords,
   liftedKg,
   resolveRestSec,
+  setEffort,
   setXp,
   volumeKg,
   xpBodyweightOnDate,
   DEFAULT_INCREMENTS,
 } from "./index.js";
 
-const squat = { loadFactor: 1.0, bodyweightRatio: 0 };
-const pullUp = { loadFactor: 1.25, bodyweightRatio: 1.0 };
-const lateralRaise = { loadFactor: 5.0, bodyweightRatio: 0 };
+const squat = { loadFactor: 1.0, bodyweightRatio: 0, repsUnit: "reps" } as const;
+const pullUp = { loadFactor: 1.25, bodyweightRatio: 1.0, repsUnit: "reps" } as const;
+const lateralRaise = { loadFactor: 5.0, bodyweightRatio: 0, repsUnit: "reps" } as const;
+const bench = { loadFactor: 1.25, bodyweightRatio: 0, repsUnit: "reps" } as const;
+const plank = { loadFactor: 0.35, bodyweightRatio: 0.5, repsUnit: "seconds" } as const;
 
-const bench = { loadFactor: 1.25, bodyweightRatio: 0 };
+describe("setXp (formula C): K x estimated 1RM of the XP load x effort", () => {
+  // At the 75 kg reference the bodyweight factor is 1, which keeps the arithmetic readable.
+  it("rates a set by its estimated 1RM: 8 x 100 kg = 126.7 kg, x 0.73 = 92 XP", () => {
+    expect(setXp({ reps: 8, weightKg: 100 }, 75, squat)).toBe(92);
+  });
 
-describe("setXp = round(reps x effective kg x (75 / bodyweight) / 10)", () => {
-  // At the 75 kg reference the bodyweight factor is 1, so these are the plain formula.
-  it("matches the formula for a loaded lift", () => {
-    expect(setXp({ reps: 8, weightKg: 100 }, 75, squat)).toBe(80); // 8 x 100 / 10
+  it("pays every hard set about the same, whatever the rep range (1RM 125 kg)", () => {
+    const sets = [
+      [5, 108.75], // 87%
+      [10, 93.75], // 75%
+      [20, 71.875], // 57.5%
+      [30, 62.5], // 50%
+    ].map(([reps, weightKg]) => setXp({ reps: reps!, weightKg: weightKg! }, 75, squat));
+    expect(sets).toEqual([93, 91, 87, 91]); // the old reps x load gave 54, 94, 144, 188
+  });
+
+  it("scales by effort: a warm-up single earns a fraction of its estimated 1RM", () => {
+    expect(setXp({ reps: 1, weightKg: 60 }, 75, squat, 1)).toBe(44);
+    expect(setXp({ reps: 1, weightKg: 60 }, 75, squat, 0.03)).toBe(1);
   });
 
   it("doesn't penalise bodyweight: a 0 kg pull-up still earns XP from your body", () => {
-    expect(setXp({ reps: 8, weightKg: 0 }, 75, pullUp)).toBe(75); // 8 x (0 + 75) x 1.25 / 10
-    expect(setXp({ reps: 8, weightKg: 10 }, 75, pullUp)).toBe(85); // added weight counts too
+    expect(setXp({ reps: 8, weightKg: 0 }, 75, pullUp)).toBe(87); // 75 x 1.25 = 93.75 kg, x 1.267 x 0.73
+    expect(setXp({ reps: 8, weightKg: 10 }, 75, pullUp)).toBeGreaterThan(87); // added weight counts too
   });
 
   it("lifts light isolation work with its factor, so a hard set earns about as much as a squat set", () => {
-    expect(setXp({ reps: 15, weightKg: 10 }, 75, lateralRaise)).toBe(75);
+    expect(setXp({ reps: 15, weightKg: 10 }, 75, lateralRaise)).toBe(55);
   });
 
-  it("is relative to bodyweight: the same lift is worth more to a lighter player", () => {
-    expect(setXp({ reps: 8, weightKg: 100 }, 80, squat)).toBe(75); // x 75/80
-    // 40 kg at 60 kg bodyweight is the same effort as 60 kg at 90 kg: same XP.
-    expect(setXp({ reps: 8, weightKg: 40 }, 60, bench)).toBe(50);
-    expect(setXp({ reps: 8, weightKg: 60 }, 90, bench)).toBe(50);
+  it("softens the bodyweight factor with a square root", () => {
+    expect(setXp({ reps: 8, weightKg: 100 }, 80, squat)).toBe(90); // load x sqrt(75/80)
+    // Benching two-thirds of your bodyweight: the lighter player earns sqrt(60/90) = 0.82 of the heavier.
+    const light = setXp({ reps: 8, weightKg: 40 }, 60, bench);
+    const heavy = setXp({ reps: 8, weightKg: 60 }, 90, bench);
+    expect(light / heavy).toBeCloseTo(Math.sqrt(60 / 90), 1);
   });
 
-  it("gives a pure bodyweight exercise the same XP at any bodyweight", () => {
-    for (const bodyweightKg of [50, 75, 80, 120]) {
-      expect(setXp({ reps: 8, weightKg: 0 }, bodyweightKg, pullUp)).toBe(75);
-    }
+  it("gives a heavier player a little more for the same bodyweight exercise", () => {
+    expect([60, 75, 120].map((bw) => setXp({ reps: 8, weightKg: 0 }, bw, pullUp))).toEqual([78, 87, 110]);
   });
 
   it("clamps the bodyweight to 40-200 kg", () => {
     expect(setXp({ reps: 8, weightKg: 100 }, 20, squat)).toBe(setXp({ reps: 8, weightKg: 100 }, 40, squat));
     expect(setXp({ reps: 8, weightKg: 100 }, 300, squat)).toBe(setXp({ reps: 8, weightKg: 100 }, 200, squat));
+  });
+
+  it("pays timed exercises by volume, counting at most 120 seconds", () => {
+    expect(setXp({ reps: 60, weightKg: 0 }, 75, plank)).toBe(79); // 60 s x 37.5 kg x 0.35 / 10
+    expect(setXp({ reps: 120, weightKg: 0 }, 75, plank)).toBe(158);
+    expect(setXp({ reps: 600, weightKg: 0 }, 75, plank)).toBe(158);
+  });
+});
+
+describe("setEffort: how close to failure", () => {
+  const best = 100 * (1 + 8 / 30); // 126.7 kg: a best of 100 kg x 8
+
+  it("is 1 for a set within 3 reps of failure, and at or above the best", () => {
+    expect(setEffort(8, 100, best)).toBe(1);
+    expect(setEffort(5, 100, best)).toBe(1); // 3 short
+    expect(setEffort(1, 130, best)).toBe(1);
+  });
+
+  it("drops below 1 further from failure", () => {
+    expect(setEffort(4, 100, best)).toBeCloseTo(0.8, 6); // 4 short: 4 of a countable 5
+  });
+
+  it("makes warm-ups and easy sets nearly worthless", () => {
+    expect(setEffort(1, 60, best)).toBeCloseTo(0.033, 3);
+    expect(setEffort(10, 50, best)).toBeCloseTo(0.23, 2);
+  });
+
+  it("is 1 with nothing to compare with", () => {
+    expect(setEffort(3, 60, null)).toBe(1);
   });
 });
 

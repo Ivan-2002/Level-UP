@@ -34,12 +34,12 @@ function entryInEffect<E extends { measuredOn: string }>(entries: E[], date: str
 }
 
 // --- XP bodyweight ------------------------------------------------------------------
-// Set XP is relative to bodyweight (x 75 / bodyweight), so XP rewards effort, not absolute
+// Set XP is relative to bodyweight (x sqrt(75 / bodyweight)), so XP rewards effort, not absolute
 // strength. That makes a LOW bodyweight worth XP, so XP doesn't trust the typed value
 // blindly. See docs/ARCHITECTURE.md, "XP per completed set".
 
 export const BODYWEIGHT_XP = {
-  /** Set XP is scaled by referenceKg / bodyweight, so a 75 kg player's XP is unchanged. */
+  /** Set XP is scaled by sqrt(referenceKg / bodyweight), so a 75 kg player's load is unchanged. */
   referenceKg: 75,
   /** The XP bodyweight is clamped to this range, whatever was typed. */
   minKg: 40,
@@ -118,18 +118,71 @@ export function effectiveKg(weightKg: number, bodyweightKg: number, tuning: Exer
   return liftedKg(weightKg, bodyweightKg, tuning.bodyweightRatio) * tuning.loadFactor;
 }
 
+// Set XP (Milestone 5, "formula C"; docs/ARCHITECTURE.md, "XP per completed set").
+//
+// A set earns XP for how STRONG an effort it was, not for how much it moved:
+//   reps exercises: round(K x estimated 1RM of the XP load x effort)
+//   timed exercises: round(seconds held, at most 120, x XP load / 10)
+// where XP load = effective kg x sqrt(75 / bodyweight) and effort is 0 to 1 (setEffort).
+//
+// Why estimated 1RM: the old reps x load paid a 30-rep set at 50% three times as much as a
+// heavy set of 5 at 87%, for the same hard effort. Epley rates both as about the lifter's
+// 1RM, so every hard set is worth about the same, whatever the rep range. On its own it
+// would also pay a single at half your max half a hard set (warm-ups, farming), so it is
+// multiplied by effort: how close the set was to failure.
+
+export const SET_XP = {
+  /** Scales estimated 1RM to XP: an intermediate's normal session earns what it did under reps x load. */
+  scale: 0.73,
+  /** A set within this many reps of failure counts as full effort (the usual "hard set"). */
+  repsInReserveAllowance: 3,
+  /** Effort is measured against the best estimated 1RM from this many days back (and today). */
+  effortWindowDays: 84,
+  /** Timed exercises count at most this many seconds per set. */
+  timedMaxSec: 120,
+} as const;
+
 /**
- * XP for one completed set: round(reps x effective kg x (75 / bodyweight) / 10).
- * `xpBodyweightKg`: the server passes xpBodyweightOnDate; it is clamped to 40-200 kg here.
- *
- * Relative to bodyweight: a 60 kg player benching 40 kg x 8 earns the same as a 90 kg
- * player benching 60 kg x 8. A pure bodyweight exercise earns the same at any bodyweight:
- * its load IS your bodyweight, which then divides out.
+ * The load XP counts: effective kg x sqrt(75 / bodyweight), bodyweight clamped to 40-200 kg.
+ * The square root softens the bodyweight factor: a 110 kg beginner isn't hit twice (weak AND
+ * heavy), a 60 kg lifter still gains, and typing a fake low bodyweight pays half as much.
+ */
+export function xpLoadKg(weightKg: number, xpBodyweightKg: number, tuning: ExerciseTuning): number {
+  const bodyweightKg = clampXpBodyweight(xpBodyweightKg);
+  return effectiveKg(weightKg, bodyweightKg, tuning) * Math.sqrt(BODYWEIGHT_XP.referenceKg / bodyweightKg);
+}
+
+/** Epley for any number of reps; a single rep is the weight lifted. Not rounded. */
+export function epleyOneRepMax(loadKg: number, reps: number): number {
+  return reps <= 1 ? loadKg : loadKg * (1 + reps / 30);
+}
+
+/**
+ * How hard a set was, 0 to 1: reps done / reps the player could have done at that weight,
+ * where "could have" comes from `referenceKg` (their best estimated 1RM, lifted kg) and a
+ * set within 3 reps of failure counts as 1. At or above the reference: 1.
+ * A warm-up single at half your max is about 0.03; a working set 2 reps short of failure, 1.
+ */
+export function setEffort(reps: number, liftedLoadKg: number, referenceKg: number | null): number {
+  if (referenceKg === null || liftedLoadKg <= 0 || liftedLoadKg >= referenceKg) return 1;
+  const possibleReps = 30 * (referenceKg / liftedLoadKg - 1); // Epley, solved for reps
+  return Math.min(1, reps / Math.max(1, possibleReps - SET_XP.repsInReserveAllowance));
+}
+
+/**
+ * XP for one completed set (before the jump cap, the 10-set limit and the daily cap, which
+ * scoreSessionSets and the server apply). `xpBodyweightKg`: xpBodyweightOnDate on the server.
  * One function on purpose: swapping the XP formula later means changing only this.
  */
-export function setXp(set: { reps: number; weightKg: number }, xpBodyweightKg: number, tuning: ExerciseTuning): number {
-  const bodyweightKg = clampXpBodyweight(xpBodyweightKg);
-  return Math.round((set.reps * effectiveKg(set.weightKg, bodyweightKg, tuning) * BODYWEIGHT_XP.referenceKg) / bodyweightKg / 10);
+export function setXp(
+  set: { reps: number; weightKg: number },
+  xpBodyweightKg: number,
+  exercise: ExerciseTuning & { repsUnit: RepsUnit },
+  effort = 1,
+): number {
+  const load = xpLoadKg(set.weightKg, xpBodyweightKg, exercise);
+  if (exercise.repsUnit === "seconds") return Math.round((Math.min(set.reps, SET_XP.timedMaxSec) * load) / 10);
+  return Math.round(SET_XP.scale * epleyOneRepMax(load, set.reps) * effort);
 }
 
 // Weekly goal and streak bonuses: see weekly-goal.ts.
