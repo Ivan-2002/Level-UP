@@ -44,7 +44,7 @@ export const BODYWEIGHT_XP = {
   /** The XP bodyweight is clamped to this range, whatever was typed. */
   minKg: 40,
   maxKg: 200,
-  /** An entry can LOWER the XP bodyweight by at most this share of it per week since the previous entry. */
+  /** An entry can move the XP bodyweight (either way) by at most this share of it per week since the previous entry. */
   maxChangePerWeek: 0.02,
 } as const;
 
@@ -60,11 +60,13 @@ export type XpBodyweightEntry = { kg: number; measuredOn: string; receivedAt: st
  * picks (by measuredOn), but its value limited at the moment the server received it.
  *
  * Walking the entries in the order the server received them, each entry:
- * - RAISES the value at once: a higher bodyweight never earns more XP (loaded lifts
- *   earn less, bodyweight exercises the same), so there's nothing to protect.
- * - LOWERS it by at most 2% of the value per week since the previous entry. The
- *   allowance builds up with time, not per entry: 5 kg lost over two months and entered
- *   once passes in full; 80 -> 40 kg overnight moves about 0.2 kg.
+ * moves the value towards what was typed by at most 2% of the value per week since the
+ * previous entry, in EITHER direction. The allowance builds up with time, not per entry:
+ * 5 kg lost over two months and entered once passes in full; 80 -> 40 kg overnight moves
+ * about 0.2 kg. Increases are limited too because, with the square-root scaling, a higher
+ * bodyweight earns more on pure bodyweight exercises (a 75 kg player typing 200 kg would
+ * get x 1.63 on pull-ups). Honest bulking (0.25-0.5% a week) is far inside the limit; a
+ * too-low typo corrected upwards lags, which costs that player XP rather than giving any.
  *
  * Why receive time, not measuredOn: the player chooses measuredOn, so a backdated entry
  * could otherwise claim months of allowance. Re-entering a date replaces that entry and
@@ -86,11 +88,11 @@ function limitedOnReceipt(entries: XpBodyweightEntry[]): Map<XpBodyweightEntry, 
   for (const entry of byReceipt) {
     const typed = clampXpBodyweight(entry.kg);
     const at = Date.parse(entry.receivedAt);
-    if (value === null || typed >= value) {
+    if (value === null) {
       value = typed;
     } else {
-      const weeks = Math.max(0, at - previousAt) / WEEK_MS;
-      value = Math.max(typed, value - value * BODYWEIGHT_XP.maxChangePerWeek * weeks);
+      const allowance: number = value * BODYWEIGHT_XP.maxChangePerWeek * (Math.max(0, at - previousAt) / WEEK_MS);
+      value = typed >= value ? Math.min(typed, value + allowance) : Math.max(typed, value - allowance);
     }
     previousAt = at;
     limited.set(entry, value);

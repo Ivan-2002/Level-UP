@@ -184,6 +184,17 @@ export const SIM_PLAYERS: SimPlayer[] = [
     cheat: true,
   },
   {
+    // The "fake bodyweight rise" trick: a 75 kg bodyweight-only player who types 200 kg every
+    // week (a higher bodyweight earns more on bodyweight exercises under the square root).
+    name: "Cheat: bodyweight-only typing 200 kg weekly",
+    bodyweightKg: 75,
+    trainingDays: MON_WED_FRI,
+    sessions: [bodyweightOnly],
+    growth: { perWeek: 0.003, max: 1.15 },
+    typedBodyweight: (week) => (week === 0 ? 75 : 200),
+    cheat: true,
+  },
+  {
     // Absurd volume: 60 hard sets a day (20 each of three lifts), 3x a week.
     name: "Cheat: volume junkie (60 hard sets a day)",
     bodyweightKg: 80,

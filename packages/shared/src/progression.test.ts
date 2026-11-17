@@ -300,8 +300,14 @@ describe("xpBodyweightOnDate: a low bodyweight can't be typed in quickly", () =>
     expect(value).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 6); // about 79.77
   });
 
-  it("applies an increase at once (bulking, or fixing a too-low typo)", () => {
-    expect(xpBodyweightOnDate([entry(70, 0), entry(85, 1)], dayIso(2))).toBe(85);
+  it("limits increases the same way: 75 -> 200 kg overnight barely moves", () => {
+    const value = xpBodyweightOnDate([entry(75, 0), entry(200, 1)], dayIso(2));
+    expect(value).toBeCloseTo(75 + 75 * BODYWEIGHT_XP.maxChangePerWeek / 7, 6); // about 75.2
+  });
+
+  it("leaves an honest bulk untouched: 70 -> 74 kg over 10 weeks, entered weekly", () => {
+    const weekly = Array.from({ length: 11 }, (_, week) => entry(70 + 0.4 * week, week * 7));
+    expect(xpBodyweightOnDate(weekly, dayIso(71))).toBeCloseTo(74, 6);
   });
 
   it("gives a backdated entry no allowance: its gap is measured from when it was received", () => {
