@@ -1,7 +1,7 @@
 import { bodyweightOnDate, liftedKg, setXp, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
-import { applyDailyCap, judgeSession, jumpCappedXp, jumpCheckValue, plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
+import { applyDailyCap, type DailyCapResult, judgeSession, jumpCappedXp, jumpCheckValue, plausibilityFlag, plausibilityLimits } from "../src/xp-limits.js";
 import { SIM_EXERCISES, type SimExercise } from "./exercises.js";
 import type { PlannedExercise, Session, SimPlayer } from "./players.js";
 
@@ -67,8 +67,13 @@ export type SimSetXp = (set: { reps: number; weightKg: number }, xpBodyweightKg:
 
 const sharedSetXp: SimSetXp = (set, xpBodyweightKg, exercise) => setXp(set, xpBodyweightKg, exercise);
 
-export function simulate(player: SimPlayer, weeks = 104, options: { setXp?: SimSetXp; xpForLevel?: (level: number) => number } = {}): SimResult {
+export function simulate(
+  player: SimPlayer,
+  weeks = 104,
+  options: { setXp?: SimSetXp; xpForLevel?: (level: number) => number; dailyCap?: (setXp: number[]) => DailyCapResult } = {},
+): SimResult {
   const formula = options.setXp ?? sharedSetXp;
+  const capDay = options.dailyCap ?? ((setXp: number[]) => applyDailyCap(0, setXp));
   const levelXp = options.xpForLevel ?? xpForLevel;
   const bodyweights: XpBodyweightEntry[] = [];
   const reached = Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>;
@@ -107,7 +112,7 @@ export function simulate(player: SimPlayer, weeks = 104, options: { setXp?: SimS
       const dayXp = setXps.reduce((a, b) => a + b, 0);
       result.days.push({ day, xp: dayXp });
       // One session a day, so nothing was awarded earlier that day.
-      const capped = applyDailyCap(0, setXps);
+      const capped = capDay(setXps);
       result.flaggedSets += flagged;
       result.jumpCappedSets += jumpCapped;
       result.sessions++;
