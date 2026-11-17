@@ -157,18 +157,19 @@ describe("training days", () => {
 
     const monday = await openApp(user, "2026-10-12T00:30:00");
 
-    expect(monday).toMatchObject({ weekStart: "2026-10-12", target: 3, streak: 1 });
+    expect(monday).toMatchObject({ weekStart: "2026-10-12", target: 2, streak: 1 }); // met exactly: the target stays
     expect((await weeks(user))[0]).toMatchObject({ daysTrained: 2, met: true, closed: true });
   });
 });
 
 describe("the target", () => {
-  it("goes up to 4 as goals are met, never beyond, and down after a miss, resetting the streak", async () => {
+  it("goes up to 4 as goals are beaten, never beyond, and down after a miss, resetting the streak", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
+    // The target rises only when BEATEN (more days than the target).
     const plan: [week: string, days: number][] = [
-      ["2026-10-0", 2], // target 2: met
-      ["2026-10-1", 3], // target 3: met
-      ["2026-10-2", 4], // target 4: met
+      ["2026-10-0", 3], // target 2: beaten
+      ["2026-10-1", 4], // target 3: beaten
+      ["2026-10-2", 5], // target 4: beaten, but 4 is the maximum
     ];
     const mondays = ["2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"];
     const dayOf = (monday: string, n: number) => {
@@ -197,13 +198,14 @@ describe("the target", () => {
   it("steps down to 2 and no lower for a player back after 3 weeks away", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
     await train(user, "2026-10-06T07:00:00");
-    await train(user, "2026-10-07T07:00:00"); // week 1 met: target 3 next
+    await train(user, "2026-10-07T07:00:00");
+    await train(user, "2026-10-08T07:00:00"); // week 1 beaten (3 of 2): target 3 next
 
     // Away for the weeks of 12, 19 and 26 October. The app opens again on 2 November.
     const back = await openApp(user, "2026-11-02T08:00:00");
 
     expect((await weeks(user)).map((w) => [w.weekStart, w.target, w.daysTrained, w.met, w.streak, w.closed])).toEqual([
-      ["2026-10-05", 2, 2, true, 1, true],
+      ["2026-10-05", 2, 3, true, 1, true],
       ["2026-10-12", 3, 0, false, 0, true], // each missed week is processed, in order
       ["2026-10-19", 2, 0, false, 0, true],
       ["2026-10-26", 2, 0, false, 0, true], // the minimum
@@ -223,14 +225,14 @@ describe("streak milestones", () => {
     const previous = new Date(`${monday}T00:00:00Z`);
     previous.setUTCDate(previous.getUTCDate() - 7);
     await prisma.weeklyGoal.create({
-      data: { userId: user.userId, weekStart: previous, kind: "goal", target: 2, daysTrained: 2, met: true, streakAfter: streak, closedAt: new Date() },
+      data: { userId: user.userId, weekStart: previous, kind: "goal", target: 2, daysTrained: 3, met: true, streakAfter: streak, closedAt: new Date() },
     });
   }
 
   it("pays 12 weeks every time it is reached, and awards the badge only once", async () => {
     const user = await playerSignedUpAt("2026-01-05T08:00:00");
 
-    // First time: 11 weeks done (the last at target 2, so this week's target is 3);
+    // First time: 11 weeks done (the last one beaten at target 2, so this week's target is 3);
     // the 12th week is met on Wednesday 7 October.
     await streakBefore(user, "2026-10-05", 11);
     await train(user, "2026-10-05T07:00:00");

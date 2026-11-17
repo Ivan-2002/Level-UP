@@ -67,7 +67,7 @@ export async function syncWeeklyGoal(
       userId,
       weekStart: addDays(week.weekStart, 7),
       kind: "goal",
-      target: nextWeeklyTarget({ kind: week.kind, target: week.target, met: closed.met }),
+      target: nextWeeklyTarget({ kind: week.kind, target: week.target, daysTrained: closed.daysTrained }),
       streakAfter: closed.streakAfter, // carried until this week is met or missed
     });
     streakBefore = closed.streakAfter;

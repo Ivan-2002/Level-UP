@@ -4,8 +4,10 @@ import { z } from "zod";
 // Weekly goal and streak: the rules, as pure functions. The server's progression
 // service stores the results and pays the XP; the app only uses the text helpers.
 //
-// - Everyone starts at 2 training days a week. Goal met -> next week +1 (max 4);
-//   missed -> next week -1 (min 2).
+// - Everyone starts at 2 training days a week. The goal rises only when the player BEATS
+//   it (more days than the target -> next week +1, max 4); meeting it exactly keeps it;
+//   missing it -> next week -1 (min 2). Until Milestone 5, meeting it exactly also raised
+//   it, so a steady 3-day player was pushed to 4, missed, and lost their streak.
 // - A training day = a workout with at least 3 completed sets, counted once per LOCAL
 //   calendar day (the player's time zone). Week = Monday to Sunday, local time.
 // - The week you sign up in is a warm-up (unless you sign up on a Monday): set XP only,
@@ -118,9 +120,10 @@ export function countTrainingDays(workouts: WorkoutForGoal[], timeZone: string, 
 
 // --- Target, streak, milestones -----------------------------------------------------------
 
-export function nextWeeklyTarget(week: { kind: WeekKind; target: number; met: boolean }): number {
+/** Next week's target, from a finished week: up only if beaten, unchanged if met exactly, down if missed. */
+export function nextWeeklyTarget(week: { kind: WeekKind; target: number; daysTrained: number }): number {
   if (pausesGoal(week.kind)) return week.target;
-  const next = week.met ? week.target + 1 : week.target - 1;
+  const next = week.daysTrained > week.target ? week.target + 1 : week.daysTrained === week.target ? week.target : week.target - 1;
   return Math.min(WEEKLY_GOAL.maxTarget, Math.max(WEEKLY_GOAL.minTarget, next));
 }
 

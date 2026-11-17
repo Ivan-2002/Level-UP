@@ -34,11 +34,12 @@ describe("simulate", () => {
   it("pays the weekly goal through the real rules", () => {
     const result = simulate(twiceAWeek, 2);
 
-    // Week 1: 2 days meets the target of 2 (bonus). Under the 4c rule that raises the
-    // target to 3, so week 2's 2 days miss it: no bonus, and the streak resets.
+    // 2 days meets the target of 2 each week. Meeting it exactly keeps it at 2 (it rises
+    // only when beaten), so both weeks pay and the streak reaches 2. (Under the 4c rule the
+    // target rose to 3 and week 2 was missed.)
     expect(result.setXp).toBe(4 * 80);
-    expect(result.bonusXp).toBe(WEEKLY_GOAL.weeklyBonusXp);
-    expect(result.longestStreak).toBe(1);
+    expect(result.bonusXp).toBe(2 * WEEKLY_GOAL.weeklyBonusXp);
+    expect(result.longestStreak).toBe(2);
   });
 
   it("records the session and day each level is reached", () => {

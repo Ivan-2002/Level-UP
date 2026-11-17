@@ -113,7 +113,7 @@ export function simulate(player: SimPlayer, weeks = 104, options: { setXp?: SimS
     const closed = evaluateWeek({ kind, target, daysTrained, streakBefore: streak, closed: true });
     streak = closed.streakAfter;
     result.longestStreak = Math.max(result.longestStreak, streak);
-    target = nextWeeklyTarget({ kind, target, met: closed.met });
+    target = nextWeeklyTarget({ kind, target, daysTrained });
     kind = "goal";
   }
 
