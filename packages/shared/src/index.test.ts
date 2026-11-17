@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { levelFromXp, levelProgress, xpForLevel } from "./index.js";
+import { levelFromXp, levelProgress, levelStatus, xpForLevel } from "./index.js";
 
 // These numbers are the ones in docs/ARCHITECTURE.md and the screen designs.
 // If someone changes the curve, these tests fail and force a deliberate decision.
@@ -52,5 +52,17 @@ describe("levelProgress", () => {
 
   it("is exactly 0 at the start of a level", () => {
     expect(levelProgress(7879).progress).toBe(0);
+  });
+});
+
+describe("levelStatus: what the API sends for the XP bar", () => {
+  it("gives the XP into the level and the level's size", () => {
+    // Level 2 spans 400 to xpForLevel(3).
+    expect(levelStatus(500)).toEqual({ level: 2, xpIntoLevel: 100, xpForNextLevel: xpForLevel(3) - 400 });
+    expect(levelStatus(0)).toEqual({ level: 1, xpIntoLevel: 0, xpForNextLevel: 400 });
+  });
+
+  it("starts a level at 0 exactly on its boundary", () => {
+    expect(levelStatus(xpForLevel(5))).toMatchObject({ level: 5, xpIntoLevel: 0 });
   });
 });

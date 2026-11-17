@@ -1,6 +1,6 @@
-import { z } from "zod";
 import { liftedKg, setEffort, setXp, SET_XP, type ExerciseTuning } from "./progression.js";
 import type { RepsUnit } from "./workouts.js";
+import type { FlagReason, SetTag } from "./xp-codes.js";
 import {
   judgeSession,
   jumpBaseline,
@@ -8,7 +8,6 @@ import {
   jumpCheckValue,
   plausibilityFlag,
   plausibilityLimits,
-  type FlagReason,
   type PlausibilityExercise,
 } from "./xp-limits.js";
 
@@ -32,9 +31,6 @@ export const LOW_EFFORT = 0.5;
 /** Only this many non-warm-up sets of one exercise per session earn XP. */
 export const MAX_XP_SETS_PER_EXERCISE = 10;
 
-export const SET_TAGS = ["check_set", "beyond_set_limit", "above_history", "warm_up", "easy_set", "timed_limit"] as const;
-export const setTagSchema = z.enum(SET_TAGS);
-export type SetTag = z.infer<typeof setTagSchema>;
 
 /** The short label shown after a set's XP in the live view and the summary. */
 export function setTagText(tag: SetTag): string {

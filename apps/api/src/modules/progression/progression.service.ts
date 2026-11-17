@@ -116,11 +116,15 @@ export async function awardSetXp(db: Db, userId: string, awards: SetXpAward[], e
 }
 
 /**
- * What one workout earned, and the player's total just before it: the XP recorded
- * before the workout was saved. Recomputed on every read, so a repeated Finish shows
- * the same numbers.
+ * What one workout earned (per set, and in total), and the player's total just before it:
+ * the XP recorded before the workout was saved. Read from the ledger on every request, so
+ * a repeated Finish shows the same numbers.
  */
-export async function workoutXp(userId: string, setIds: string[], savedAt: Date): Promise<{ earned: number; totalBefore: number }> {
-  const [earned, totalBefore] = await Promise.all([repo.sumSetXp(setIds), repo.sumXpBefore(userId, savedAt)]);
-  return { earned, totalBefore };
+export async function workoutXp(
+  userId: string,
+  setIds: string[],
+  savedAt: Date,
+): Promise<{ perSet: Map<string, number>; earned: number; totalBefore: number }> {
+  const [perSet, totalBefore] = await Promise.all([repo.setXpBySet(setIds), repo.sumXpBefore(userId, savedAt)]);
+  return { perSet, earned: [...perSet.values()].reduce((a, b) => a + b, 0), totalBefore };
 }

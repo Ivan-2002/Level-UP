@@ -54,13 +54,13 @@ export async function sumXpOnDay(db: Db, userId: string, earnedOn: string, sourc
   return result._sum.amount ?? 0;
 }
 
-/** XP awarded for these sets. */
-export async function sumSetXp(setIds: string[]): Promise<number> {
-  const result = await prisma.xpEvent.aggregate({
+/** XP awarded for each of these sets (a set with no row earned nothing). */
+export async function setXpBySet(setIds: string[]): Promise<Map<string, number>> {
+  const rows = await prisma.xpEvent.findMany({
     where: { source: "workout_set", sourceId: { in: setIds } },
-    _sum: { amount: true },
+    select: { sourceId: true, amount: true },
   });
-  return result._sum.amount ?? 0;
+  return new Map(rows.map((r) => [r.sourceId, r.amount]));
 }
 
 /** The player's total XP from everything recorded before `before`. */

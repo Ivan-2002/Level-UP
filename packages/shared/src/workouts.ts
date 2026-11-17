@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { weeklyGoalStatusSchema } from "./weekly-goal.js";
 import { restSecSchema } from "./progression.js";
+import { levelStatusSchema } from "./levels.js";
+import { flagReasonSchema, setTagSchema } from "./xp-codes.js";
 
 // ---------------------------------------------------------------------------
 // Exercises and workouts (Milestone 4)
@@ -263,14 +265,37 @@ export const finishSummarySchema = z.object({
     /** A streak milestone (12, 26, 52 weeks) reached by meeting the goal with this workout. */
     streakMilestone: z.number().int(),
     total: z.number().int(),
+    /**
+     * Set XP this workout did NOT get, and why: the daily cap (daily_cap), or it was synced
+     * more than 14 days after it started (too_old). Null when it got everything.
+     */
+    heldBack: z.object({ amount: z.number().int().positive(), reason: z.enum(["daily_cap", "too_old"]) }).nullable(),
   }),
-  /** Total XP before and after; the app draws the level bar with levelProgress(). */
+  /**
+   * Level before and after this workout. statusBefore/statusAfter are what the XP bar draws
+   * (the server owns the curve); before/after/totalXp* are kept for apps older than Milestone 5.
+   */
   level: z.object({
     before: z.number().int(),
     after: z.number().int(),
     totalXpBefore: z.number().int(),
     totalXpAfter: z.number().int(),
+    statusBefore: levelStatusSchema,
+    statusAfter: levelStatusSchema,
   }),
+  /**
+   * Every set of the workout, in the order of `workout.exercises[].sets`: the XP the ledger
+   * recorded for it (after the daily cap), its tag and why it was flagged or capped.
+   * Workouts from before Milestone 5 have no tags or reasons.
+   */
+  sets: z.array(
+    z.object({
+      setId: z.uuid(),
+      xp: z.number().int(),
+      tag: setTagSchema.nullable(),
+      flagReason: flagReasonSchema.nullable(),
+    }),
+  ),
   stats: sessionStatsSchema.extend({
     /** The previous workout of the same routine (or any previous workout); null if none. */
     previous: sessionStatsSchema.nullable(),

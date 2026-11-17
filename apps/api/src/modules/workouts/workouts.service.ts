@@ -5,9 +5,12 @@ import {
   canBeRecord,
   emptyRecordBook,
   findNewRecords,
+  flagReasonSchema,
   levelFromXp,
+  levelStatus,
   liftedKg,
   localDate,
+  setTagSchema,
   volumeKg,
   type Exercise,
   type FinishSummary,
@@ -223,10 +226,11 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
   const bodyweightKg = bodyweightOn(row.startedAt);
 
   // XP: what the ledger recorded for these sets, and the total just before.
-  const setIds = row.exercises.flatMap((e) => e.sets.map((s) => s.id));
-  const { earned, totalBefore } = await progressionService.workoutXp(userId, setIds, row.createdAt);
+  const sets = row.exercises.flatMap((e) => e.sets);
+  const { perSet, earned, totalBefore } = await progressionService.workoutXp(userId, sets.map((s) => s.id), row.createdAt);
   const bonus = await weeklyGoalService.bonusXpOf(row.id);
   const total = earned + bonus.weeklyGoal + bonus.streakMilestone;
+  const heldBack = row.xpHeldBackReason ? { amount: row.xpHeldBack, reason: row.xpHeldBackReason } : null;
 
   // Compared with last time (same routine, or the previous workout).
   const previous = await repo.findPreviousWorkout(userId, row);
@@ -235,13 +239,22 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
     : null;
 
   return {
-    xp: { sets: earned, ...bonus, total },
+    xp: { sets: earned, ...bonus, total, heldBack },
     level: {
       before: levelFromXp(totalBefore),
       after: levelFromXp(totalBefore + total),
       totalXpBefore: totalBefore,
       totalXpAfter: totalBefore + total,
+      statusBefore: levelStatus(totalBefore),
+      statusAfter: levelStatus(totalBefore + total),
     },
+    // Codes as stored; one the contract doesn't know (written by a newer server) reads as null.
+    sets: sets.map((s) => ({
+      setId: s.id,
+      xp: perSet.get(s.id) ?? 0,
+      tag: setTagSchema.safeParse(s.xpTag).data ?? null,
+      flagReason: flagReasonSchema.safeParse(s.flagReason).data ?? null,
+    })),
     stats: {
       ...sessionStats(row, exercises, bodyweightKg),
       previous: previous && previousExercises ? sessionStats(previous, previousExercises, bodyweightOn(previous.startedAt)) : null,

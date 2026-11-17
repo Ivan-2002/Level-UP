@@ -92,6 +92,7 @@ describe("plausibility at Finish", () => {
       { xp: setXp({ reps: 8, weightKg: 60 }, 75, BENCH), isFlagged: false, flagReason: null, xpTag: null },
       { xp: 0, isFlagged: true, flagReason: "weight_above_range", xpTag: "check_set" },
     ]);
+    expect(summary.sets[1]).toMatchObject({ xp: 0, tag: "check_set", flagReason: "weight_above_range" });
     expect(summary.prs).toEqual([]);
   });
 });
@@ -174,6 +175,9 @@ describe("the 10-set limit and tags at Finish", () => {
     expect(await storedSets(saved.id)).toEqual(
       expected.sets.map((s) => ({ xp: s.xp, isFlagged: s.isFlagged, flagReason: s.flagReason, xpTag: s.tag })),
     );
+    // The summary sends the same, set by set.
+    const summary = (await request(app).get(`/v1/workouts/${saved.id}/summary`).set("Cookie", user.cookie)).body;
+    expect(finishWorkoutResponseSchema.parse(summary).summary.sets.map((s) => [s.xp, s.tag])).toEqual(expected.sets.map((s) => [s.xp, s.tag]));
   });
 });
 
@@ -248,6 +252,7 @@ describe("the daily cap at Finish", () => {
 
     const first = await finish(user, big);
     const before = await heldBackOf(first.workout.id);
+    expect(first.summary.xp.heldBack).toEqual({ amount: before.xpHeldBack, reason: "daily_cap" });
     const repeat = await request(app).post("/v1/workouts").set("Cookie", user.cookie).send(big);
 
     expect(repeat.status).toBe(200);
@@ -262,7 +267,8 @@ describe(`the ${XP_MAX_WORKOUT_AGE_DAYS}-day rule at Finish`, () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
     const sets = times(3, { reps: 8, weightKg: 60 });
 
-    const { workout: saved } = await finish(user, workout(XP_MAX_WORKOUT_AGE_DAYS + 1, [["barbell-bench-press", sets]]));
+    const { workout: saved, summary } = await finish(user, workout(XP_MAX_WORKOUT_AGE_DAYS + 1, [["barbell-bench-press", sets]]));
+    expect(summary.xp).toMatchObject({ sets: 0, heldBack: { amount: 3 * setXp({ reps: 8, weightKg: 60 }, 75, BENCH), reason: "too_old" } });
 
     expect(await prisma.xpEvent.count({ where: { userId: user.userId } })).toBe(0);
     expect(await prisma.workout.findUniqueOrThrow({ where: { id: saved.id }, select: { xpHeldBack: true, xpHeldBackReason: true } })).toEqual({

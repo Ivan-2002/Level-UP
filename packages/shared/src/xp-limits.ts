@@ -1,7 +1,7 @@
-import { z } from "zod";
 import { epleyOneRepMax } from "./progression.js";
 import { formatWeight, type WeightUnit } from "./units.js";
 import { HOLD_MAX_SEC, type Equipment, type Mechanic, type RepsUnit } from "./workouts.js";
+import type { FlagReason } from "./xp-codes.js";
 
 // ---------------------------------------------------------------------------
 // Limits against fake or inflated workouts (docs/ARCHITECTURE.md, "Limits against fake
@@ -71,9 +71,7 @@ export function plausibilityLimits(exercise: PlausibilityExercise): Plausibility
 //   is_flagged: 0 XP, not a PR.
 // - above_history: far above the player's own best (the jump cap below). NOT is_flagged:
 //   the set still earns XP, capped at the 25% line, and isn't a PR.
-export const FLAG_REASONS = ["weight_above_range", "reps_above_range", "above_history"] as const;
-export const flagReasonSchema = z.enum(FLAG_REASONS);
-export type FlagReason = z.infer<typeof flagReasonSchema>;
+// The codes themselves (FLAG_REASONS) live in xp-codes.ts.
 export type PlausibilityFlagReason = Exclude<FlagReason, "above_history">;
 
 /**
