@@ -23,6 +23,8 @@ workoutsRouter.get("/weekly-goal", requireAuth, controller.weeklyGoal);
 // start with /exercises (modules own data and rules, not URL prefixes).
 workoutsRouter.get("/exercises/recent", requireAuth, controller.recentExercises);
 // ?ids=a,b,c -> each exercise's most recent session (routine detail, active workout pre-fill).
+// Each exercise's 12-week best and jump baseline, for the app's offline XP preview.
+workoutsRouter.get("/exercises/xp-history", requireAuth, controller.exerciseXpHistory);
 workoutsRouter.get("/exercises/last-sessions", requireAuth, validateQuery(lastSessionsQuerySchema), controller.lastSessions);
 workoutsRouter.get(
   "/exercises/:id/summary",

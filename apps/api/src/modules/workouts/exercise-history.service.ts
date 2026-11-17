@@ -9,12 +9,16 @@ import {
   type Exercise,
   type ExerciseSession,
   type ExerciseSummary,
+  type ExerciseXpHistoryList,
   type LastSessionList,
   type RecentExerciseList,
 } from "@levelup/shared";
+import { now } from "../../lib/clock.js";
 import { AppError } from "../../lib/errors.js";
 import { isUuid } from "../../lib/ids.js";
+import type { Db } from "../../lib/prisma.js";
 import * as exercisesService from "../exercises/exercises.service.js";
+import * as progressionService from "../progression/progression.service.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./workouts.repository.js";
 
@@ -120,6 +124,41 @@ export async function recentExercises(userId: string): Promise<RecentExerciseLis
       ];
     }),
   };
+}
+
+/**
+ * Each exercise's past sessions, oldest first: of these exercises (null: every exercise),
+ * in workouts that started before `before` (omitted: all of them). An exercise done twice
+ * in one workout (a superset) is ONE session, as in scoring. Pass `db` inside a transaction.
+ */
+export async function pastSessions(
+  userId: string,
+  exerciseIds: string[] | null,
+  before?: Date,
+  db?: Db,
+): Promise<Map<string, progressionService.PastSession[]>> {
+  const rows = await repo.findExerciseHistory(userId, exerciseIds, before && { startedAt: before }, db);
+  const sessions = new Map<string, Map<string, progressionService.PastSession>>();
+  for (const row of rows) {
+    const byWorkout = sessions.get(row.exerciseId) ?? new Map<string, progressionService.PastSession>();
+    const session = byWorkout.get(row.workout.id) ?? { startedAt: row.workout.startedAt, sets: [] };
+    session.sets.push(...row.sets.map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() })));
+    byWorkout.set(row.workout.id, session);
+    sessions.set(row.exerciseId, byWorkout);
+  }
+  return new Map([...sessions].map(([exerciseId, byWorkout]) => [exerciseId, [...byWorkout.values()]]));
+}
+
+/**
+ * GET /exercises/xp-history: every exercise the player has done, with the history the
+ * shared scoring needs, as of now. Replays the player's whole history (see the
+ * performance test in exercise-xp-history.test.ts).
+ */
+export async function exerciseXpHistories(userId: string): Promise<ExerciseXpHistoryList> {
+  const sessions = await pastSessions(userId, null);
+  const exercises = await exercisesService.findUsableExercises(userId, [...sessions.keys()]);
+  const histories = await progressionService.xpHistories(userId, sessions, exercises, now());
+  return { items: [...histories].map(([exerciseId, history]) => ({ exerciseId, ...history })) };
 }
 
 async function usableExerciseOrThrow(userId: string, exerciseId: string): Promise<Exercise> {

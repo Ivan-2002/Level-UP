@@ -10,6 +10,7 @@ import {
   type ScoredSet,
   type ScoringExercise,
   type SessionSet,
+  type XpBodyweightEntry,
   XP_SOURCES_UNDER_DAILY_CAP,
 } from "@levelup/shared";
 import type { XpHeldBackReason } from "../../generated/prisma/client.js";
@@ -66,16 +67,7 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
   const date = workout.startedAt.toISOString();
   const typed = bodyweightOnDate(bodyweights, date);
 
-  const history = new Map<string, ExerciseXpHistory>();
-  for (const [exerciseId, sessions] of workout.pastSessions) {
-    const exercise = workout.exercises.get(exerciseId);
-    if (!exercise) continue;
-    const past = sessions.map((s) => {
-      const day = s.startedAt.toISOString();
-      return { date: day, bodyweightKg: bodyweightOnDate(bodyweights, day), sets: s.sets };
-    });
-    history.set(exerciseId, exerciseXpHistory(past, exercise, date));
-  }
+  const history = historiesFrom(bodyweights, workout.pastSessions, workout.exercises, date);
 
   const score = scoreSessionSets({
     sets: workout.sets,
@@ -96,6 +88,40 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
 
 // Zero means nothing was held back: no reason (the database's CHECK insists on that).
 const heldBack = (amount: number, reason: XpHeldBackReason) => (amount > 0 ? { amount, reason } : null);
+
+/**
+ * Each exercise's XP history (12-week best, jump baseline) as of `at`, from its past
+ * sessions: what the app needs to preview XP offline (GET /exercises/xp-history).
+ * The same calculation Finish uses. Exercises missing from `exercises` are left out.
+ */
+export async function xpHistories(
+  userId: string,
+  pastSessions: Map<string, PastSession[]>,
+  exercises: Map<string, ScoringExercise>,
+  at: Date,
+): Promise<Map<string, ExerciseXpHistory>> {
+  return historiesFrom(await usersService.bodyweightHistory(userId), pastSessions, exercises, at.toISOString());
+}
+
+/** Past sessions -> ExerciseXpHistory, valuing each session at the bodyweight in effect on its day. */
+function historiesFrom(
+  bodyweights: XpBodyweightEntry[],
+  pastSessions: Map<string, PastSession[]>,
+  exercises: Map<string, ScoringExercise>,
+  date: string,
+): Map<string, ExerciseXpHistory> {
+  const histories = new Map<string, ExerciseXpHistory>();
+  for (const [exerciseId, sessions] of pastSessions) {
+    const exercise = exercises.get(exerciseId);
+    if (!exercise) continue;
+    const past = sessions.map((s) => {
+      const day = s.startedAt.toISOString();
+      return { date: day, bodyweightKg: bodyweightOnDate(bodyweights, day), sets: s.sets };
+    });
+    histories.set(exerciseId, exerciseXpHistory(past, exercise, date));
+  }
+  return histories;
+}
 
 export type SetXpAward = { setId: string; amount: number; bodyPart: BodyPart };
 

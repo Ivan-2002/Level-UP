@@ -148,14 +148,14 @@ export type ExerciseHistoryRow = {
 };
 
 /**
- * Every past appearance of these exercises in the player's workouts, oldest first, with
- * their non-flagged sets. `before` limits it to workouts that started earlier: by
+ * Every past appearance of these exercises (null: of every exercise) in the player's
+ * workouts, oldest first, with their non-flagged sets. `before` limits it to workouts that started earlier: by
  * (startedAt, id) for a saved workout (PRs), by startedAt alone for one not saved yet
  * (Finish, before its insert). Pass `db` to read inside a transaction.
  */
 export function findExerciseHistory(
   userId: string,
-  exerciseIds: string[],
+  exerciseIds: string[] | null,
   before?: { startedAt: Date; id?: string },
   db: Db = prisma,
 ): Promise<ExerciseHistoryRow[]> {
@@ -166,7 +166,7 @@ export function findExerciseHistory(
     ],
   };
   return db.workoutExercise.findMany({
-    where: { exerciseId: { in: exerciseIds }, workout: { userId, ...earlier } },
+    where: { ...(exerciseIds && { exerciseId: { in: exerciseIds } }), workout: { userId, ...earlier } },
     select: {
       exerciseId: true,
       workout: { select: { id: true, startedAt: true } },

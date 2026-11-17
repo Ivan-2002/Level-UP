@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import type {
   ExerciseSummary,
   ExerciseSummaryQuery,
+  ExerciseXpHistoryList,
   FinishWorkoutInput,
   FinishWorkoutResponse,
   LastSessionList,
@@ -48,6 +49,10 @@ export async function exerciseSummary(req: Request<{ id: string }>, res: Respons
 
 export async function recentExercises(req: Request, res: Response<RecentExerciseList>) {
   res.json(await historyService.recentExercises(req.session!.user.id));
+}
+
+export async function exerciseXpHistory(req: Request, res: Response<ExerciseXpHistoryList>) {
+  res.json(await historyService.exerciseXpHistories(req.session!.user.id));
 }
 
 export async function weeklyGoal(req: Request, res: Response<WeeklyGoalStatus>) {

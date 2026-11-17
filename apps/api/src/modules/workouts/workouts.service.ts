@@ -23,13 +23,14 @@ import {
 } from "@levelup/shared";
 import { now } from "../../lib/clock.js";
 import { AppError } from "../../lib/errors.js";
-import { prisma, type Db } from "../../lib/prisma.js";
+import { prisma } from "../../lib/prisma.js";
 import * as exercisesService from "../exercises/exercises.service.js";
 import * as progressionService from "../progression/progression.service.js";
 import * as weeklyGoalService from "../progression/weekly-goal.service.js";
 import * as routinesService from "../routines/routines.service.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./workouts.repository.js";
+import { pastSessions } from "./exercise-history.service.js";
 import { daysTrainedAsOf, daysTrainedFor } from "./weekly-goal.service.js";
 
 // Business rules for logged workouts:
@@ -76,7 +77,7 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         earnedOn,
         sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg }))),
         exercises,
-        pastSessions: await pastSessions(tx, userId, [...exercises.keys()], startedAt),
+        pastSessions: await pastSessions(userId, [...exercises.keys()], startedAt, tx),
       });
       const scored = [...score.sets];
 
@@ -172,23 +173,6 @@ function assertRepsFitExercises(input: FinishWorkoutInput, exercises: Map<string
     const exercise = exerciseOf(exercises, e.exerciseId);
     e.sets.forEach((set, i) => exercisesService.assertRepsWithinLimit(exercise, set.reps, `${exercise.name}, set ${i + 1}`));
   }
-}
-
-/**
- * Each exercise's earlier sessions (workouts that started before this one), oldest first.
- * An exercise done twice in one workout (a superset) is ONE session, as in scoring.
- */
-async function pastSessions(db: Db, userId: string, exerciseIds: string[], startedAt: Date) {
-  const rows = await repo.findExerciseHistory(userId, exerciseIds, { startedAt }, db);
-  const sessions = new Map<string, Map<string, progressionService.PastSession>>();
-  for (const row of rows) {
-    const byWorkout = sessions.get(row.exerciseId) ?? new Map<string, progressionService.PastSession>();
-    const session = byWorkout.get(row.workout.id) ?? { startedAt: row.workout.startedAt, sets: [] };
-    session.sets.push(...row.sets.map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() })));
-    byWorkout.set(row.workout.id, session);
-    sessions.set(row.exerciseId, byWorkout);
-  }
-  return new Map([...sessions].map(([exerciseId, byWorkout]) => [exerciseId, [...byWorkout.values()]]));
 }
 
 /** The ledger awards: each saved set (in the order logged) with the XP it was awarded. */

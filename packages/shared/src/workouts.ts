@@ -405,3 +405,14 @@ export const recentExerciseListSchema = z.object({
   items: z.array(z.object({ exercise: exerciseSchema, lastDoneAt: z.iso.datetime(), lastSets: z.array(loggedSetSchema) })),
 });
 export type RecentExerciseList = z.infer<typeof recentExerciseListSchema>;
+
+/**
+ * Response of GET /exercises/xp-history: for every exercise the player has done, the
+ * history the shared scoring needs (ExerciseXpHistory), so the app can preview XP offline.
+ * Values are estimated 1RM in lifted kg, or seconds for timed exercises. Worked out from
+ * logged sets on each request; the app updates its copy after each Finish.
+ */
+export const exerciseXpHistoryListSchema = z.object({
+  items: z.array(z.object({ exerciseId: z.uuid(), recentBest: z.number().nullable(), jumpBaseline: z.number().nullable() })),
+});
+export type ExerciseXpHistoryList = z.infer<typeof exerciseXpHistoryListSchema>;
