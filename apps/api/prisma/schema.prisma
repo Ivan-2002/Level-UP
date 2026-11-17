@@ -122,6 +122,9 @@ model BodyweightEntry {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   kg         Decimal  @db.Decimal(7, 3) // 3 decimals: lb input converts back exactly (see units.ts)
   measuredOn DateTime @db.Date // a calendar day, no time
+  // When the server last WROTE this entry (also on re-entering its date). The XP bodyweight
+  // rule orders and times entries by this, never by measuredOn (which the player chooses).
+  receivedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
   // One entry per day: entering today's weight again updates it.

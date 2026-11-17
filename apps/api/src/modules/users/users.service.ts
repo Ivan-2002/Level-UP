@@ -1,4 +1,4 @@
-import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput, UpdateProfileInput } from "@levelup/shared";
+import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput, UpdateProfileInput, XpBodyweightEntry } from "@levelup/shared";
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import { now } from "../../lib/clock.js";
@@ -74,9 +74,10 @@ export async function recordBodyweight(userId: string, input: RecordBodyweightIn
 }
 
 /** Every bodyweight entry, oldest first (pass `db` to read inside a transaction). */
-export async function bodyweightHistory(userId: string, db?: Db): Promise<BodyweightEntry[]> {
+/** The player's bodyweight history, with when the server received each entry (for xpBodyweightOnDate). */
+export async function bodyweightHistory(userId: string, db?: Db): Promise<XpBodyweightEntry[]> {
   const rows = await repo.findBodyweightEntries(userId, db);
-  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: r.measuredOn.toISOString().slice(0, 10) }));
+  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: r.measuredOn.toISOString().slice(0, 10), receivedAt: r.receivedAt.toISOString() }));
 }
 
 /** Adds to the cached total XP; returns the new total. The ledger stays the source of truth. */
