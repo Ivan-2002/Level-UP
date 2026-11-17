@@ -321,9 +321,13 @@ model WorkoutSet {
   reps              Int
   weightKg          Decimal         @db.Decimal(7, 3) // added weight; 0 for plain bodyweight. 3 decimals: 135 lb round-trips
   completedAt       DateTime? // when it was ticked on the phone; null before 4c
-  // Space for later anti-cheat checks: a flagged set earns no XP and isn't a PR until confirmed.
+  // Written at Finish by the shared scoring (scoreSessionSets). is_flagged = implausible:
+  // 0 XP, not a PR. flag_reason: a FLAG_REASONS code (also above_history, which is not
+  // is_flagged). xp_tag: the SET_TAGS label the summary shows next to the set's XP. Both are
+  // codes, not database enums, so adding one needs no migration; null before Milestone 5.
   isFlagged         Boolean         @default(false)
   flagReason        String?
+  xpTag             String?
 
   @@unique([workoutExerciseId, setOrder])
   @@map("workout_set")
