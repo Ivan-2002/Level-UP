@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { LevelStatus } from "./levels.js";
 import { weightUnitSchema, type WeightUnit } from "./units.js";
 import { timeZoneSchema } from "./weekly-goal.js";
 
@@ -66,6 +67,13 @@ export type Profile = {
   weightUnit: WeightUnit;
   timeZone: string;
   totalXp: number;
+  /** The XP bar: worked out by the server, which owns the level curve (Milestone 5). */
+  level: LevelStatus;
+  /**
+   * The bodyweight XP uses today (xpBodyweightOnDate: limited at 2% a week, 40-200 kg), for
+   * the app's offline XP preview. bodyweightKg above is what the player typed.
+   */
+  xpBodyweightKg: number;
   createdAt: string; // ISO 8601
 };
 

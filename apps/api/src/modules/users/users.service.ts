@@ -1,4 +1,14 @@
-import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput, UpdateProfileInput, XpBodyweightEntry } from "@levelup/shared";
+import {
+  levelStatus,
+  localDate,
+  xpBodyweightOnDate,
+  type BodyweightEntry,
+  type CreateProfileInput,
+  type Profile,
+  type RecordBodyweightInput,
+  type UpdateProfileInput,
+  type XpBodyweightEntry,
+} from "@levelup/shared";
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import { now } from "../../lib/clock.js";
@@ -13,7 +23,7 @@ import * as repo from "./users.repository.js";
 export async function getProfile(userId: string): Promise<Profile> {
   const row = await repo.findProfileByUserId(userId);
   if (!row) throw new AppError("not_found", "ProfileNotFound", "You haven't created your character yet.");
-  return toProfile(row);
+  return await toProfile(row);
 }
 
 export async function createProfile(userId: string, input: CreateProfileInput): Promise<Profile> {
@@ -28,13 +38,13 @@ export async function createProfile(userId: string, input: CreateProfileInput): 
   if (result === "duplicate") {
     throw (await repo.findProfileByUserId(userId)) ? profileExists() : usernameTaken();
   }
-  return toProfile(result);
+  return await toProfile(result);
 }
 
 export async function updateProfile(userId: string, input: UpdateProfileInput): Promise<Profile> {
   const row = await repo.updateProfile(userId, input);
   if (!row) throw new AppError("not_found", "ProfileNotFound", "You haven't created your character yet.");
-  return toProfile(row);
+  return await toProfile(row);
 }
 
 /** Logging workouts needs a character: XP is added to it. (The app's guard ensures one.) */
@@ -93,13 +103,17 @@ const usernameTaken = () =>
 // Turns a database row into the shared API contract. This is where storage details
 // stop: Postgres DECIMAL becomes a plain number, dates become ISO strings, and
 // internal columns (userId, updatedAt) are not exposed.
-function toProfile(row: repo.ProfileRecord): Profile {
+async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
+  const bodyweights = await bodyweightHistory(row.userId);
   return {
     username: row.username,
     bodyweightKg: row.bodyweightKg === null ? null : row.bodyweightKg.toNumber(),
     weightUnit: row.weightUnit,
     timeZone: row.timeZone,
     totalXp: row.totalXp,
+    level: levelStatus(row.totalXp),
+    // As of the player's local today, like a workout started now.
+    xpBodyweightKg: xpBodyweightOnDate(bodyweights, localDate(now(), row.timeZone)),
     createdAt: row.createdAt.toISOString(),
   };
 }

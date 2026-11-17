@@ -1,5 +1,6 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
+import { BODYWEIGHT_FALLBACK_KG, levelStatus, localDate } from "@levelup/shared";
 import { prisma } from "../../lib/prisma.js";
 import { app, signUpUser, type TestUser } from "../../test/helpers.js";
 
@@ -48,6 +49,8 @@ describe("POST /profile", () => {
       weightUnit: "kg", // the default when the app sends none
       timeZone: "Africa/Johannesburg",
       totalXp: 0,
+      level: { level: 1, xpIntoLevel: 0, xpForNextLevel: 400 },
+      xpBodyweightKg: 75.5,
       createdAt: expect.any(String),
     });
 
@@ -192,5 +195,40 @@ describe("weight unit (kg / lb)", () => {
 
   it("needs a session", async () => {
     expect((await request(app).patch("/v1/profile").send({ weightUnit: "lb" })).status).toBe(401);
+  });
+});
+
+describe("GET /profile: what the XP bar and the offline preview need", () => {
+  it("sends the level status worked out from the total XP", async () => {
+    const user = await signUpUser();
+    await createProfile(user, validCharacter);
+    await prisma.profile.update({ where: { userId: user.userId }, data: { totalXp: 500 } });
+
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
+
+    expect(res.body).toMatchObject({ totalXp: 500, level: levelStatus(500) });
+    expect(res.body.level).toMatchObject({ level: 2, xpIntoLevel: 100 });
+  });
+
+  it("sends the XP bodyweight: an overnight drop barely moves it, while bodyweightKg shows what was typed", async () => {
+    const user = await signUpUser();
+    await createProfile(user, { username: "Dropper", timeZone: "UTC" });
+    const day = (daysAgo: number) => localDate(new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000), "UTC");
+    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 80, measuredOn: day(3) });
+    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 40, measuredOn: day(0) });
+
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
+
+    expect(res.body.bodyweightKg).toBe(40);
+    expect(res.body.xpBodyweightKg).toBeCloseTo(80, 1);
+  });
+
+  it("uses the 75 kg fallback when no bodyweight was ever entered", async () => {
+    const user = await signUpUser();
+    await createProfile(user, { username: "NoScale" });
+
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
+
+    expect(res.body.xpBodyweightKg).toBe(BODYWEIGHT_FALLBACK_KG);
   });
 });
