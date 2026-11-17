@@ -187,8 +187,9 @@ export function jumpCapText(baseline: number, repsUnit: RepsUnit, weightUnit: We
 //
 // Full XP up to a daily limit, then 25% beyond it, and never more than twice the limit
 // awarded in one day. A soft cap rewards a genuinely big day without making a fake
-// 1,000-pull-up day worth it. 2,500 was checked with the simulation: an intermediate
-// session uses about 60% of it; only an advanced lifter's 100-minute leg day reaches it.
+// 1,000-pull-up day worth it. 3,100 was chosen with the simulation as the smallest limit
+// (in steps of 100) that caps no honest player more than 3 days a year: the biggest honest
+// day is a 100 kg advanced lifter's leg day, 3,014. (2,500 capped them every session.)
 //
 // The cap's DAY is the local calendar day the workout started (xp_event.earned_on), and
 // the server locks the player's profile row before counting it, so two Finishes sent
@@ -196,7 +197,7 @@ export function jumpCapText(baseline: number, repsUnit: RepsUnit, weightUnit: We
 
 export const DAILY_XP_CAP = {
   /** Set XP per day at the full rate. */
-  limit: 2500,
+  limit: 3100,
   /** The share of XP beyond the limit that is still awarded. */
   bandRate: 0.25,
   /** Never more than limit x this awarded in one day. */

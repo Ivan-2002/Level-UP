@@ -9,29 +9,29 @@ import { SIM_LEVELS, simulate, type LevelReached } from "./simulate.js";
 
 const WEEKS = 104;
 
-const when = (r: LevelReached | null) => {
-  if (r === null) return `> ${WEEKS / 52} yr`;
+const when = (r: LevelReached | null, weeks: number) => {
+  if (r === null) return `> ${weeks / 52} yr`;
   if (r.session === 0) return "1st session";
   if (r.day < 7) return `${r.day + 1} d`;
   return `${Math.round(r.day / 7)} wk`;
 };
 
-const rows = SIM_PLAYERS.map((p) => simulate(p, WEEKS)).map((r) =>
+const rows = SIM_PLAYERS.map((p) => ({ r: simulate(p, p.weeks ?? WEEKS), weeks: p.weeks ?? WEEKS })).map(({ r, weeks }) =>
   [
     r.player,
     r.firstWeekSessionXp.map((xp) => xp.toLocaleString("en-US")).join(" / "),
     `${r.biggestDayXp.toLocaleString("en-US")} (${Math.round((100 * r.biggestDayXp) / DAILY_XP_CAP.limit)}%)`,
-    ...SIM_LEVELS.map((l) => when(r.reached[l])),
+    ...SIM_LEVELS.map((l) => when(r.reached[l], weeks)),
     `${r.longestStreak} wk`,
     `${Math.round((100 * r.bonusXp) / r.totalXp)}%`,
-    `${r.flaggedSets} / ${r.jumpCappedSets}`,
+    `${r.flaggedSets} / ${r.jumpCappedSets} / ${r.beyondLimitSets}`,
     r.cappedDays === 0 ? "0" : `${r.cappedDays} (${r.heldBackXp.toLocaleString("en-US")} held back)`,
   ].join(" | "),
 );
 
-const header = ["Player", "Session XP, week 1", "Biggest day (% of cap)", ...SIM_LEVELS.map((l) => `Level ${l}`), "Longest streak", "From bonuses", "Flagged / jump-capped sets", "Capped days"];
+const header = ["Player", "Session XP, week 1", "Biggest day (% of cap)", ...SIM_LEVELS.map((l) => `Level ${l}`), "Longest streak", "From bonuses", "Flagged / jump-capped / beyond 10", "Capped days"];
 
-console.log(`Balance simulation, ${WEEKS} weeks\n`);
+console.log(`Balance simulation, ${WEEKS} weeks (the returning player: ${WEEKS + 52})\n`);
 console.log(`| ${header.join(" | ")} |`);
 console.log(`|${header.map(() => " --- ").join("|")}|`);
 for (const row of rows) console.log(`| ${row} |`);

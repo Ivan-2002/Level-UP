@@ -143,44 +143,48 @@ describe("jump cap: estimated 1RM (Epley) at every rep count, or seconds for tim
   });
 });
 
-describe("applyDailyCap: full XP to 2,500, 25% beyond, never more than 5,000 a day", () => {
-  it("leaves a normal day alone", () => {
-    expect(applyDailyCap(0, [60, 60, 60])).toEqual({ awarded: [60, 60, 60], heldBack: 0 });
-    expect(applyDailyCap(2400, [100])).toEqual({ awarded: [100], heldBack: 0 }); // lands exactly on the limit
+describe("applyDailyCap: full XP to 3,100, 25% beyond, never more than 6,200 a day", () => {
+  it("uses the limit chosen with the simulation", () => {
+    expect(DAILY_XP_CAP).toEqual({ limit: 3100, bandRate: 0.25, ceilingMultiple: 2 });
   });
 
-  it("splits a set that crosses the limit: full rate up to 2,500, 25% for the rest", () => {
+  it("leaves a normal day alone", () => {
+    expect(applyDailyCap(0, [60, 60, 60])).toEqual({ awarded: [60, 60, 60], heldBack: 0 });
+    expect(applyDailyCap(3000, [100])).toEqual({ awarded: [100], heldBack: 0 }); // lands exactly on the limit
+  });
+
+  it("splits a set that crosses the limit: full rate up to 3,100, 25% for the rest", () => {
     // 100 of 200 fit under the limit; the other 100 earn 25.
-    expect(applyDailyCap(2400, [200])).toEqual({ awarded: [125], heldBack: 75 });
+    expect(applyDailyCap(3000, [200])).toEqual({ awarded: [125], heldBack: 75 });
   });
 
   it("pays 25% for a set entirely in the band", () => {
-    expect(applyDailyCap(2600, [100])).toEqual({ awarded: [25], heldBack: 75 });
+    expect(applyDailyCap(3200, [100])).toEqual({ awarded: [25], heldBack: 75 });
   });
 
   it("stops at the ceiling: a set crossing it earns only the room left", () => {
-    expect(applyDailyCap(4990, [100])).toEqual({ awarded: [10], heldBack: 90 }); // 25 would pass 5,000
-    expect(applyDailyCap(4990, [40])).toEqual({ awarded: [10], heldBack: 30 }); // 25% of 40 = 10 fits exactly
+    expect(applyDailyCap(6190, [100])).toEqual({ awarded: [10], heldBack: 90 }); // 25 would pass 6,200
+    expect(applyDailyCap(6190, [40])).toEqual({ awarded: [10], heldBack: 30 }); // 25% of 40 = 10 fits exactly
   });
 
   it("awards nothing once the day is at (or somehow past) the ceiling", () => {
-    expect(applyDailyCap(5000, [80, 80])).toEqual({ awarded: [0, 0], heldBack: 160 });
-    expect(applyDailyCap(6000, [80])).toEqual({ awarded: [0], heldBack: 80 });
+    expect(applyDailyCap(6200, [80, 80])).toEqual({ awarded: [0, 0], heldBack: 160 });
+    expect(applyDailyCap(7000, [80])).toEqual({ awarded: [0], heldBack: 80 });
   });
 
   it("carries the day's total from set to set, in order", () => {
-    // 2,450 before: set 1 fills the last 50 (+25 for its other 100); set 2 is all in the band.
-    expect(applyDailyCap(2450, [150, 100, 0])).toEqual({ awarded: [75, 25, 0], heldBack: 150 });
+    // 3,050 before: set 1 fills the last 50 (+25 for its other 100); set 2 is all in the band.
+    expect(applyDailyCap(3050, [150, 100, 0])).toEqual({ awarded: [75, 25, 0], heldBack: 150 });
   });
 
   it("rounds each set's 25% like set XP (a 1 XP set in the band earns 0)", () => {
-    expect(applyDailyCap(3000, [1, 2, 3])).toEqual({ awarded: [0, 1, 1], heldBack: 4 });
+    expect(applyDailyCap(3600, [1, 2, 3])).toEqual({ awarded: [0, 1, 1], heldBack: 4 });
   });
 
-  it("reaches the ceiling only after about 12,500 raw XP in a day", () => {
-    const { awarded } = applyDailyCap(0, Array.from({ length: 125 }, () => 100));
+  it("reaches the ceiling only after about 15,500 raw XP in a day", () => {
+    const { awarded } = applyDailyCap(0, Array.from({ length: 155 }, () => 100));
     expect(awarded.reduce((a, b) => a + b, 0)).toBe(DAILY_XP_CAP.limit * DAILY_XP_CAP.ceilingMultiple);
-    expect(applyDailyCap(0, Array.from({ length: 124 }, () => 100)).awarded.reduce((a, b) => a + b, 0)).toBeLessThan(5000);
+    expect(applyDailyCap(0, Array.from({ length: 154 }, () => 100)).awarded.reduce((a, b) => a + b, 0)).toBeLessThan(6200);
   });
 
   it("covers set XP only: weekly and streak bonuses are outside it", () => {
