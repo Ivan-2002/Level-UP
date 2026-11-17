@@ -23,6 +23,8 @@ export type SimPlayer = {
   growth: { perWeek: number; max: number };
   /** The bodyweight the player TYPES in week `week` (null = no entry). Default: the real one, once, at sign-up. */
   typedBodyweight?: (week: number) => number | null;
+  /** Overrides `growth`: strength in week `week`, or null for a week without training. */
+  strengthAt?: (week: number) => number | null;
 };
 
 const ex = (slug: SimExerciseSlug, sets: number, reps: number, kg: number): PlannedExercise => ({ slug, sets, reps, kg });
