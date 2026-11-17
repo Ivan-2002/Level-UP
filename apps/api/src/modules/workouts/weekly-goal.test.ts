@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { finishWorkoutResponseSchema, weeklyGoalStatusSchema, type WeeklyGoalStatus } from "@levelup/shared";
+import { finishWorkoutResponseSchema, WEEKLY_GOAL, weeklyGoalStatusSchema, type WeeklyGoalStatus } from "@levelup/shared";
 import { setNow } from "../../lib/clock.js";
 import { prisma } from "../../lib/prisma.js";
 import { app, seedExercises, signUpPlayer, signUpUser, type TestUser } from "../../test/helpers.js";
@@ -10,6 +10,9 @@ import { app, seedExercises, signUpPlayer, signUpUser, type TestUser } from "../
 // Times are written in Johannesburg local time (UTC+2), the player's zone. October 2026:
 // Monday 5, 12, 19 and 26; Monday 2 November.
 const TZ = "Africa/Johannesburg";
+// The bonus VALUES are pinned in packages/shared; these tests check they're paid and stored.
+const BONUS = WEEKLY_GOAL.weeklyBonusXp;
+const TWELVE_WEEKS = WEEKLY_GOAL.streakMilestones.find((m) => m.weeks === 12)!.xp;
 const at = (local: string) => `${local}+02:00`;
 
 let ids: Record<string, string>;
@@ -91,7 +94,7 @@ describe("GET /weekly-goal", () => {
     for (let i = 0; i < 3; i++) await openApp(user, "2026-10-14T09:00:00");
 
     expect(await weeks(user)).toHaveLength(2);
-    expect(await bonusRows(user)).toEqual([{ source: "weekly_goal", amount: 60 }]);
+    expect(await bonusRows(user)).toEqual([{ source: "weekly_goal", amount: BONUS }]);
   });
 });
 
@@ -120,7 +123,7 @@ describe("training days", () => {
     const meets = await train(user, "2026-10-08T07:00:00", { clientId: "6f1d1c1e-0000-4000-8000-000000000001" });
     const extra = await train(user, "2026-10-09T07:00:00");
 
-    expect(meets.summary.xp).toMatchObject({ weeklyGoal: 60, total: meets.summary.xp.sets + 60 });
+    expect(meets.summary.xp).toMatchObject({ weeklyGoal: BONUS, total: meets.summary.xp.sets + BONUS });
     expect(meets.summary.weeklyGoal).toMatchObject({ daysTrained: 2, met: true, streak: 1 });
     expect(extra.summary.xp.weeklyGoal).toBe(0); // more days earn set XP only
     expect(extra.summary.weeklyGoal).toMatchObject({ daysTrained: 3, met: true, streak: 1 });
@@ -128,7 +131,7 @@ describe("training days", () => {
     // A repeated Finish (lost response) shows the same bonus and pays nothing new.
     const repeat = await train(user, "2026-10-08T07:00:00", { clientId: "6f1d1c1e-0000-4000-8000-000000000001" });
     expect(repeat.summary).toEqual(meets.summary);
-    expect(await bonusRows(user)).toEqual([{ source: "weekly_goal", amount: 60 }]);
+    expect(await bonusRows(user)).toEqual([{ source: "weekly_goal", amount: BONUS }]);
   });
 
   it("needs at least 3 completed sets", async () => {
@@ -188,7 +191,7 @@ describe("the target", () => {
       ["2026-11-02", 3, false, 0], // one down after the miss
     ]);
     expect(nextWeek).toMatchObject({ target: 3, streak: 0 });
-    expect((await bonusRows(user)).map((b) => b.amount)).toEqual([60, 60, 60]); // flat, at every target
+    expect((await bonusRows(user)).map((b) => b.amount)).toEqual([BONUS, BONUS, BONUS]); // flat, at every target
   });
 
   it("steps down to 2 and no lower for a player back after 3 weeks away", async () => {
@@ -233,7 +236,7 @@ describe("streak milestones", () => {
     await train(user, "2026-10-05T07:00:00");
     await train(user, "2026-10-06T07:00:00");
     const twelve = await train(user, "2026-10-07T07:00:00");
-    expect(twelve.summary.xp).toMatchObject({ weeklyGoal: 60, streakMilestone: 500 });
+    expect(twelve.summary.xp).toMatchObject({ weeklyGoal: BONUS, streakMilestone: TWELVE_WEEKS });
     expect(twelve.summary.weeklyGoal).toMatchObject({ streak: 12, met: true });
 
     // A reset later, then another 11 weeks; the 12th met on Wednesday 4 November.
@@ -241,11 +244,11 @@ describe("streak milestones", () => {
     await train(user, "2026-11-02T07:00:00");
     await train(user, "2026-11-03T07:00:00");
     const again = await train(user, "2026-11-04T07:00:00");
-    expect(again.summary.xp).toMatchObject({ weeklyGoal: 60, streakMilestone: 500 });
+    expect(again.summary.xp).toMatchObject({ weeklyGoal: BONUS, streakMilestone: TWELVE_WEEKS });
 
     expect((await bonusRows(user)).filter((b) => b.source === "streak_milestone")).toHaveLength(2);
     expect(await prisma.userAchievement.findMany({ where: { userId: user.userId }, select: { key: true } })).toEqual([{ key: "streak_12" }]);
-    expect(await totalXp(user)).toBe(6 * twelve.summary.xp.sets + 2 * (60 + 500)); // the cached total includes every bonus
+    expect(await totalXp(user)).toBe(6 * twelve.summary.xp.sets + 2 * (BONUS + TWELVE_WEEKS)); // the cached total includes every bonus
   });
 });
 

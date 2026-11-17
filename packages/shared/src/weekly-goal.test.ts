@@ -99,9 +99,9 @@ describe("streaks and milestones", () => {
   });
 
   it("reaches a milestone on the week the streak arrives at it", () => {
-    expect(milestonesReached(11, 12)).toEqual([{ weeks: 12, xp: 500 }]);
+    expect(milestonesReached(11, 12)).toEqual([{ weeks: 12, xp: 3000 }]);
     expect(milestonesReached(12, 13)).toEqual([]);
-    expect(milestonesReached(51, 52)).toEqual([{ weeks: 52, xp: 3000 }]);
+    expect(milestonesReached(51, 52)).toEqual([{ weeks: 52, xp: 20000 }]);
     expect(milestonesReached(52, 53)).toEqual([]); // nothing after 52, for now
   });
 
@@ -114,7 +114,7 @@ describe("streaks and milestones", () => {
       paid.push(...evaluation.milestones.map((m) => m.xp));
       streak = evaluation.streakAfter;
     }
-    expect(paid).toEqual([500, 500]);
+    expect(paid).toEqual([3000, 3000]);
     expect(streak).toBe(12);
   });
 });
@@ -127,7 +127,7 @@ describe("evaluateWeek", () => {
   });
 
   it("pays the same bonus for extra days", () => {
-    expect(evaluateWeek(week(5, true)).bonusXp).toBe(60);
+    expect(evaluateWeek(week(5, true)).bonusXp).toBe(400);
   });
 
   it("keeps the streak alive while the week is still open", () => {

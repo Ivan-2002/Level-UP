@@ -22,13 +22,19 @@ export const WEEKLY_GOAL = {
   maxTarget: 4,
   /** A workout needs this many completed (non-flagged) sets to make the day a training day. */
   minSetsPerTrainingDay: 3,
-  /** Paid once per week when the goal is met; the same at every target. */
-  weeklyBonusXp: 60,
-  /** XP is paid every time a milestone is reached (also after a reset); the badge once. */
+  /**
+   * Paid once per week when the goal is met; the same at every target. About one
+   * beginner session (was 60 until Milestone 5: negligible next to ~1,500 XP sessions).
+   */
+  weeklyBonusXp: 400,
+  /**
+   * XP is paid every time a milestone is reached (also after a reset); the badge once.
+   * The 52-week bonus is about 4.5 weeks of an intermediate player's training.
+   */
   streakMilestones: [
-    { weeks: 12, xp: 500 },
-    { weeks: 26, xp: 1200 },
-    { weeks: 52, xp: 3000 },
+    { weeks: 12, xp: 3000 },
+    { weeks: 26, xp: 7500 },
+    { weeks: 52, xp: 20000 },
   ] satisfies StreakMilestone[],
 } as const;
 
