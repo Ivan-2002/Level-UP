@@ -1,6 +1,7 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BODYWEIGHT_FALLBACK_KG, levelStatus, localDate } from "@levelup/shared";
+import { BODYWEIGHT_FALLBACK_KG, BODYWEIGHT_XP, levelStatus, localDate } from "@levelup/shared";
+import { setNow } from "../../lib/clock.js";
 import { prisma } from "../../lib/prisma.js";
 import { app, signUpUser, type TestUser } from "../../test/helpers.js";
 
@@ -221,6 +222,31 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
 
     expect(res.body.bodyweightKg).toBe(40);
     expect(res.body.xpBodyweightKg).toBeCloseTo(80, 1);
+  });
+
+  it("can't have the XP bodyweight reset by re-entering every date (80 -> 40 kg)", async () => {
+    // The old hole: re-entering EVERY entry's date replaced every entry, so the first edit
+    // became an unchecked "first entry". Receipts keep the original writes in the walk.
+    const user = await signUpUser();
+    await createProfile(user, { username: "Resetter", timeZone: "UTC" });
+    const record = (kg: number, measuredOn: string) =>
+      request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg, measuredOn });
+
+    setNow("2026-08-01T08:00:00Z");
+    await record(80, "2026-08-01");
+    setNow("2026-08-08T08:00:00Z");
+    await record(80, "2026-08-08");
+    setNow("2026-08-09T08:00:00Z");
+    await record(40, "2026-08-01");
+    setNow("2026-08-09T08:01:00Z");
+    await record(40, "2026-08-08");
+
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
+    setNow(null);
+
+    expect(res.body.bodyweightKg).toBe(40); // what the player typed is still shown
+    // One day's allowance since the last 80 kg receipt: about 79.8, not 40.
+    expect(res.body.xpBodyweightKg).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 1);
   });
 
   it("uses the 75 kg fallback when no bodyweight was ever entered", async () => {

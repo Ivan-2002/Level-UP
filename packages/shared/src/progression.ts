@@ -52,42 +52,51 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const clampXpBodyweight = (kg: number) => Math.min(BODYWEIGHT_XP.maxKg, Math.max(BODYWEIGHT_XP.minKg, kg));
 
-/** A bodyweight entry as XP sees it: `receivedAt` is when the server last wrote it. */
-export type XpBodyweightEntry = { kg: number; measuredOn: string; receivedAt: string };
+/**
+ * One bodyweight write the server received (bodyweight_receipt): append-only, so
+ * re-entering a date adds a receipt instead of replacing one. `receivedAt` is when.
+ */
+export type BodyweightReceipt = { kg: number; measuredOn: string; receivedAt: string };
 
 /**
- * The bodyweight set XP uses for a workout on `date`: the same entry bodyweightOnDate
- * picks (by measuredOn), but its value limited at the moment the server received it.
+ * The bodyweight set XP uses for a workout on `date`: the entry in effect that day (as
+ * bodyweightOnDate picks it, by measuredOn, from each date's LATEST receipt), but its value
+ * limited at the moment the server received it.
  *
- * Walking the entries in the order the server received them, each entry:
- * moves the value towards what was typed by at most 2% of the value per week since the
- * previous entry, in EITHER direction. The allowance builds up with time, not per entry:
- * 5 kg lost over two months and entered once passes in full; 80 -> 40 kg overnight moves
- * about 0.2 kg. Increases are limited too because, with the square-root scaling, a higher
- * bodyweight earns more on pure bodyweight exercises (a 75 kg player typing 200 kg would
- * get x 1.63 on pull-ups). Honest bulking (0.25-0.5% a week) is far inside the limit; a
- * too-low typo corrected upwards lags, which costs that player XP rather than giving any.
+ * Walking EVERY receipt in the order the server received them, each one moves the value
+ * towards what was typed by at most 2% of the value per week since the previous receipt,
+ * in EITHER direction. The allowance builds up with time, not per entry: 5 kg lost over
+ * two months and entered once passes in full; 80 -> 40 kg overnight moves about 0.2 kg.
+ * Increases are limited too because, with the square-root scaling, a higher bodyweight
+ * earns more on pure bodyweight exercises (a 75 kg player typing 200 kg would get x 1.63
+ * on pull-ups). Honest bulking (0.25-0.5% a week) is far inside the limit; a typo
+ * corrected later lags like any other change, which costs that player a little XP for
+ * a week or so rather than giving any.
  *
  * Why receive time, not measuredOn: the player chooses measuredOn, so a backdated entry
- * could otherwise claim months of allowance. Re-entering a date replaces that entry and
- * gives it a new receivedAt, so an edited entry moves to the end of the walk instead of
- * becoming an unchecked first entry. The first entry received is taken as typed:
- * there's nothing to check it against.
+ * could otherwise claim months of allowance. Why receipts, not entries: re-entering a
+ * date replaces its entry, so with entries alone, re-entering EVERY date erased the
+ * history and made the first edit an unchecked first entry. Receipts are never replaced,
+ * so only the very first receipt is taken as typed: there's nothing to check it against.
  */
-export function xpBodyweightOnDate(entries: XpBodyweightEntry[], date: string): number {
-  if (entries.length === 0) return BODYWEIGHT_FALLBACK_KG;
-  return limitedOnReceipt(entries).get(entryInEffect(entries, date))!;
+export function xpBodyweightOnDate(receipts: BodyweightReceipt[], date: string): number {
+  if (receipts.length === 0) return BODYWEIGHT_FALLBACK_KG;
+  const limited = limitedOnReceipt(receipts);
+  // Each date's latest receipt is that date's entry (Map keys keep the walk's order).
+  const latestPerDate = new Map<string, BodyweightReceipt>();
+  for (const receipt of limited.keys()) latestPerDate.set(receipt.measuredOn, receipt);
+  return limited.get(entryInEffect([...latestPerDate.values()], date))!;
 }
 
-/** Every entry's XP value at the moment it was received. */
-function limitedOnReceipt(entries: XpBodyweightEntry[]): Map<XpBodyweightEntry, number> {
-  const byReceipt = [...entries].sort((a, b) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt));
-  const limited = new Map<XpBodyweightEntry, number>();
+/** Every receipt's XP value at the moment it was received, in the order received. */
+function limitedOnReceipt(receipts: BodyweightReceipt[]): Map<BodyweightReceipt, number> {
+  const byReceipt = [...receipts].sort((a, b) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt));
+  const limited = new Map<BodyweightReceipt, number>();
   let value: number | null = null;
   let previousAt = 0;
-  for (const entry of byReceipt) {
-    const typed = clampXpBodyweight(entry.kg);
-    const at = Date.parse(entry.receivedAt);
+  for (const receipt of byReceipt) {
+    const typed = clampXpBodyweight(receipt.kg);
+    const at = Date.parse(receipt.receivedAt);
     if (value === null) {
       value = typed;
     } else {
@@ -95,7 +104,7 @@ function limitedOnReceipt(entries: XpBodyweightEntry[]): Map<XpBodyweightEntry, 
       value = typed >= value ? Math.min(typed, value + allowance) : Math.max(typed, value - allowance);
     }
     previousAt = at;
-    limited.set(entry, value);
+    limited.set(receipt, value);
   }
   return limited;
 }

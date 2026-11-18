@@ -10,7 +10,7 @@ import {
   type ScoredSet,
   type ScoringExercise,
   type SessionSet,
-  type XpBodyweightEntry,
+  type BodyweightEntry,
   XP_SOURCES_UNDER_DAILY_CAP,
 } from "@levelup/shared";
 import type { XpHeldBackReason } from "../../generated/prisma/client.js";
@@ -64,6 +64,7 @@ export type WorkoutScore = {
  */
 export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToScore): Promise<WorkoutScore> {
   const bodyweights = await usersService.bodyweightHistory(userId, db);
+  const receipts = await usersService.bodyweightReceipts(userId, db);
   const date = workout.startedAt.toISOString();
   const typed = bodyweightOnDate(bodyweights, date);
 
@@ -73,7 +74,7 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
     sets: workout.sets,
     exercises: workout.exercises,
     history,
-    bodyweight: { xp: xpBodyweightOnDate(bodyweights, date), typed },
+    bodyweight: { xp: xpBodyweightOnDate(receipts, date), typed },
   });
   const setXp = score.sets.map((s) => s.xp);
   const scored = setXp.reduce((a, b) => a + b, 0);
@@ -105,7 +106,7 @@ export async function xpHistories(
 
 /** Past sessions -> ExerciseXpHistory, valuing each session at the bodyweight in effect on its day. */
 function historiesFrom(
-  bodyweights: XpBodyweightEntry[],
+  bodyweights: BodyweightEntry[],
   pastSessions: Map<string, PastSession[]>,
   exercises: Map<string, ScoringExercise>,
   date: string,

@@ -7,7 +7,7 @@ import {
   type Profile,
   type RecordBodyweightInput,
   type UpdateProfileInput,
-  type XpBodyweightEntry,
+  type BodyweightReceipt,
 } from "@levelup/shared";
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
@@ -83,12 +83,22 @@ export async function recordBodyweight(userId: string, input: RecordBodyweightIn
   return { kg: row.kg.toNumber(), measuredOn: row.measuredOn.toISOString().slice(0, 10) };
 }
 
-/** Every bodyweight entry, oldest first (pass `db` to read inside a transaction). */
-/** The player's bodyweight history, with when the server received each entry (for xpBodyweightOnDate). */
-export async function bodyweightHistory(userId: string, db?: Db): Promise<XpBodyweightEntry[]> {
+/**
+ * Every bodyweight entry (the current weight per day), oldest first: for the REAL
+ * bodyweight (bodyweightOnDate). Pass `db` to read inside a transaction.
+ */
+export async function bodyweightHistory(userId: string, db?: Db): Promise<BodyweightEntry[]> {
   const rows = await repo.findBodyweightEntries(userId, db);
-  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: r.measuredOn.toISOString().slice(0, 10), receivedAt: r.receivedAt.toISOString() }));
+  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: isoDay(r.measuredOn) }));
 }
+
+/** Every bodyweight write ever received, in order: for the XP bodyweight (xpBodyweightOnDate). */
+export async function bodyweightReceipts(userId: string, db?: Db): Promise<BodyweightReceipt[]> {
+  const rows = await repo.findBodyweightReceipts(userId, db);
+  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: isoDay(r.measuredOn), receivedAt: r.receivedAt.toISOString() }));
+}
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Adds to the cached total XP; returns the new total. The ledger stays the source of truth. */
 export function addTotalXp(db: Db, userId: string, amount: number): Promise<number> {
@@ -104,7 +114,7 @@ const usernameTaken = () =>
 // stop: Postgres DECIMAL becomes a plain number, dates become ISO strings, and
 // internal columns (userId, updatedAt) are not exposed.
 async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
-  const bodyweights = await bodyweightHistory(row.userId);
+  const receipts = await bodyweightReceipts(row.userId);
   return {
     username: row.username,
     bodyweightKg: row.bodyweightKg === null ? null : row.bodyweightKg.toNumber(),
@@ -113,7 +123,7 @@ async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
     totalXp: row.totalXp,
     level: levelStatus(row.totalXp),
     // As of the player's local today, like a workout started now.
-    xpBodyweightKg: xpBodyweightOnDate(bodyweights, localDate(now(), row.timeZone)),
+    xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone)),
     createdAt: row.createdAt.toISOString(),
   };
 }

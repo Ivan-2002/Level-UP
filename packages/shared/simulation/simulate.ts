@@ -1,4 +1,4 @@
-import { bodyweightOnDate, xpBodyweightOnDate, type XpBodyweightEntry } from "../src/progression.js";
+import { bodyweightOnDate, xpBodyweightOnDate, type BodyweightReceipt } from "../src/progression.js";
 import { recentBest, scoreSessionSets, type ExerciseXpHistory, type SessionSet } from "../src/set-scoring.js";
 import { evaluateWeek, firstWeekKind, nextWeeklyTarget, type WeekKind } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
@@ -53,7 +53,7 @@ type SimState = {
   player: SimPlayer;
   capDay: (setXp: number[]) => DailyCapResult;
   levelXp: (level: number) => number;
-  bodyweights: XpBodyweightEntry[];
+  bodyweights: BodyweightReceipt[];
   reached: Record<SimLevel, LevelReached | null>;
   totals: Omit<SimResult, "player" | "reached" | "totalXp">;
   /** Each exercise's jump-cap baseline and its sessions' best values, as the server replays them. */

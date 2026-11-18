@@ -17,24 +17,25 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String               @id
-  name          String
-  email         String               @unique
-  emailVerified Boolean              @default(false)
-  image         String?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  profile       Profile?
-  workouts      Workout[]
-  exercises     Exercise[] // custom exercises this user created (later)
-  routines      Routine[]
-  bodyweights   BodyweightEntry[]
-  exercisePrefs ExercisePreference[]
-  xpEvents      XpEvent[]
-  weeklyGoals   WeeklyGoal[]
-  achievements  UserAchievement[]
+  id                 String               @id
+  name               String
+  email              String               @unique
+  emailVerified      Boolean              @default(false)
+  image              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  sessions           Session[]
+  accounts           Account[]
+  profile            Profile?
+  workouts           Workout[]
+  exercises          Exercise[] // custom exercises this user created (later)
+  routines           Routine[]
+  bodyweights        BodyweightEntry[]
+  bodyweightReceipts BodyweightReceipt[]
+  exercisePrefs      ExercisePreference[]
+  xpEvents           XpEvent[]
+  weeklyGoals        WeeklyGoal[]
+  achievements       UserAchievement[]
 
   @@map("user")
 }
@@ -132,6 +133,23 @@ model BodyweightEntry {
   @@map("bodyweight_entry")
 }
 
+// Every bodyweight write the server received, never updated or deleted: an append-only
+// log, like xp_event. bodyweight_entry above is the CURRENT weight per day (what the
+// player sees, and what PRs and volume use); this is what the XP bodyweight rule walks.
+// Re-entering a date replaces the entry but adds a receipt, so editing every entry can't
+// erase the history the 2% a week limit is measured against (docs/ARCHITECTURE.md).
+model BodyweightReceipt {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kg         Decimal  @db.Decimal(7, 3)
+  measuredOn DateTime @db.Date // the day the player said it was for
+  receivedAt DateTime @default(now()) // when the server received it: the walk's order and clock
+
+  @@index([userId, receivedAt])
+  @@map("bodyweight_receipt")
+}
+
 // ---------------------------------------------------------------------------
 // Exercise library: OWNED BY THE EXERCISES MODULE.
 // Built-in exercises come from src/modules/exercises/exercise-catalog.ts (pnpm db:seed).
@@ -177,33 +195,33 @@ enum RepsUnit {
 }
 
 model Exercise {
-  id               String               @id @default(uuid(7)) @db.Uuid
+  id                   String               @id @default(uuid(7)) @db.Uuid
   // Stable key for built-in exercises, so the seed can upsert ("barbell-back-squat").
   // Null for custom exercises; Postgres allows many NULLs in a unique column.
-  slug             String?              @unique
-  name             String
-  muscleGroup      String // finer than bodyPart, for display ("Lats", "Quadriceps")
-  bodyPart         BodyPart
-  equipment        Equipment
-  repsUnit         RepsUnit             @default(reps)
-  mechanic         Mechanic             @default(isolation)
-  suggestedRestSec Int                  @default(90) // rest priority: preference > routine > this > 120 s
+  slug                 String?              @unique
+  name                 String
+  muscleGroup          String // finer than bodyPart, for display ("Lats", "Quadriceps")
+  bodyPart             BodyPart
+  equipment            Equipment
+  repsUnit             RepsUnit             @default(reps)
+  mechanic             Mechanic             @default(isolation)
+  suggestedRestSec     Int                  @default(90) // rest priority: preference > routine > this > 120 s
   // XP tuning (Milestone 5): effective load = (weight + bodyweight x bodyweightRatio) x loadFactor
-  loadFactor       Decimal              @db.Decimal(4, 2)
-  bodyweightRatio  Decimal              @default(0) @db.Decimal(3, 2)
+  loadFactor           Decimal              @db.Decimal(4, 2)
+  bodyweightRatio      Decimal              @default(0) @db.Decimal(3, 2)
   // Plausibility limits (Milestone 5): a set above either is flagged (0 XP, not a PR). Null =
   // the default for the exercise's equipment x mechanic (packages/shared, xp-limits.ts).
   // Logged weight: per dumbbell, or ADDED weight for bodyweight exercises.
-  maxPlausibleWeightKg Decimal?        @db.Decimal(7, 3)
+  maxPlausibleWeightKg Decimal?             @db.Decimal(7, 3)
   maxPlausibleReps     Int?
-  isCustom         Boolean              @default(false)
-  ownerId          String? // set only for custom exercises (later)
-  owner            User?                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  usedIn           WorkoutExercise[]
-  inRoutines       RoutineExercise[]
-  preferences      ExercisePreference[]
+  isCustom             Boolean              @default(false)
+  ownerId              String? // set only for custom exercises (later)
+  owner                User?                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  usedIn               WorkoutExercise[]
+  inRoutines           RoutineExercise[]
+  preferences          ExercisePreference[]
 
   @@index([ownerId])
   @@map("exercise")

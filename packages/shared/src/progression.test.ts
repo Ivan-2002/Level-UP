@@ -319,18 +319,24 @@ describe("xpBodyweightOnDate: a low bodyweight can't be typed in quickly", () =>
     expect(xpBodyweightOnDate(entries, dayIso(60))).toBe(80);
   });
 
-  it("treats a same-day re-entry as if it had been typed right the first time", () => {
-    // 80 kg on day 0; on day 14, 78 kg, then corrected to 76 kg a few minutes later. The
-    // correction replaces the day-14 entry (one entry per date), with a new receivedAt.
-    const corrected = { ...entry(76, 14), receivedAt: new Date(START + 14 * DAY + 5 * 60 * 1000).toISOString() };
-    const typedRightFirstTime = entry(76, 14);
-    expect(xpBodyweightOnDate([entry(80, 0), corrected], dayIso(15))).toBeCloseTo(
-      xpBodyweightOnDate([entry(80, 0), typedRightFirstTime], dayIso(15)),
-      1,
-    );
-    // Two weeks allow 80 x 0.02 x 2 = 3.2 kg, so 76 kg lands at 76.8 for now (plus the
-    // 5 minutes' worth), and catches up over the next week.
-    expect(xpBodyweightOnDate([entry(80, 0), corrected], dayIso(15))).toBeCloseTo(76.8, 2);
+  it("counts a same-day correction as a change: it catches up within the allowance", () => {
+    // 80 kg on day 0; on day 14, 78 kg, then corrected to 76 kg five minutes later. Both
+    // writes are receipts: the 78 used the two weeks' allowance, the 76 has five minutes'.
+    const corrected = [entry(80, 0), entry(78, 14), { ...entry(76, 14), receivedAt: new Date(START + 14 * DAY + 5 * 60 * 1000).toISOString() }];
+    expect(xpBodyweightOnDate(corrected, dayIso(15))).toBeCloseTo(78, 2);
+    // A week later the next entry catches up in full (78 x 0.02 = 1.56 kg allowed, 2 needed: 76.44).
+    expect(xpBodyweightOnDate([...corrected, entry(76, 21)], dayIso(22))).toBeCloseTo(78 - 78 * BODYWEIGHT_XP.maxChangePerWeek, 2);
+  });
+
+  it("can't be reset by re-entering every date: the original receipts stay in the walk", () => {
+    // 80 kg on days 0 and 7; on day 8, both dates are re-entered as 40 kg.
+    const original = [entry(80, 0), entry(80, 7)];
+    const reEntered = [entry(40, 0, 8), { ...entry(40, 7), receivedAt: new Date(START + 8 * DAY + 60 * 1000).toISOString() }];
+    // With only the current entry per date (the old rule's input), the first edit was an
+    // unchecked first entry, and 40 kg went through:
+    expect(xpBodyweightOnDate(reEntered, dayIso(8))).toBe(40);
+    // With every receipt, 80 -> 40 kg moves only one day's allowance:
+    expect(xpBodyweightOnDate([...original, ...reEntered], dayIso(8))).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 2);
   });
 
   it("doesn't let an edited first entry become unchecked: the edit moves to the end of the walk", () => {
