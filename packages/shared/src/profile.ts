@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { LevelStatus } from "./levels.js";
-import { weightUnitSchema, type WeightUnit } from "./units.js";
+import { levelStatusSchema } from "./levels.js";
+import { weightUnitSchema } from "./units.js";
 import { timeZoneSchema } from "./weekly-goal.js";
 
 // ---------------------------------------------------------------------------
@@ -60,22 +60,23 @@ export type BodyweightEntry = { kg: number; measuredOn: string /* YYYY-MM-DD */ 
 /** Body of POST /profile. */
 export type CreateProfileInput = z.infer<typeof createProfileSchema>;
 
-/** Response of GET /profile and POST /profile. */
-export type Profile = {
-  username: string;
-  bodyweightKg: number | null;
-  weightUnit: WeightUnit;
-  timeZone: string;
-  totalXp: number;
+/** Response of GET /profile and POST /profile. A schema (not only a type) so the app can check a copy saved on the phone. */
+export const profileSchema = z.object({
+  username: z.string(),
+  bodyweightKg: z.number().nullable(),
+  weightUnit: weightUnitSchema,
+  timeZone: z.string(),
+  totalXp: z.number().int(),
   /** The XP bar: worked out by the server, which owns the level curve (Milestone 5). */
-  level: LevelStatus;
+  level: levelStatusSchema,
   /**
    * The bodyweight XP uses today (xpBodyweightOnDate: limited at 2% a week, 40-200 kg), for
    * the app's offline XP preview. bodyweightKg above is what the player typed.
    */
-  xpBodyweightKg: number;
-  createdAt: string; // ISO 8601
-};
+  xpBodyweightKg: z.number(),
+  createdAt: z.string(), // ISO 8601
+});
+export type Profile = z.infer<typeof profileSchema>;
 
 // ---------------------------------------------------------------------------
 // Error responses
