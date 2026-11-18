@@ -35,8 +35,11 @@ console.log(`Balance simulation, ${WEEKS} weeks (the returning player: ${WEEKS +
 console.log(`| ${header.join(" | ")} |`);
 console.log(`|${header.map(() => " --- ").join("|")}|`);
 for (const row of rows) console.log(`| ${row} |`);
+const levels = SIM_LEVELS.map((l) => [l, xpForLevel(l).toLocaleString("en-US")].join(" = ")).join(", ");
+const streaks = WEEKLY_GOAL.streakMilestones.map((m) => `${m.weeks} wk +` + m.xp).join(", ");
+const ceiling = (DAILY_XP_CAP.limit * DAILY_XP_CAP.ceilingMultiple).toLocaleString("en-US");
 console.log(
-  `\nLevels: ${SIM_LEVELS.map((l) => `${l} = ${xpForLevel(l).toLocaleString("en-US")}`).join(", ")} XP. ` +
-    `Weekly goal +${WEEKLY_GOAL.weeklyBonusXp}; streaks ${WEEKLY_GOAL.streakMilestones.map((m) => `${m.weeks} wk +${m.xp}`).join(", ")}. ` +
-    `Daily cap ${DAILY_XP_CAP.limit.toLocaleString("en-US")}, ${DAILY_XP_CAP.bandRate * 100}% beyond, ceiling ${(DAILY_XP_CAP.limit * DAILY_XP_CAP.ceilingMultiple).toLocaleString("en-US")}.`,
+  `\nLevels: ${levels} XP. ` +
+    `Weekly goal +${WEEKLY_GOAL.weeklyBonusXp}; streaks ${streaks}. ` +
+    `Daily cap ${DAILY_XP_CAP.limit.toLocaleString("en-US")}, ${DAILY_XP_CAP.bandRate * 100}% beyond, ceiling ${ceiling}.`,
 );

@@ -123,8 +123,15 @@ export function countTrainingDays(workouts: WorkoutForGoal[], timeZone: string, 
 /** Next week's target, from a finished week: up only if beaten, unchanged if met exactly, down if missed. */
 export function nextWeeklyTarget(week: { kind: WeekKind; target: number; daysTrained: number }): number {
   if (pausesGoal(week.kind)) return week.target;
-  const next = week.daysTrained > week.target ? week.target + 1 : week.daysTrained === week.target ? week.target : week.target - 1;
+  const next = week.target + targetStep(week.daysTrained, week.target);
   return Math.min(WEEKLY_GOAL.maxTarget, Math.max(WEEKLY_GOAL.minTarget, next));
+}
+
+/** +1 if the target was beaten, 0 if met exactly, -1 if missed. */
+function targetStep(daysTrained: number, target: number): number {
+  if (daysTrained > target) return 1;
+  if (daysTrained === target) return 0;
+  return -1;
 }
 
 /** The streak after a finished goal week. */

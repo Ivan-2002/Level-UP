@@ -64,6 +64,8 @@ export async function syncWeeklyGoal(
   let streakBefore = (await repo.findWeek(userId, addDays(week.weekStart, -7), db))?.streakAfter ?? 0;
 
   // Close every week that has ended, oldest first, opening the next one each time.
+  // One at a time, awaited in the loop on purpose: each week's target and streak come
+  // from the week before it, so the weeks can't be closed in parallel.
   while (week.weekStart < currentWeek) {
     // A week already closed keeps its result: closing is final.
     const closed = week.closedAt ? week : await settleWeek(db, userId, week, streakBefore, timeZone, options, true);

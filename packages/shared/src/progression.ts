@@ -30,7 +30,7 @@ export function bodyweightOnDate(entries: { kg: number; measuredOn: string }[], 
 function entryInEffect<E extends { measuredOn: string }>(entries: E[], date: string): E {
   const day = date.slice(0, 10);
   const sorted = [...entries].sort((a, b) => a.measuredOn.localeCompare(b.measuredOn));
-  return sorted.filter((e) => e.measuredOn <= day).at(-1) ?? sorted[0]!;
+  return sorted.findLast((e) => e.measuredOn <= day) ?? sorted[0]!;
 }
 
 // --- XP bodyweight ------------------------------------------------------------------

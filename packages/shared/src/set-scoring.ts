@@ -8,7 +8,9 @@ import {
   jumpCheckValue,
   plausibilityFlag,
   plausibilityLimits,
+  type JumpJudgement,
   type PlausibilityExercise,
+  type PlausibilityLimits,
 } from "./xp-limits.js";
 
 // ---------------------------------------------------------------------------
@@ -97,15 +99,9 @@ export function scoreSessionSets(input: {
     const exercise = input.exercises.get(exerciseId);
     if (!exercise) throw new Error(`Exercise ${exerciseId} missing from scoring input`);
     const history = input.history.get(exerciseId) ?? { recentBest: null, jumpBaseline: null };
-    const limits = plausibilityLimits(exercise);
 
     // 1. Plausibility.
-    const valid: number[] = [];
-    for (const i of indexes) {
-      const reason = plausibilityFlag(input.sets[i]!, limits);
-      if (reason) scored[i] = { xp: 0, effort: 1, tag: "check_set", flagReason: reason, isFlagged: true };
-      else valid.push(i);
-    }
+    const valid = flagImplausibleSets(input.sets, indexes, plausibilityLimits(exercise), scored);
     if (valid.length === 0) {
       summary.set(exerciseId, { jumpBaselineAfter: history.jumpBaseline, sessionBest: null });
       continue;
@@ -119,38 +115,69 @@ export function scoreSessionSets(input: {
     summary.set(exerciseId, { jumpBaselineAfter: judged.baselineAfter, sessionBest });
 
     // 3-6. Effort, tags, the 10-set limit and the XP.
-    const timed = exercise.repsUnit === "seconds";
     const reference = Math.max(sessionBest, history.recentBest ?? 0);
-    const heaviest = Math.max(...valid.map((i) => input.sets[i]!.weightKg));
-    const firstHeaviest = valid.find((i) => input.sets[i]!.weightKg === heaviest)!;
-    let counted = 0;
-
-    valid.forEach((i, n) => {
-      const set = input.sets[i]!;
-      const effort = timed ? 1 : setEffort(set.reps, lifted[n]!, reference);
-      const warmUp = !timed && effort < LOW_EFFORT && i < firstHeaviest;
-      const aboveHistory = judged.aboveHistory[n]!;
-      const flagReason = aboveHistory ? "above_history" : null;
-
-      if (!warmUp && ++counted > MAX_XP_SETS_PER_EXERCISE) {
-        scored[i] = { xp: 0, effort, tag: "beyond_set_limit", flagReason, isFlagged: false };
-        return;
-      }
-      const tag: SetTag | null = aboveHistory
-        ? "above_history"
-        : warmUp
-          ? "warm_up"
-          : !timed && effort < LOW_EFFORT
-            ? "easy_set"
-            : timed && set.reps > SET_XP.timedMaxSec
-              ? "timed_limit"
-              : null;
-      const xp = jumpCappedXp(setXp(set, input.bodyweight.xp, exercise, effort), judged.factors[n]!);
-      scored[i] = { xp, effort, tag, flagReason, isFlagged: false };
-    });
+    scoreValidSets({ sets: input.sets, valid, lifted, judged, reference, exercise, bodyweightXp: input.bodyweight.xp }, scored);
   }
 
   return { sets: scored, exercises: summary };
+}
+
+/** Step 1: flags each implausible set in `scored` (0 XP, "Check this set") and returns the indexes of the rest. */
+function flagImplausibleSets(sets: SessionSet[], indexes: number[], limits: PlausibilityLimits, scored: ScoredSet[]): number[] {
+  const valid: number[] = [];
+  for (const i of indexes) {
+    const reason = plausibilityFlag(sets[i]!, limits);
+    if (reason) scored[i] = { xp: 0, effort: 1, tag: "check_set", flagReason: reason, isFlagged: true };
+    else valid.push(i);
+  }
+  return valid;
+}
+
+/** Steps 3-6 for one exercise's valid sets: effort, tag, the 10-set limit and the XP, written into `scored`. */
+function scoreValidSets(
+  input: {
+    sets: SessionSet[];
+    /** Indexes into `sets`, in the order completed; `lifted` and `judged` follow the same order. */
+    valid: number[];
+    lifted: number[];
+    judged: JumpJudgement;
+    /** The value effort is measured against: the higher of the 12-week best and this session's best. */
+    reference: number;
+    exercise: ScoringExercise;
+    bodyweightXp: number;
+  },
+  scored: ScoredSet[],
+): void {
+  const { sets, valid, lifted, judged, exercise } = input;
+  const timed = exercise.repsUnit === "seconds";
+  const heaviest = Math.max(...valid.map((i) => sets[i]!.weightKg));
+  const firstHeaviest = valid.find((i) => sets[i]!.weightKg === heaviest)!;
+  let counted = 0;
+
+  valid.forEach((i, n) => {
+    const set = sets[i]!;
+    const effort = timed ? 1 : setEffort(set.reps, lifted[n]!, input.reference);
+    const warmUp = !timed && effort < LOW_EFFORT && i < firstHeaviest;
+    const aboveHistory = judged.aboveHistory[n]!;
+    const flagReason = aboveHistory ? "above_history" : null;
+
+    if (!warmUp && ++counted > MAX_XP_SETS_PER_EXERCISE) {
+      scored[i] = { xp: 0, effort, tag: "beyond_set_limit", flagReason, isFlagged: false };
+      return;
+    }
+    const tag = tagFor({ reps: set.reps, effort, timed, warmUp, aboveHistory });
+    const xp = jumpCappedXp(setXp(set, input.bodyweightXp, exercise, effort), judged.factors[n]!);
+    scored[i] = { xp, effort, tag, flagReason, isFlagged: false };
+  });
+}
+
+/** The tag of a set that earns XP (step 4), in order of priority. */
+function tagFor(set: { reps: number; effort: number; timed: boolean; warmUp: boolean; aboveHistory: boolean }): SetTag | null {
+  if (set.aboveHistory) return "above_history";
+  if (set.warmUp) return "warm_up";
+  if (!set.timed && set.effort < LOW_EFFORT) return "easy_set";
+  if (set.timed && set.reps > SET_XP.timedMaxSec) return "timed_limit";
+  return null;
 }
 
 /** Set indexes per exercise, in the order the exercise first appears. */
