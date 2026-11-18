@@ -213,7 +213,9 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
 
   it("sends the XP bodyweight: an overnight drop barely moves it, while bodyweightKg shows what was typed", async () => {
     const user = await signUpUser();
+    setNow(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // signed up a month ago: past the grace week
     await createProfile(user, { username: "Dropper", timeZone: "UTC" });
+    setNow(null);
     const day = (daysAgo: number) => localDate(new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000), "UTC");
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 80, measuredOn: day(3) });
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 40, measuredOn: day(0) });
@@ -228,6 +230,7 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
     // The old hole: re-entering EVERY entry's date replaced every entry, so the first edit
     // became an unchecked "first entry". Receipts keep the original writes in the walk.
     const user = await signUpUser();
+    setNow("2026-07-01T08:00:00Z"); // signed up well before, so the grace week is long over
     await createProfile(user, { username: "Resetter", timeZone: "UTC" });
     const record = (kg: number, measuredOn: string) =>
       request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg, measuredOn });
@@ -247,6 +250,21 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
     expect(res.body.bodyweightKg).toBe(40); // what the player typed is still shown
     // One day's allowance since the last 80 kg receipt: about 79.8, not 40.
     expect(res.body.xpBodyweightKg).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 1);
+  });
+
+  it("lets a new player correct a mistyped first weight in the first week: 120 -> 80 kg on day 2", async () => {
+    const user = await signUpUser();
+    const signUp = Date.parse("2026-09-01T08:00:00Z");
+    setNow(new Date(signUp));
+    await createProfile(user, { username: "Typo", bodyweightKg: 120, timeZone: "UTC" });
+    setNow(new Date(signUp + 2 * 24 * 60 * 60 * 1000));
+    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 80, measuredOn: "2026-09-03" });
+
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
+    setNow(null);
+
+    expect(res.body.bodyweightKg).toBe(80);
+    expect(res.body.xpBodyweightKg).toBe(80);
   });
 
   it("uses the 75 kg fallback when no bodyweight was ever entered", async () => {

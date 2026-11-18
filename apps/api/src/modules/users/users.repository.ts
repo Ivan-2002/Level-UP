@@ -116,6 +116,12 @@ export async function lockGoalContext(db: Db, userId: string): Promise<{ timeZon
   return rows[0] ?? null;
 }
 
+/** When the player created their character: the start of the bodyweight grace week. */
+export async function findProfileCreatedAt(userId: string, db: Db = prisma): Promise<Date | null> {
+  const row = await db.profile.findUnique({ where: { userId }, select: { createdAt: true } });
+  return row?.createdAt ?? null;
+}
+
 export async function findTimeZone(userId: string): Promise<string | null> {
   const row = await prisma.profile.findUnique({ where: { userId }, select: { timeZone: true } });
   return row?.timeZone ?? null;
@@ -136,7 +142,7 @@ async function withLatestBodyweight(row: ProfileRow): Promise<ProfileRecord> {
   return { ...row, bodyweightKg: latest?.kg ?? null };
 }
 
-/** Today's calendar date in UTC, as Postgres DATE columns want it (midnight, no time). */
+/** Today's calendar date in UTC (by the clock, now()), as Postgres DATE columns want it (midnight, no time). */
 export function todayUtc(): Date {
-  return new Date(new Date().toISOString().slice(0, 10));
+  return new Date(now().toISOString().slice(0, 10));
 }

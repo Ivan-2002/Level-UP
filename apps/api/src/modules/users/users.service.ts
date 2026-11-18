@@ -92,8 +92,17 @@ export async function bodyweightHistory(userId: string, db?: Db): Promise<Bodywe
   return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: isoDay(r.measuredOn) }));
 }
 
-/** Every bodyweight write ever received, in order: for the XP bodyweight (xpBodyweightOnDate). */
-export async function bodyweightReceipts(userId: string, db?: Db): Promise<BodyweightReceipt[]> {
+/**
+ * What the XP bodyweight (xpBodyweightOnDate) needs: every bodyweight write ever received,
+ * in order, and when the player created their character (the start of the grace week).
+ */
+export async function xpBodyweightInput(userId: string, db?: Db): Promise<{ receipts: BodyweightReceipt[]; signedUpAt?: string }> {
+  const receipts = await bodyweightReceipts(userId, db);
+  const createdAt = await repo.findProfileCreatedAt(userId, db);
+  return createdAt ? { receipts, signedUpAt: createdAt.toISOString() } : { receipts };
+}
+
+async function bodyweightReceipts(userId: string, db?: Db): Promise<BodyweightReceipt[]> {
   const rows = await repo.findBodyweightReceipts(userId, db);
   return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: isoDay(r.measuredOn), receivedAt: r.receivedAt.toISOString() }));
 }
@@ -114,7 +123,7 @@ const usernameTaken = () =>
 // stop: Postgres DECIMAL becomes a plain number, dates become ISO strings, and
 // internal columns (userId, updatedAt) are not exposed.
 async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
-  const receipts = await bodyweightReceipts(row.userId);
+  const receipts = await bodyweightReceipts(row.userId); // the sign-up time is on the row
   return {
     username: row.username,
     bodyweightKg: row.bodyweightKg === null ? null : row.bodyweightKg.toNumber(),
@@ -123,7 +132,7 @@ async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
     totalXp: row.totalXp,
     level: levelStatus(row.totalXp),
     // As of the player's local today, like a workout started now.
-    xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone)),
+    xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone), { signedUpAt: row.createdAt.toISOString() }),
     createdAt: row.createdAt.toISOString(),
   };
 }

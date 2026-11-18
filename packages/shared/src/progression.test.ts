@@ -339,6 +339,22 @@ describe("xpBodyweightOnDate: a low bodyweight can't be typed in quickly", () =>
     expect(xpBodyweightOnDate([...original, ...reEntered], dayIso(8))).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 2);
   });
 
+  it("takes every receipt in the first week after sign-up as typed: a mistyped first weight is corrected at once", () => {
+    const signedUpAt = dayIso(0);
+    // Signed up at 120 kg (meant 80); corrected on day 2.
+    const receipts = [entry(120, 0), entry(80, 2)];
+    expect(xpBodyweightOnDate(receipts, dayIso(3), { signedUpAt })).toBe(80);
+    // Without the grace week the correction would move one 2-day allowance: about 119.3.
+    expect(xpBodyweightOnDate(receipts, dayIso(3))).toBeCloseTo(120 - 120 * BODYWEIGHT_XP.maxChangePerWeek * (2 / 7), 6);
+  });
+
+  it("checks receipts again from day 7: the limit starts at the latest receipt of the grace week", () => {
+    const signedUpAt = dayIso(0);
+    const receipts = [entry(120, 0), entry(80, 6), entry(40, 8)];
+    // Day 8 is past the grace week: 80 -> 40 moves two days' allowance from the day-6 receipt.
+    expect(xpBodyweightOnDate(receipts, dayIso(9), { signedUpAt })).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek * (2 / 7), 6);
+  });
+
   it("doesn't let an edited first entry become unchecked: the edit moves to the end of the walk", () => {
     // Sign-up 80 kg (day 0), 80 kg again on day 28; on day 70 the sign-up entry is edited to 40.
     const edited = { ...entry(40, 0), receivedAt: dayIso(70) };

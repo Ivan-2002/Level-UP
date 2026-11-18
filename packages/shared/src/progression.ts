@@ -46,9 +46,16 @@ export const BODYWEIGHT_XP = {
   maxKg: 200,
   /** An entry can move the XP bodyweight (either way) by at most this share of it per week since the previous entry. */
   maxChangePerWeek: 0.02,
+  /**
+   * Receipts in this many days after sign-up are all taken as typed, like a first entry,
+   * so a new player can correct a mistyped first weight (120 instead of 80) at once
+   * instead of over ~20 weeks. It allows nothing a first entry didn't already allow.
+   */
+  graceDays: 7,
 } as const;
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 
 export const clampXpBodyweight = (kg: number) => Math.min(BODYWEIGHT_XP.maxKg, Math.max(BODYWEIGHT_XP.minKg, kg));
 
@@ -77,19 +84,24 @@ export type BodyweightReceipt = { kg: number; measuredOn: string; receivedAt: st
  * could otherwise claim months of allowance. Why receipts, not entries: re-entering a
  * date replaces its entry, so with entries alone, re-entering EVERY date erased the
  * history and made the first edit an unchecked first entry. Receipts are never replaced,
- * so only the very first receipt is taken as typed: there's nothing to check it against.
+ * so only the first receipt is taken as typed: there's nothing to check it against.
+ *
+ * The first week (`signedUpAt`, BODYWEIGHT_XP.graceDays): every receipt received in it is
+ * taken as typed too, so the latest one that week is where the limit starts. Without
+ * `signedUpAt` there's no grace week (stricter, never looser).
  */
-export function xpBodyweightOnDate(receipts: BodyweightReceipt[], date: string): number {
+export function xpBodyweightOnDate(receipts: BodyweightReceipt[], date: string, options: { signedUpAt?: string } = {}): number {
   if (receipts.length === 0) return BODYWEIGHT_FALLBACK_KG;
-  const limited = limitedOnReceipt(receipts);
+  const graceEnds = options.signedUpAt === undefined ? -Infinity : Date.parse(options.signedUpAt) + BODYWEIGHT_XP.graceDays * DAY_MS;
+  const limited = limitedOnReceipt(receipts, graceEnds);
   // Each date's latest receipt is that date's entry (Map keys keep the walk's order).
   const latestPerDate = new Map<string, BodyweightReceipt>();
   for (const receipt of limited.keys()) latestPerDate.set(receipt.measuredOn, receipt);
   return limited.get(entryInEffect([...latestPerDate.values()], date))!;
 }
 
-/** Every receipt's XP value at the moment it was received, in the order received. */
-function limitedOnReceipt(receipts: BodyweightReceipt[]): Map<BodyweightReceipt, number> {
+/** Every receipt's XP value at the moment it was received, in the order received. Receipts before `graceEnds` (ms) are taken as typed. */
+function limitedOnReceipt(receipts: BodyweightReceipt[], graceEnds: number): Map<BodyweightReceipt, number> {
   const byReceipt = [...receipts].sort((a, b) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt));
   const limited = new Map<BodyweightReceipt, number>();
   let value: number | null = null;
@@ -97,7 +109,7 @@ function limitedOnReceipt(receipts: BodyweightReceipt[]): Map<BodyweightReceipt,
   for (const receipt of byReceipt) {
     const typed = clampXpBodyweight(receipt.kg);
     const at = Date.parse(receipt.receivedAt);
-    if (value === null) {
+    if (value === null || at < graceEnds) {
       value = typed;
     } else {
       const allowance: number = value * BODYWEIGHT_XP.maxChangePerWeek * (Math.max(0, at - previousAt) / WEEK_MS);

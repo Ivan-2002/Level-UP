@@ -122,7 +122,7 @@ function playSession(state: SimState, week: number, day: number, strength: numbe
   const startedAt = atDay(day, 18).toISOString();
   const session = player.sessions[totals.sessions % player.sessions.length]!;
 
-  const bodyweight = { xp: xpBodyweightOnDate(state.bodyweights, startedAt), typed: bodyweightOnDate(state.bodyweights, startedAt) };
+  const bodyweight = { xp: xpBodyweightOnDate(state.bodyweights, startedAt, { signedUpAt: SIGN_UP.toISOString() }), typed: bodyweightOnDate(state.bodyweights, startedAt) };
   const { setXps, flagged, jumpCapped, beyondLimit } = scoreSession(session, strength, bodyweight, { baselines: state.baselines, histories: state.histories, today: startedAt });
   const dayXp = setXps.reduce((a, b) => a + b, 0);
   totals.days.push({ day, xp: dayXp });

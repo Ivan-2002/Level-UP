@@ -64,7 +64,7 @@ export type WorkoutScore = {
  */
 export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToScore): Promise<WorkoutScore> {
   const bodyweights = await usersService.bodyweightHistory(userId, db);
-  const receipts = await usersService.bodyweightReceipts(userId, db);
+  const { receipts, signedUpAt } = await usersService.xpBodyweightInput(userId, db);
   const date = workout.startedAt.toISOString();
   const typed = bodyweightOnDate(bodyweights, date);
 
@@ -74,7 +74,7 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
     sets: workout.sets,
     exercises: workout.exercises,
     history,
-    bodyweight: { xp: xpBodyweightOnDate(receipts, date), typed },
+    bodyweight: { xp: xpBodyweightOnDate(receipts, date, { signedUpAt }), typed },
   });
   const setXp = score.sets.map((s) => s.xp);
   const scored = setXp.reduce((a, b) => a + b, 0);
