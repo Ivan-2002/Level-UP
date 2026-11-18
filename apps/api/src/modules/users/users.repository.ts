@@ -51,12 +51,11 @@ export function findProfileByUsername(username: string): Promise<ProfileRow | nu
 export async function insertProfile(data: NewProfile): Promise<ProfileRecord | "duplicate"> {
   const { bodyweightKg, ...profile } = data;
   try {
-    const [row] = await prisma.$transaction([
-      prisma.profile.create({ data: profile }),
-      ...(bodyweightKg === undefined
-        ? []
-        : [prisma.bodyweightEntry.create({ data: { userId: data.userId, kg: bodyweightKg, measuredOn: todayUtc(), receivedAt: now() } })]),
-    ]);
+    const row = await prisma.$transaction(async (tx) => {
+      const created = await tx.profile.create({ data: profile });
+      if (bodyweightKg !== undefined) await writeBodyweight(tx, { userId: data.userId, kg: bodyweightKg, measuredOn: todayUtc(), receivedAt: now() });
+      return created;
+    });
     return withLatestBodyweight(row);
   } catch (err) {
     // P2002 = Prisma's code for "unique constraint failed".
@@ -68,16 +67,33 @@ export async function insertProfile(data: NewProfile): Promise<ProfileRecord | "
 }
 
 /**
- * One entry per day: recording a date's weight again replaces it. Every write stamps
- * receivedAt with the server's time, the update too: the XP bodyweight rule then treats a
- * re-entered date as just received, so editing an old entry can't dodge the 2% a week limit.
+ * One entry per day: recording a date's weight again replaces it. Every write ALSO adds a
+ * receipt (bodyweight_receipt, append-only), in the same transaction: the XP bodyweight
+ * rule walks the receipts, so re-entering a date (even every date) adds to the history the
+ * 2% a week limit is measured against instead of erasing it.
  */
 export function upsertBodyweight(userId: string, kg: number, measuredOn: Date) {
-  const receivedAt = now();
-  return prisma.bodyweightEntry.upsert({
+  return prisma.$transaction((tx) => writeBodyweight(tx, { userId, kg, measuredOn, receivedAt: now() }));
+}
+
+/** The two writes behind every bodyweight a player records: the day's entry and its receipt. */
+async function writeBodyweight(db: Db, data: { userId: string; kg: number; measuredOn: Date; receivedAt: Date }) {
+  const { userId, measuredOn } = data;
+  const entry = await db.bodyweightEntry.upsert({
     where: { userId_measuredOn: { userId, measuredOn } },
-    create: { userId, kg, measuredOn, receivedAt },
-    update: { kg, receivedAt },
+    create: data,
+    update: { kg: data.kg, receivedAt: data.receivedAt },
+  });
+  await db.bodyweightReceipt.create({ data });
+  return entry;
+}
+
+/** Every bodyweight receipt, in the order the server received them. */
+export function findBodyweightReceipts(userId: string, db: Db = prisma) {
+  return db.bodyweightReceipt.findMany({
+    where: { userId },
+    orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
+    select: { kg: true, measuredOn: true, receivedAt: true },
   });
 }
 
@@ -100,6 +116,12 @@ export async function lockGoalContext(db: Db, userId: string): Promise<{ timeZon
   return rows[0] ?? null;
 }
 
+/** When the player created their character: the start of the bodyweight grace week. */
+export async function findProfileCreatedAt(userId: string, db: Db = prisma): Promise<Date | null> {
+  const row = await db.profile.findUnique({ where: { userId }, select: { createdAt: true } });
+  return row?.createdAt ?? null;
+}
+
 export async function findTimeZone(userId: string): Promise<string | null> {
   const row = await prisma.profile.findUnique({ where: { userId }, select: { timeZone: true } });
   return row?.timeZone ?? null;
@@ -120,7 +142,7 @@ async function withLatestBodyweight(row: ProfileRow): Promise<ProfileRecord> {
   return { ...row, bodyweightKg: latest?.kg ?? null };
 }
 
-/** Today's calendar date in UTC, as Postgres DATE columns want it (midnight, no time). */
+/** Today's calendar date in UTC (by the clock, now()), as Postgres DATE columns want it (midnight, no time). */
 export function todayUtc(): Date {
-  return new Date(new Date().toISOString().slice(0, 10));
+  return new Date(now().toISOString().slice(0, 10));
 }

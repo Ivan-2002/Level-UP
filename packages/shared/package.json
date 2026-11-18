@@ -11,7 +11,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "sim": "tsx simulation/run.ts"
+    "sim": "tsx simulation/run.ts",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "tsx": "^4.23.15",

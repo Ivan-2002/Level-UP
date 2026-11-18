@@ -45,6 +45,7 @@ export default function Home() {
             <WeeklyGoalCard userId={userId} />
             <StartOrResumeWorkout userId={userId} />
             <SyncStatus userId={userId} />
+            <Button label="Log bodyweight" variant="secondary" icon="bodyweight" onPress={() => router.push("/log-bodyweight")} />
           </>
         ) : null}
 

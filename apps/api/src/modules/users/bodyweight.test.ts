@@ -47,6 +47,26 @@ describe("POST /bodyweight", () => {
     setNow(null);
   });
 
+  it("keeps every write as a receipt: re-entering a date replaces the entry but adds a receipt", async () => {
+    // The XP bodyweight rule walks the receipts, so edits can't erase its history.
+    const user = await signUpUser();
+    const record = (kg: number) =>
+      request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg, measuredOn: "2026-11-01" });
+
+    setNow("2026-11-02T08:00:00Z");
+    await record(80);
+    setNow("2026-11-03T08:00:00Z");
+    await record(70);
+    setNow(null);
+
+    const receipts = await prisma.bodyweightReceipt.findMany({ where: { userId: user.userId }, orderBy: { receivedAt: "asc" } });
+    expect(receipts.map((r) => [r.kg.toNumber(), r.measuredOn.toISOString().slice(0, 10), r.receivedAt.toISOString()])).toEqual([
+      [80, "2026-11-01", "2026-11-02T08:00:00.000Z"],
+      [70, "2026-11-01", "2026-11-03T08:00:00.000Z"],
+    ]);
+    expect(await prisma.bodyweightEntry.count({ where: { userId: user.userId } })).toBe(1);
+  });
+
   it("allows tomorrow (already today east of UTC) but not later", async () => {
     const user = await signUpUser();
     const record = (measuredOn: string) =>

@@ -77,6 +77,7 @@ export default function AppLayout() {
         <Stack.Screen name="add-exercise" options={{ presentation: "modal" }} />
         <Stack.Screen name="create-exercise" options={{ presentation: "modal" }} />
         <Stack.Screen name="finish-workout" options={{ presentation: "modal" }} />
+        <Stack.Screen name="log-bodyweight" options={{ presentation: "modal" }} />
         <Stack.Screen name="ui-preview" />
       </Stack.Protected>
       <Stack.Protected guard={!hasProfile}>

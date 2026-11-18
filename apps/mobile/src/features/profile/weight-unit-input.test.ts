@@ -1,5 +1,5 @@
 import { createProfileSchema } from "@levelup/shared";
-import { bodyweightMessage, bodyweightRange, parseBodyweightInput, weightUnitForMeasurementSystem } from "./weight-unit-input";
+import { bodyweightChangeText, bodyweightMessage, bodyweightRange, needsBodyweightConfirm, parseBodyweightInput, weightUnitForMeasurementSystem } from "./weight-unit-input";
 
 describe("weightUnitForMeasurementSystem", () => {
   it("suggests lb only for the US measurement system", () => {
@@ -52,5 +52,27 @@ describe("bodyweightMessage", () => {
   it("passes other messages through", () => {
     const issue = issueFor(Number.NaN);
     expect(bodyweightMessage(issue.code, issue.message, "lb")).toBe(issue.message);
+  });
+});
+
+describe("needsBodyweightConfirm", () => {
+  it("asks only when the change from the last entry is more than 10%", () => {
+    expect(needsBodyweightConfirm(80, 72)).toBe(false); // exactly 10%
+    expect(needsBodyweightConfirm(80, 88)).toBe(false);
+    expect(needsBodyweightConfirm(80, 71.9)).toBe(true);
+    expect(needsBodyweightConfirm(80, 120)).toBe(true);
+    expect(needsBodyweightConfirm(80, 8)).toBe(true);
+  });
+
+  it("never asks without a last entry", () => {
+    expect(needsBodyweightConfirm(null, 120)).toBe(false);
+  });
+});
+
+describe("bodyweightChangeText", () => {
+  it("states the difference and the last entry in the player's unit", () => {
+    expect(bodyweightChangeText(80, 40, "kg")).toBe("That's 40 kg less than your last entry (80 kg).");
+    expect(bodyweightChangeText(80, 120, "kg")).toBe("That's 40 kg more than your last entry (80 kg).");
+    expect(bodyweightChangeText(80, 120, "lb")).toBe("That's 88.18 lb more than your last entry (176.37 lb).");
   });
 });

@@ -59,14 +59,14 @@ async function seedTwoYears(user: TestUser, exerciseIds: string[]) {
   await prisma.workout.createMany({ data: workouts });
   await prisma.workoutExercise.createMany({ data: workoutExercises });
   await prisma.workoutSet.createMany({ data: sets });
-  await prisma.bodyweightEntry.createMany({
-    data: Array.from({ length: WEEKS }, (_, w) => ({
-      userId: user.userId,
-      kg: 80 + w * 0.02,
-      measuredOn: new Date(new Date(start + w * 7 * DAY).toISOString().slice(0, 10)),
-      receivedAt: new Date(start + w * 7 * DAY),
-    })),
-  });
+  const bodyweights = Array.from({ length: WEEKS }, (_, w) => ({
+    userId: user.userId,
+    kg: 80 + w * 0.02,
+    measuredOn: new Date(new Date(start + w * 7 * DAY).toISOString().slice(0, 10)),
+    receivedAt: new Date(start + w * 7 * DAY),
+  }));
+  await prisma.bodyweightEntry.createMany({ data: bodyweights });
+  await prisma.bodyweightReceipt.createMany({ data: bodyweights });
   return { workouts: workouts.length, sets: sets.length };
 }
 

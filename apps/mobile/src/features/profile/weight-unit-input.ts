@@ -1,6 +1,6 @@
-import { BODYWEIGHT_MAX_KG, BODYWEIGHT_MIN_KG, fromInputWeight, toDisplayWeight, type WeightUnit } from "@levelup/shared";
+import { BODYWEIGHT_MAX_KG, BODYWEIGHT_MIN_KG, formatWeight, fromInputWeight, toDisplayWeight, type WeightUnit } from "@levelup/shared";
 
-// The rules for typing a weight in the player's own unit on Create character. Plain
+// The rules for typing a bodyweight in the player's own unit (Create character, Log bodyweight). Plain
 // functions (no React), so they're unit-tested.
 
 /**
@@ -43,4 +43,23 @@ export function bodyweightRange(unit: WeightUnit): { min: number; max: number } 
     min: Math.ceil(toDisplayWeight(BODYWEIGHT_MIN_KG, unit)),
     max: Math.floor(toDisplayWeight(BODYWEIGHT_MAX_KG, unit)),
   };
+}
+
+/**
+ * Above this change from the last entry (10%), the app asks the player to confirm before
+ * saving: a typo (8 instead of 80, 180 instead of 80) is far more likely than a real 10%
+ * change between entries, and the XP bodyweight then takes weeks to undo it.
+ */
+export const BODYWEIGHT_CONFIRM_CHANGE = 0.1;
+
+/** True when `nextKg` differs from the last entry by more than 10%. No last entry: nothing to compare. */
+export function needsBodyweightConfirm(previousKg: number | null, nextKg: number): boolean {
+  if (previousKg === null || previousKg <= 0) return false;
+  return Math.abs(nextKg - previousKg) / previousKg > BODYWEIGHT_CONFIRM_CHANGE;
+}
+
+/** The confirm question: "That's 40 kg less than your last entry (80 kg)." */
+export function bodyweightChangeText(previousKg: number, nextKg: number, unit: WeightUnit): string {
+  const difference = formatWeight(Math.abs(nextKg - previousKg), unit);
+  return `That's ${difference} ${nextKg < previousKg ? "less" : "more"} than your last entry (${formatWeight(previousKg, unit)}).`;
 }
