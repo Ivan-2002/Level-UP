@@ -6,6 +6,7 @@ import {
   recentBest,
   scoreSessionSets,
   setTagText,
+  JUMP_CAP_TEXT,
   setXp,
   type ExerciseXpHistory,
   type PastExerciseSession,
@@ -49,6 +50,11 @@ describe("scoreSessionSets", () => {
     expect(working.slice(0, 10).every((s) => s.xp === 92)).toBe(true);
     expect(working[10]).toMatchObject({ xp: 0, tag: "beyond_set_limit", isFlagged: false });
     expect(setTagText("beyond_set_limit")).toBe("Beyond 10 sets");
+  });
+
+  it("explains the jump-capped tag with a fixed sentence (no baseline number)", () => {
+    expect(setTagText("above_history")).toBe("Above your best · +25%");
+    expect(JUMP_CAP_TEXT).toBe("More than 25% above your best, so it earned XP as if at that limit.");
   });
 
   it("shares one count when the same exercise appears twice in a session (a superset)", () => {

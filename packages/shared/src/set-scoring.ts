@@ -4,6 +4,7 @@ import type { FlagReason, SetTag } from "./xp-codes.js";
 import {
   judgeSession,
   jumpBaseline,
+  JUMP_CAP,
   jumpCappedXp,
   jumpCheckValue,
   plausibilityFlag,
@@ -51,6 +52,13 @@ export function setTagText(tag: SetTag): string {
       return `Counted to ${SET_XP.timedMaxSec / 60}:00`;
   }
 }
+
+/**
+ * The sentence that explains the "Above your best" tag (live view and summary). Fixed: the
+ * baseline it was measured against isn't sent with the summary, and "your best" is the
+ * jump baseline, which remembers older bests than the 12-week window.
+ */
+export const JUMP_CAP_TEXT = `More than ${Math.round(JUMP_CAP.maxJump * 100)}% above your best, so it earned XP as if at that limit.`;
 
 export type ScoringExercise = PlausibilityExercise & ExerciseTuning & { repsUnit: RepsUnit };
 

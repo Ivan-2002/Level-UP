@@ -175,20 +175,6 @@ export function jumpCappedXp(xp: number, factor: number): number {
   return Math.round(xp * factor);
 }
 
-/**
- * The summary's sentence for a jump-capped set, e.g. "Far above your best for this exercise
- * (estimated 1RM 100 kg), so it earns XP as 125 kg for now. Keep it up: the full value
- * catches up within a few sessions."
- */
-export function jumpCapText(baseline: number, repsUnit: RepsUnit, weightUnit: WeightUnit): string {
-  const line = baseline * (1 + JUMP_CAP.maxJump);
-  const [best, counted] =
-    repsUnit === "seconds"
-      ? [`longest hold ${Math.round(baseline)} s`, `${Math.round(line)} s`]
-      : [`estimated 1RM ${formatWeight(baseline, weightUnit, { decimals: 1 })}`, formatWeight(line, weightUnit, { decimals: 1 })];
-  return `Far above your best for this exercise (${best}), so it earns XP as ${counted} for now and doesn't count as a PR. Keep it up: the full value catches up within a few sessions.`;
-}
-
 // --- Daily cap ------------------------------------------------------------------------
 //
 // Full XP up to a daily limit, then 25% beyond it, and never more than twice the limit

@@ -11,7 +11,6 @@ import {
   judgeSession,
   jumpBaseline,
   jumpCappedXp,
-  jumpCapText,
   jumpCheckValue,
   MECHANICS,
   plausibilityFlag,
@@ -134,13 +133,6 @@ describe("jump cap: estimated 1RM (Epley) at every rep count, or seconds for tim
   it("compares a timed exercise with the longest hold", () => {
     const judged = judgeSession(jumpBaseline([[60, 45]]), [90]);
     expect(judged.factors[0]).toBeCloseTo(75 / 90, 6);
-  });
-
-  it("explains a capped set with the best and the line, in the player's unit", () => {
-    expect(jumpCapText(100, "reps", "kg")).toBe(
-      "Far above your best for this exercise (estimated 1RM 100 kg), so it earns XP as 125 kg for now and doesn't count as a PR. Keep it up: the full value catches up within a few sessions.",
-    );
-    expect(jumpCapText(60, "seconds", "kg")).toContain("(longest hold 60 s), so it earns XP as 75 s");
   });
 });
 
