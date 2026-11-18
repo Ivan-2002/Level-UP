@@ -13,6 +13,7 @@ import {
   type Mechanic,
   type RepsUnit,
 } from "@levelup/shared";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/Button";
 import { Chip } from "@/components/Chip";
 import { Text } from "@/components/Text";
@@ -28,7 +29,8 @@ type Field = "name" | "muscleGroup" | "bodyPart" | "equipment" | "mechanic";
 // (load factor, bodyweight share) from these answers, so nobody can make one worth more.
 // On success it goes back to the sheet with the new exercise already selected.
 export function CreateExerciseScreen({ initialName }: { initialName: string }) {
-  const create = useCreateExercise();
+  const { data: session } = authClient.useSession();
+  const create = useCreateExercise(session?.user.id ?? "");
   const [name, setName] = useState(initialName);
   const [muscleGroup, setMuscleGroup] = useState("");
   const [bodyPart, setBodyPart] = useState<BodyPart | null>(null);

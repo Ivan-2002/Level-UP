@@ -29,7 +29,7 @@ export function FinishWorkoutScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
   const workout = useActiveWorkout((s) => s.workout);
-  const library = useExercises();
+  const library = useExercises(userId);
   const routine = useRoutine(userId, workout?.routineId ?? null);
   const save = useSaveRoutine(userId);
   const [saveAs, setSaveAs] = useState(false);

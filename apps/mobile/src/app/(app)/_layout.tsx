@@ -31,7 +31,7 @@ export default function AppLayout() {
   // Load the exercise library as soon as we're signed in, so it's saved on the phone
   // before the player is at the gym with no signal.
   useEffect(() => {
-    if (session?.user.id) void queryClient.prefetchQuery(exercisesQuery);
+    if (session?.user.id) void queryClient.prefetchQuery(exercisesQuery(session.user.id));
   }, [session?.user.id, queryClient]);
 
   async function signOut() {
