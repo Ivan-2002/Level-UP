@@ -1,12 +1,16 @@
 import {
   estimatedOneRepMax,
   liftedKg,
+  scoreSessionSets,
   setXp,
   toDisplayWeight,
   type Exercise,
   type ExerciseSession,
+  type ExerciseXpHistory,
   type LoggedSet,
   type Mechanic,
+  type ScoredSet,
+  type SessionScore,
   type WeightUnit,
 } from "@levelup/shared";
 import type { Segment } from "@/components/progress-segments";
@@ -31,7 +35,45 @@ function doneSets(draft: DraftExercise, unit: WeightUnit): Done[] {
   });
 }
 
-/** XP earned so far, with the shared per-set formula. */
+/** What scoring a workout in progress needs besides the workout: the player's history and bodyweights. */
+export type LiveScoringContext = {
+  /** Each exercise's 12-week best and jump baseline (GET /v1/exercises/xp-history, cached). */
+  history: Map<string, ExerciseXpHistory>;
+  /** `xp`: the XP bodyweight (profile.xpBodyweightKg); `typed`: the real one (profile.bodyweightKg), for lifted kg. */
+  bodyweight: { xp: number; typed: number };
+};
+
+export type LiveScore = {
+  /** Set XP so far. Before the daily cap and the 14-day rule: only the server knows the day. */
+  total: number;
+  /** Each done set's XP, effort and tag, by its draft set id. */
+  bySet: Map<string, ScoredSet>;
+  /** Per exercise, for the NEXT session: what the cached history becomes after this Finish. */
+  exercises: SessionScore["exercises"];
+};
+
+/**
+ * Scores the done sets with the shared pipeline (scoreSessionSets), in the order Finish
+ * sends them (buildFinishPayload: exercise by exercise, each exercise's sets in order),
+ * which is the order the server scores them in. So the preview matches the server's
+ * number, except for what only the server can know (the daily cap, the 14-day rule).
+ */
+export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringContext): LiveScore {
+  const done = workout.exercises.flatMap((draft) => doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })));
+  const score = scoreSessionSets({
+    sets: done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg })),
+    exercises: new Map(workout.exercises.map((draft) => [draft.exercise.id, draft.exercise])),
+    history: context.history,
+    bodyweight: context.bodyweight,
+  });
+  return {
+    total: score.sets.reduce((sum, s) => sum + s.xp, 0),
+    bySet: new Map(done.map((d, i) => [d.set.id, score.sets[i]!])),
+    exercises: score.exercises,
+  };
+}
+
+/** XP earned so far, with the shared per-set formula. Replaced by scoreLiveWorkout in Phase 4c. */
 export function liveXp(workout: ActiveWorkout, bodyweightKg: number): number {
   return workout.exercises.reduce(
     (sum, draft) => sum + doneSets(draft, workout.weightUnit).reduce((s, d) => s + setXp(d, bodyweightKg, draft.exercise), 0),

@@ -1,6 +1,6 @@
-import type { ExerciseSession } from "@levelup/shared";
+import { epleyOneRepMax, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
-import { addExercise, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
+import { addExercise, buildFinishPayload, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
 import {
   e1rmBars,
   lastSessionText,
@@ -8,6 +8,7 @@ import {
   livePrs,
   nextUp,
   previousSetText,
+  scoreLiveWorkout,
   suggestedRestText,
   todayBestE1rm,
   workoutSegments,
@@ -48,6 +49,56 @@ describe("live XP and progress", () => {
   it("gives one segment per exercise, sized by its sets", () => {
     const w = fill(workout(), 0, 0, "62.5", "8", 5);
     expect(workoutSegments(w)).toEqual({ segments: [{ total: 3, done: 1 }, { total: 1, done: 0 }], currentIndex: 0 });
+  });
+});
+
+describe("scoreLiveWorkout: the live preview runs the server's pipeline", () => {
+  const noHistory = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 } };
+
+  it("scores exactly the sets Finish sends, in the order the server scores them", () => {
+    let w: ActiveWorkout = { ...workout(), clientId: "6f1d1c1e-0000-4000-8000-000000000001" }; // Finish needs a UUID
+    w = fill(w, 0, 0, "62.5", "8", 5);
+    w = fill(w, 1, 0, "0", "10", 8); // the pull-up, ticked between bench sets
+    w = fill(w, 0, 1, "65", "8", 11);
+    w = fill(w, 0, 2, "65", "6", 14);
+
+    const payload = buildFinishPayload(w, at(20));
+    if (!payload.ok) throw new Error(payload.message);
+    const server = scoreSessionSets({
+      sets: payload.value.exercises.flatMap((e) => e.sets.map((s) => ({ exerciseId: e.exerciseId, reps: s.reps, weightKg: s.weightKg }))),
+      exercises: new Map([benchPress, pullUp].map((e) => [e.id, e])),
+      ...noHistory,
+    });
+
+    const live = scoreLiveWorkout(w, noHistory);
+
+    expect(live.total).toBe(server.sets.reduce((sum, s) => sum + s.xp, 0));
+    const doneIds = [...w.exercises[0]!.sets, ...w.exercises[1]!.sets].map((set) => set.id); // payload order
+    expect(doneIds.map((id) => live.bySet.get(id))).toEqual(server.sets);
+    expect(live.exercises).toEqual(server.exercises);
+  });
+
+  it("leaves out sets that aren't done", () => {
+    const w = fill(workout(), 0, 0, "62.5", "8", 5); // sets 2 and 3 are filled in but not ticked
+    expect([...scoreLiveWorkout(w, noHistory).bySet.keys()]).toEqual([w.exercises[0]!.sets[0]!.id]);
+  });
+
+  it("uses the cached history: a jump far above the best is held to the line and tagged", () => {
+    const history = new Map([[benchPress.id, { recentBest: epleyOneRepMax(50, 8), jumpBaseline: epleyOneRepMax(50, 8) }]]);
+    const w = fill(workout(), 0, 0, "65", "8", 5); // 30% above 50 x 8 (the line is +25%)
+
+    const set = scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } }).bySet.get(w.exercises[0]!.sets[0]!.id)!;
+    const fresh = scoreLiveWorkout(w, noHistory).bySet.get(w.exercises[0]!.sets[0]!.id)!;
+
+    expect(set).toMatchObject({ tag: "above_history", flagReason: "above_history" });
+    expect(set.xp).toBeLessThan(fresh.xp);
+  });
+
+  it("tags an easy set against the 12-week best", () => {
+    const history = new Map([[benchPress.id, { recentBest: epleyOneRepMax(120, 8), jumpBaseline: epleyOneRepMax(120, 8) }]]);
+    const w = fill(workout(), 0, 0, "62.5", "8", 5);
+
+    expect(scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } }).bySet.get(w.exercises[0]!.sets[0]!.id)).toMatchObject({ tag: "easy_set" });
   });
 });
 
