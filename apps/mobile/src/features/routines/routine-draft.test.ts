@@ -67,6 +67,13 @@ describe("targets", () => {
     const draft = stepTarget(stepTarget(pushDay(), "k1", "targetReps", 1), "k3", "targetReps", 1);
     expect([draft.exercises[0]!.targetReps, draft.exercises[2]!.targetReps]).toEqual([9, 35]);
   });
+
+  it("stops reps at 100, and a timed exercise at 600 seconds", () => {
+    let draft = pushDay();
+    for (let i = 0; i < 150; i++) draft = stepTarget(draft, "k1", "targetReps", 1);
+    for (let i = 0; i < 150; i++) draft = stepTarget(draft, "k3", "targetReps", 1);
+    expect([draft.exercises[0]!.targetReps, draft.exercises[2]!.targetReps]).toEqual([100, 600]);
+  });
 });
 
 describe("rest", () => {

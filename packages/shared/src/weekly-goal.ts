@@ -4,8 +4,10 @@ import { z } from "zod";
 // Weekly goal and streak: the rules, as pure functions. The server's progression
 // service stores the results and pays the XP; the app only uses the text helpers.
 //
-// - Everyone starts at 2 training days a week. Goal met -> next week +1 (max 4);
-//   missed -> next week -1 (min 2).
+// - Everyone starts at 2 training days a week. The goal rises only when the player BEATS
+//   it (more days than the target -> next week +1, max 4); meeting it exactly keeps it;
+//   missing it -> next week -1 (min 2). Until Milestone 5, meeting it exactly also raised
+//   it, so a steady 3-day player was pushed to 4, missed, and lost their streak.
 // - A training day = a workout with at least 3 completed sets, counted once per LOCAL
 //   calendar day (the player's time zone). Week = Monday to Sunday, local time.
 // - The week you sign up in is a warm-up (unless you sign up on a Monday): set XP only,
@@ -22,21 +24,23 @@ export const WEEKLY_GOAL = {
   maxTarget: 4,
   /** A workout needs this many completed (non-flagged) sets to make the day a training day. */
   minSetsPerTrainingDay: 3,
-  /** Paid once per week when the goal is met; the same at every target. */
-  weeklyBonusXp: 60,
-  /** XP is paid every time a milestone is reached (also after a reset); the badge once. */
+  /**
+   * Paid once per week when the goal is met; the same at every target. About one
+   * beginner session (was 60 until Milestone 5: negligible next to ~1,500 XP sessions).
+   */
+  weeklyBonusXp: 400,
+  /**
+   * XP is paid every time a milestone is reached (also after a reset); the badge once.
+   * The 52-week bonus is about 4.5 weeks of an intermediate player's training.
+   */
   streakMilestones: [
-    { weeks: 12, xp: 500 },
-    { weeks: 26, xp: 1200 },
-    { weeks: 52, xp: 3000 },
+    { weeks: 12, xp: 3000 },
+    { weeks: 26, xp: 7500 },
+    { weeks: 52, xp: 20000 },
   ] satisfies StreakMilestone[],
 } as const;
 
-/**
- * The ledger sources the future daily XP cap applies to. Weekly and streak bonuses are
- * deliberately NOT in it: hitting your goal on a big day shouldn't cost you the bonus.
- */
-export const XP_SOURCES_UNDER_DAILY_CAP = ["workout_set"] as const;
+// The daily XP cap (and which ledger sources it covers) lives in xp-limits.ts.
 
 /**
  * goal    = a normal week: counts for the target and the streak.
@@ -116,10 +120,18 @@ export function countTrainingDays(workouts: WorkoutForGoal[], timeZone: string, 
 
 // --- Target, streak, milestones -----------------------------------------------------------
 
-export function nextWeeklyTarget(week: { kind: WeekKind; target: number; met: boolean }): number {
+/** Next week's target, from a finished week: up only if beaten, unchanged if met exactly, down if missed. */
+export function nextWeeklyTarget(week: { kind: WeekKind; target: number; daysTrained: number }): number {
   if (pausesGoal(week.kind)) return week.target;
-  const next = week.met ? week.target + 1 : week.target - 1;
+  const next = week.target + targetStep(week.daysTrained, week.target);
   return Math.min(WEEKLY_GOAL.maxTarget, Math.max(WEEKLY_GOAL.minTarget, next));
+}
+
+/** +1 if the target was beaten, 0 if met exactly, -1 if missed. */
+function targetStep(daysTrained: number, target: number): number {
+  if (daysTrained > target) return 1;
+  if (daysTrained === target) return 0;
+  return -1;
 }
 
 /** The streak after a finished goal week. */

@@ -1,5 +1,6 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { setNow } from "../../lib/clock.js";
 import { prisma } from "../../lib/prisma.js";
 import { app, signUpUser } from "../../test/helpers.js";
 
@@ -26,6 +27,24 @@ describe("POST /bodyweight", () => {
 
     const entries = await prisma.bodyweightEntry.findMany({ where: { userId: user.userId } });
     expect(entries.map((e) => e.kg.toNumber())).toEqual([79.5]);
+  });
+
+  it("stamps when the server received the entry, and moves it when the date is entered again", async () => {
+    // The XP bodyweight rule orders and times entries by this, so editing an old date
+    // must count as a new entry, not keep its original time.
+    const user = await signUpUser();
+    const record = (kg: number) =>
+      request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg, measuredOn: "2026-11-01" });
+    const receivedAt = async () => (await prisma.bodyweightEntry.findFirstOrThrow({ where: { userId: user.userId } })).receivedAt.toISOString();
+
+    setNow("2026-11-02T08:00:00Z");
+    await record(80);
+    expect(await receivedAt()).toBe("2026-11-02T08:00:00.000Z");
+
+    setNow("2026-11-20T08:00:00Z");
+    await record(70);
+    expect(await receivedAt()).toBe("2026-11-20T08:00:00.000Z");
+    setNow(null);
   });
 
   it("allows tomorrow (already today east of UTC) but not later", async () => {

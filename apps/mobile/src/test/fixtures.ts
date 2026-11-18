@@ -34,6 +34,8 @@ export const benchPress: Exercise = {
   suggestedRestSec: 180,
   loadFactor: 1.25,
   bodyweightRatio: 0,
+  maxPlausibleWeightKg: null,
+  maxPlausibleReps: null,
   isCustom: false,
   restPreferenceSec: null,
 };
@@ -49,6 +51,8 @@ export const pullUp: Exercise = {
   suggestedRestSec: 150,
   loadFactor: 1.25,
   bodyweightRatio: 1.0,
+  maxPlausibleWeightKg: null,
+  maxPlausibleReps: null,
   isCustom: false,
   restPreferenceSec: null,
 };
@@ -64,6 +68,8 @@ export const plank: Exercise = {
   suggestedRestSec: 60,
   loadFactor: 0.35,
   bodyweightRatio: 0.5,
+  maxPlausibleWeightKg: null,
+  maxPlausibleReps: null,
   isCustom: false,
   restPreferenceSec: null,
 };
@@ -79,6 +85,8 @@ export const lateralRaise: Exercise = {
   suggestedRestSec: 60,
   loadFactor: 5.0,
   bodyweightRatio: 0,
+  maxPlausibleWeightKg: null,
+  maxPlausibleReps: null,
   isCustom: false,
   restPreferenceSec: null,
 };

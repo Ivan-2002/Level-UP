@@ -64,6 +64,11 @@ async function usableExercisesOrThrow(userId: string, input: RoutineInput): Prom
   const exercises = await exercisesService.findUsableExercises(userId, ids);
   const unknown = [...new Set(ids)].filter((id) => !exercises.has(id));
   if (unknown.length > 0) throw new AppError("invalid", "UnknownExercise", `Unknown exercise: ${unknown.join(", ")}`);
+  // Targets in seconds for timed exercises (up to 600), in reps otherwise (up to 100).
+  for (const e of input.exercises) {
+    const exercise = exercises.get(e.exerciseId)!;
+    exercisesService.assertRepsWithinLimit(exercise, e.targetReps, `${exercise.name}, target`);
+  }
   return exercises;
 }
 

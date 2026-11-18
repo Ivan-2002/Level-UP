@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, usePreventRemove } from "expo-router";
-import { REPS_MAX, REST_MAX_SEC, REST_MIN_SEC, TARGET_SETS_MAX } from "@levelup/shared";
+import { repsMaxFor, REST_MAX_SEC, REST_MIN_SEC, TARGET_SETS_MAX } from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { IconButton } from "@/components/IconButton";
@@ -185,7 +185,7 @@ function PlanSteppers({ item }: { item: draftRules.DraftRoutineExercise }) {
         onDecrease={() => change((d) => draftRules.stepTarget(d, item.key, "targetReps", -1))}
         onIncrease={() => change((d) => draftRules.stepTarget(d, item.key, "targetReps", 1))}
         canDecrease={item.targetReps > (timed ? 5 : 1)}
-        canIncrease={item.targetReps < REPS_MAX}
+        canIncrease={item.targetReps < repsMaxFor(item.exercise.repsUnit)}
       />
       <Stepper
         label="Rest"

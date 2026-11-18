@@ -54,6 +54,17 @@ describe("GET /exercises", () => {
     );
   });
 
+  it("includes each exercise's own plausibility limits, null where the default applies", async () => {
+    const user = await signUpUser();
+    const res = await request(app).get("/v1/exercises").set("Cookie", user.cookie);
+    const limits = Object.fromEntries(
+      res.body.items.filter((e: { maxPlausibleWeightKg: number | null }) => e.maxPlausibleWeightKg !== null).map((e: { name: string; maxPlausibleWeightKg: number }) => [e.name, e.maxPlausibleWeightKg]),
+    );
+
+    expect(limits).toEqual({ "Back Squat": 450, Deadlift: 450, "Leg Press": 500, "Standing Calf Raise": 300, "One-arm Dumbbell Row": 100 });
+    expect(res.body.items.every((e: { maxPlausibleReps: number | null }) => e.maxPlausibleReps === null)).toBe(true);
+  });
+
   it("searches name OR muscle group, ignoring case, every word must match", async () => {
     const user = await signUpUser();
     const search = async (q: string) =>
@@ -98,6 +109,7 @@ describe("POST /exercises (custom exercise)", () => {
     const res = await request(app).post("/v1/exercises").set("Cookie", user.cookie).send(custom);
 
     expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ maxPlausibleWeightKg: null, maxPlausibleReps: null }); // custom: the defaults
     expect(exerciseSchema.parse(res.body)).toMatchObject({
       ...custom,
       repsUnit: "reps",

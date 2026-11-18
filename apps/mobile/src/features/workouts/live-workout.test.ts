@@ -38,10 +38,11 @@ function workout(unit: "kg" | "lb" = "kg") {
 
 describe("live XP and progress", () => {
   it("adds XP for completed sets only, with the shared formula", () => {
-    let w = fill(workout(), 0, 0, "62.5", "8", 5); // round(8 x 62.5 x 1.25 load factor / 10) = 63
-    w = fill(w, 1, 0, "0", "10", 8); // pull-up at 80 kg bodyweight: round(10 x 80 x 1.25 / 10) = 100
+    // Estimated 1RM of the XP load (x sqrt(75 / 80) here) x 0.73:
+    let w = fill(workout(), 0, 0, "62.5", "8", 5); // bench: 78.1 kg load -> 70 XP
+    w = fill(w, 1, 0, "0", "10", 8); // pull-up: 100 kg load -> 94 XP
 
-    expect(liveXp(w, 80)).toBe(163);
+    expect(liveXp(w, 80)).toBe(164);
   });
 
   it("gives one segment per exercise, sized by its sets", () => {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { finishWorkoutSchema, listWorkoutsQuerySchema, type FinishWorkoutInput } from "./index.js";
+import {
+  exerciseSchema,
+  finishWorkoutSchema,
+  HOLD_MAX_SEC,
+  listWorkoutsQuerySchema,
+  REPS_MAX,
+  REPS_MAX_ANY_UNIT,
+  repsMaxFor,
+  type FinishWorkoutInput,
+} from "./index.js";
 
 const HOUR = 60 * 60 * 1000;
 const EXERCISE_ID = "0195f3a0-0000-7000-8000-000000000001";
@@ -21,6 +30,30 @@ function issueMessages(input: unknown) {
   const result = finishWorkoutSchema.safeParse(input);
   return result.success ? [] : result.error.issues.map((i) => i.message);
 }
+
+describe("exerciseSchema", () => {
+  it("still parses an exercise cached before the plausibility overrides existed", () => {
+    const cachedBeforeMilestone5 = {
+      id: EXERCISE_ID, name: "Back Squat", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "barbell", repsUnit: "reps",
+      mechanic: "compound", suggestedRestSec: 180, loadFactor: 1, bodyweightRatio: 0, isCustom: false, restPreferenceSec: null,
+    };
+    expect(exerciseSchema.parse(cachedBeforeMilestone5)).toMatchObject({ maxPlausibleWeightKg: null, maxPlausibleReps: null });
+  });
+});
+
+describe("reps limits by unit", () => {
+  it("allows 100 reps, or 600 seconds for a timed exercise", () => {
+    expect(repsMaxFor("reps")).toBe(REPS_MAX);
+    expect(repsMaxFor("seconds")).toBe(HOLD_MAX_SEC);
+    expect([REPS_MAX, HOLD_MAX_SEC]).toEqual([100, 600]);
+  });
+
+  it("lets the schema through up to the largest limit of any unit (the server checks the unit next)", () => {
+    const withReps = (reps: number) => workout({ exercises: [{ exerciseId: EXERCISE_ID, sets: [{ reps, weightKg: 0 }] }] });
+    expect(issueMessages(withReps(REPS_MAX_ANY_UNIT))).toEqual([]);
+    expect(issueMessages(withReps(REPS_MAX_ANY_UNIT + 1))).toEqual(["Reps must be at most 600."]);
+  });
+});
 
 describe("finishWorkoutSchema boundaries", () => {
   it("accepts exactly 100 sets and rejects 101", () => {

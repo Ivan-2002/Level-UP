@@ -2,11 +2,15 @@ import { z } from "zod";
 import {
   addToRecordBook,
   bodyweightOnDate,
+  canBeRecord,
   emptyRecordBook,
   findNewRecords,
+  flagReasonSchema,
   levelFromXp,
+  levelStatus,
   liftedKg,
-  setXp,
+  localDate,
+  setTagSchema,
   volumeKg,
   type Exercise,
   type FinishSummary,
@@ -26,6 +30,7 @@ import * as weeklyGoalService from "../progression/weekly-goal.service.js";
 import * as routinesService from "../routines/routines.service.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./workouts.repository.js";
+import { pastSessions } from "./exercise-history.service.js";
 import { daysTrainedAsOf, daysTrainedFor } from "./weekly-goal.service.js";
 
 // Business rules for logged workouts:
@@ -48,15 +53,33 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
   // 2. XP needs a character to go to, and every exercise must be usable by this user.
   await usersService.requireProfile(userId);
   const exercises = await usableExercisesOrThrow(userId, input.exercises.map((e) => e.exerciseId));
+  assertRepsFitExercises(input, exercises);
 
   // 3. Save everything in one transaction. Every module writes through `tx`.
   try {
     const saved = await prisma.$transaction(async (tx) => {
+      // Lock the player's profile row first (it is held until commit), and read their zone:
+      // set XP is dated the local day the workout started.
+      const { timeZone } = await usersService.lockGoalContext(tx, userId);
       // A routine deleted (or never ours) is ignored rather than failing the whole
       // Finish: an offline workout must never become an error the outbox retries forever.
       const routineId =
         input.routineId && (await routinesService.routineBelongsTo(tx, userId, input.routineId)) ? input.routineId : null;
       const startedAt = new Date(input.startedAt);
+      const earnedOn = localDate(startedAt, timeZone);
+
+      // Score every set BEFORE saving, so each set is stored with its flag and tag. History
+      // is read inside the transaction, after the lock: a Finish that got here first is
+      // already committed and counts as history.
+      const score = await progressionService.scoreWorkout(tx, userId, {
+        startedAt,
+        receivedAt: now(),
+        earnedOn,
+        sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg }))),
+        exercises,
+        pastSessions: await pastSessions(userId, [...exercises.keys()], startedAt, tx),
+      });
+      const scored = [...score.sets];
 
       const row = await repo.insertWorkout(tx, {
         userId,
@@ -65,13 +88,24 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         routineId,
         startedAt,
         finishedAt: new Date(input.finishedAt),
-        exercises: input.exercises,
+        xpHeldBack: score.heldBack?.amount ?? 0,
+        xpHeldBackReason: score.heldBack?.reason ?? null,
+        exercises: input.exercises.map((e) => ({
+          ...e,
+          sets: e.sets.map((set) => {
+            const { isFlagged, flagReason, tag } = scored.shift()!;
+            return { ...set, isFlagged, flagReason, xpTag: tag };
+          }),
+        })),
       });
 
-      const bodyweightKg = bodyweightOnDate(await usersService.bodyweightHistory(userId, tx), input.startedAt);
-      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, bodyweightKg));
+      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, score.awardedXp), earnedOn);
       // Rolls the weeks over and, if this workout meets this week's goal, pays the bonus.
-      await weeklyGoalService.syncWeeklyGoal(tx, userId, { now: now(), daysTrainedIn: daysTrainedFor(tx, userId), metByWorkoutId: row.id });
+      await weeklyGoalService.syncWeeklyGoal(tx, userId, {
+        now: now(),
+        daysTrainedIn: daysTrainedFor(tx, userId),
+        metBy: { workoutId: row.id, startedAt },
+      });
       await exercisesService.saveRestPreferences(tx, userId, chosenRestTimes(input));
       if (routineId) await routinesService.recordRoutineDone(tx, routineId, startedAt);
       return row;
@@ -133,18 +167,18 @@ async function usableExercisesOrThrow(userId: string, ids: string[]): Promise<Ma
   return exercises;
 }
 
-/** XP for every completed, non-flagged set, using the shared formula. */
-function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, bodyweightKg: number) {
-  return row.exercises.flatMap((we) => {
-    const exercise = exerciseOf(exercises, we.exerciseId);
-    return we.sets
-      .filter((s) => !s.isFlagged)
-      .map((s) => ({
-        setId: s.id,
-        bodyPart: exercise.bodyPart,
-        amount: setXp({ reps: s.reps, weightKg: s.weightKg.toNumber() }, bodyweightKg, exercise),
-      }));
-  });
+/** Reps (or seconds, for timed exercises) within each exercise's own limit. */
+function assertRepsFitExercises(input: FinishWorkoutInput, exercises: Map<string, Exercise>): void {
+  for (const e of input.exercises) {
+    const exercise = exerciseOf(exercises, e.exerciseId);
+    e.sets.forEach((set, i) => exercisesService.assertRepsWithinLimit(exercise, set.reps, `${exercise.name}, set ${i + 1}`));
+  }
+}
+
+/** The ledger awards: each saved set (in the order logged) with the XP it was awarded. */
+function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, awardedXp: number[]) {
+  const saved = row.exercises.flatMap((we) => we.sets.map((s) => ({ setId: s.id, bodyPart: exerciseOf(exercises, we.exerciseId).bodyPart })));
+  return saved.map((s, i) => ({ ...s, amount: awardedXp[i]! }));
 }
 
 /** Rest times the PLAYER chose. If an exercise appears twice, the later choice wins. */
@@ -176,10 +210,11 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
   const bodyweightKg = bodyweightOn(row.startedAt);
 
   // XP: what the ledger recorded for these sets, and the total just before.
-  const setIds = row.exercises.flatMap((e) => e.sets.map((s) => s.id));
-  const { earned, totalBefore } = await progressionService.workoutXp(userId, setIds, row.createdAt);
+  const sets = row.exercises.flatMap((e) => e.sets);
+  const { perSet, earned, totalBefore } = await progressionService.workoutXp(userId, sets.map((s) => s.id), row.createdAt);
   const bonus = await weeklyGoalService.bonusXpOf(row.id);
   const total = earned + bonus.weeklyGoal + bonus.streakMilestone;
+  const heldBack = row.xpHeldBackReason ? { amount: row.xpHeldBack, reason: row.xpHeldBackReason } : null;
 
   // Compared with last time (same routine, or the previous workout).
   const previous = await repo.findPreviousWorkout(userId, row);
@@ -188,13 +223,22 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
     : null;
 
   return {
-    xp: { sets: earned, ...bonus, total },
+    xp: { sets: earned, ...bonus, total, heldBack },
     level: {
       before: levelFromXp(totalBefore),
       after: levelFromXp(totalBefore + total),
       totalXpBefore: totalBefore,
       totalXpAfter: totalBefore + total,
+      statusBefore: levelStatus(totalBefore),
+      statusAfter: levelStatus(totalBefore + total),
     },
+    // Codes as stored; one the contract doesn't know (written by a newer server) reads as null.
+    sets: sets.map((s) => ({
+      setId: s.id,
+      xp: perSet.get(s.id) ?? 0,
+      tag: setTagSchema.safeParse(s.xpTag).data ?? null,
+      flagReason: flagReasonSchema.safeParse(s.flagReason).data ?? null,
+    })),
     stats: {
       ...sessionStats(row, exercises, bodyweightKg),
       previous: previous && previousExercises ? sessionStats(previous, previousExercises, bodyweightOn(previous.startedAt)) : null,
@@ -221,6 +265,7 @@ function sessionStats(row: repo.WorkoutDetailRow, exercises: Map<string, Exercis
 /**
  * New PRs in this workout, one line per exercise and kind: the best new value against
  * the best from BEFORE this workout (so "76 -> 78 kg" even if two sets beat it).
+ * Flagged and jump-capped sets are never records, on either side (canBeRecord).
  */
 async function personalRecords(
   userId: string,
@@ -236,7 +281,7 @@ async function personalRecords(
   for (const past of history) {
     const exercise = exerciseOf(exercises, past.exerciseId);
     const bw = bodyweightOn(past.workout.startedAt);
-    const sets = past.sets.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bw, exercise.bodyweightRatio) }));
+    const sets = past.sets.filter(canBeRecord).map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bw, exercise.bodyweightRatio) }));
     books.set(past.exerciseId, addToRecordBook(books.get(past.exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit));
   }
 
@@ -245,7 +290,7 @@ async function personalRecords(
     const exercise = exerciseOf(exercises, exerciseId);
     const logged = row.exercises
       .filter((we) => we.exerciseId === exerciseId)
-      .flatMap((we) => we.sets.filter((s) => !s.isFlagged))
+      .flatMap((we) => we.sets.filter(canBeRecord)) // not implausible, not jump-capped
       .map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() }));
     const sets = logged.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg, bodyweightKg, exercise.bodyweightRatio) }));
     const records = findNewRecords(books.get(exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit);

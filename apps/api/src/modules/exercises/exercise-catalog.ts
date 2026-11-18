@@ -27,7 +27,7 @@ import type { BodyPart, Equipment, Mechanic, RepsUnit } from "@levelup/shared";
 // LOGGING CONVENTIONS the app must show in its UI:
 // - Dumbbell weight is PER DUMBBELL (the number printed on it). Factors account for that.
 // - Bodyweight exercises log ADDED weight (belt, vest); 0 for plain reps.
-// - Plank logs seconds held in the reps field (so at most 100 s per set for now). It is
+// - Plank logs seconds held in the reps field (at most HOLD_MAX_SEC = 600 s per set). It is
 //   marked repsUnit: "seconds" so the app can label the column, without hard-coding names.
 
 export type CatalogExercise = {
@@ -42,27 +42,34 @@ export type CatalogExercise = {
   suggestedRestSec: number;
   /** Defaults to "reps". */
   repsUnit?: RepsUnit;
+  /**
+   * Plausibility overrides, only where a strong honest lifter can pass the equipment x
+   * mechanic default (barbell compound 350 kg, machine compound 300, machine isolation 200,
+   * dumbbell compound 80 per dumbbell). Unset = the default.
+   */
+  maxPlausibleWeightKg?: number;
+  maxPlausibleReps?: number;
 };
 
 //  Comment = the "typical hard set" the factor was derived from.
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   // --- Legs ---------------------------------------------------------------
-  { slug: "barbell-back-squat", name: "Back Squat", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "barbell", loadFactor: 1.0, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 180 }, // 100 x 8 (benchmark)
+  { slug: "barbell-back-squat", name: "Back Squat", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "barbell", loadFactor: 1.0, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 180, maxPlausibleWeightKg: 450 }, // 100 x 8 (benchmark)
   { slug: "romanian-deadlift", name: "Romanian Deadlift", muscleGroup: "Hamstrings", bodyPart: "legs", equipment: "barbell", loadFactor: 1.1, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 150 }, // 90 x 8
-  { slug: "leg-press", name: "Leg Press", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "machine", loadFactor: 0.5, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 150 }, // 160 x 10: sled leverage makes numbers big
+  { slug: "leg-press", name: "Leg Press", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "machine", loadFactor: 0.5, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 150, maxPlausibleWeightKg: 500 }, // 160 x 10: sled leverage makes numbers big
   { slug: "leg-extension", name: "Leg Extension", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "machine", loadFactor: 1.3, bodyweightRatio: 0, mechanic: "isolation", suggestedRestSec: 75 }, // 50 x 12
   { slug: "lying-leg-curl", name: "Lying Leg Curl", muscleGroup: "Hamstrings", bodyPart: "legs", equipment: "machine", loadFactor: 1.7, bodyweightRatio: 0, mechanic: "isolation", suggestedRestSec: 75 }, // 40 x 12
   { slug: "walking-lunge", name: "Walking Lunge", muscleGroup: "Glutes", bodyPart: "legs", equipment: "dumbbell", loadFactor: 0.9, bodyweightRatio: 0.75, mechanic: "compound", suggestedRestSec: 120 }, // (16 + 60) x 12: you carry most of your body
   { slug: "kettlebell-swing", name: "Kettlebell Swing", muscleGroup: "Glutes & hamstrings", bodyPart: "legs", equipment: "kettlebell", loadFactor: 2.2, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 120 }, // 24 x 15
-  { slug: "standing-calf-raise", name: "Standing Calf Raise", muscleGroup: "Calves", bodyPart: "legs", equipment: "machine", loadFactor: 0.7, bodyweightRatio: 0, mechanic: "isolation", suggestedRestSec: 60 }, // 80 x 15
+  { slug: "standing-calf-raise", name: "Standing Calf Raise", muscleGroup: "Calves", bodyPart: "legs", equipment: "machine", loadFactor: 0.7, bodyweightRatio: 0, mechanic: "isolation", suggestedRestSec: 60, maxPlausibleWeightKg: 300 }, // 80 x 15
 
   // --- Back ---------------------------------------------------------------
-  { slug: "deadlift", name: "Deadlift", muscleGroup: "Posterior chain", bodyPart: "back", equipment: "barbell", loadFactor: 1.2, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 180 }, // 130 x 5
+  { slug: "deadlift", name: "Deadlift", muscleGroup: "Posterior chain", bodyPart: "back", equipment: "barbell", loadFactor: 1.2, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 180, maxPlausibleWeightKg: 450 }, // 130 x 5
   { slug: "pull-up", name: "Pull-up", muscleGroup: "Lats", bodyPart: "back", equipment: "bodyweight", loadFactor: 1.25, bodyweightRatio: 1.0, mechanic: "compound", suggestedRestSec: 150 }, // (0 + 80) x 8
   { slug: "lat-pulldown", name: "Lat Pulldown", muscleGroup: "Lats", bodyPart: "back", equipment: "cable", loadFactor: 1.3, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 120 }, // 60 x 10
   { slug: "barbell-row", name: "Barbell Row", muscleGroup: "Upper back", bodyPart: "back", equipment: "barbell", loadFactor: 1.4, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 150 }, // 70 x 8
   { slug: "seated-cable-row", name: "Seated Cable Row", muscleGroup: "Upper back", bodyPart: "back", equipment: "cable", loadFactor: 1.3, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 120 }, // 60 x 10
-  { slug: "one-arm-dumbbell-row", name: "One-arm Dumbbell Row", muscleGroup: "Lats", bodyPart: "back", equipment: "dumbbell", loadFactor: 2.5, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 120 }, // 30 x 10
+  { slug: "one-arm-dumbbell-row", name: "One-arm Dumbbell Row", muscleGroup: "Lats", bodyPart: "back", equipment: "dumbbell", loadFactor: 2.5, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 120, maxPlausibleWeightKg: 100 }, // 30 x 10
 
   // --- Chest --------------------------------------------------------------
   { slug: "barbell-bench-press", name: "Bench Press", muscleGroup: "Chest", bodyPart: "chest", equipment: "barbell", loadFactor: 1.25, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 180 }, // 80 x 8

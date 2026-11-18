@@ -77,10 +77,10 @@ describe("previewSummary (before the workout syncs)", () => {
     if (!ticked.ok) throw new Error(ticked.message);
 
     expect(previewSummary(ticked.value, new Date(START.getTime() + 3_600_000).toISOString(), 80)).toEqual({
-      xpSets: 60, // round(8 x 60 x 1.25 / 10)
+      xpSets: 67, // 8 x 60 kg bench: load 75 kg x sqrt(75/80), estimated 1RM x 0.73
       durationSec: 3600,
       setCount: 1,
-      volumeKg: 480,
+      volumeKg: 480, // volume stays in real kilograms
     });
   });
 });

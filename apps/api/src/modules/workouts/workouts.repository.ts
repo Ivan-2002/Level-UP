@@ -1,6 +1,6 @@
 import { isUuid } from "../../lib/ids.js";
 import { prisma, type Db } from "../../lib/prisma.js";
-import { Prisma } from "../../generated/prisma/client.js";
+import { Prisma, type XpHeldBackReason } from "../../generated/prisma/client.js";
 
 // The only file that queries the workout, workout_exercise and workout_set tables.
 // It knows how a workout is stored; the service decides what is allowed.
@@ -36,10 +36,14 @@ export type NewWorkout = {
   routineId: string | null;
   startedAt: Date;
   finishedAt: Date;
+  /** Set XP the workout didn't get, and why (0 and null when it got it all). */
+  xpHeldBack: number;
+  xpHeldBackReason: XpHeldBackReason | null;
   exercises: {
     exerciseId: string;
     restSec?: number;
-    sets: { reps: number; weightKg: number; completedAt?: string }[];
+    /** Each set as logged, with what the XP scoring decided about it. */
+    sets: { reps: number; weightKg: number; completedAt?: string; isFlagged: boolean; flagReason: string | null; xpTag: string | null }[];
   }[];
 };
 
@@ -76,6 +80,8 @@ export function insertWorkout(db: Db, data: NewWorkout): Promise<WorkoutDetailRo
       routineId: data.routineId,
       startedAt: data.startedAt,
       finishedAt: data.finishedAt,
+      xpHeldBack: data.xpHeldBack,
+      xpHeldBackReason: data.xpHeldBackReason,
       exercises: {
         create: data.exercises.map((exercise, order) => ({
           order,
@@ -89,6 +95,9 @@ export function insertWorkout(db: Db, data: NewWorkout): Promise<WorkoutDetailRo
                 reps: set.reps,
                 weightKg: set.weightKg,
                 completedAt: set.completedAt ? new Date(set.completedAt) : null,
+                isFlagged: set.isFlagged,
+                flagReason: set.flagReason,
+                xpTag: set.xpTag,
               })),
             },
           },
@@ -124,36 +133,44 @@ export function findPreviousWorkout(
   });
 }
 
+// Non-flagged sets only. flagReason tells jump-capped sets (above_history) apart: they
+// count for the jump baseline but are never PRs.
+const historySets = {
+  where: { isFlagged: false },
+  orderBy: { setOrder: "asc" },
+  select: { id: true, reps: true, weightKg: true, flagReason: true },
+} satisfies Prisma.WorkoutExercise$setsArgs;
+
 export type ExerciseHistoryRow = {
   exerciseId: string;
   workout: { id: string; startedAt: Date };
-  sets: { id: string; reps: number; weightKg: Prisma.Decimal }[];
+  sets: { id: string; reps: number; weightKg: Prisma.Decimal; flagReason: string | null }[];
 };
 
 /**
- * Every past appearance of these exercises in the player's workouts, oldest first, with
- * their non-flagged sets. `before` limits it to workouts that started earlier (for PRs:
- * only history before this workout counts). Records are calculated on read from this.
+ * Every past appearance of these exercises (null: of every exercise) in the player's
+ * workouts, oldest first, with their non-flagged sets. `before` limits it to workouts that started earlier: by
+ * (startedAt, id) for a saved workout (PRs), by startedAt alone for one not saved yet
+ * (Finish, before its insert). Pass `db` to read inside a transaction.
  */
 export function findExerciseHistory(
   userId: string,
-  exerciseIds: string[],
-  before?: { startedAt: Date; id: string },
+  exerciseIds: string[] | null,
+  before?: { startedAt: Date; id?: string },
+  db: Db = prisma,
 ): Promise<ExerciseHistoryRow[]> {
-  return prisma.workoutExercise.findMany({
-    where: {
-      exerciseId: { in: exerciseIds },
-      workout: {
-        userId,
-        ...(before && {
-          OR: [{ startedAt: { lt: before.startedAt } }, { startedAt: before.startedAt, id: { lt: before.id } }],
-        }),
-      },
-    },
+  const earlier = before && {
+    OR: [
+      { startedAt: { lt: before.startedAt } },
+      ...(before.id === undefined ? [] : [{ startedAt: before.startedAt, id: { lt: before.id } }]),
+    ],
+  };
+  return db.workoutExercise.findMany({
+    where: { ...(exerciseIds && { exerciseId: { in: exerciseIds } }), workout: { userId, ...earlier } },
     select: {
       exerciseId: true,
       workout: { select: { id: true, startedAt: true } },
-      sets: { where: { isFlagged: false }, orderBy: { setOrder: "asc" }, select: { id: true, reps: true, weightKg: true } },
+      sets: historySets,
     },
     orderBy: [{ workout: { startedAt: "asc" } }, { order: "asc" }],
   });
@@ -166,7 +183,7 @@ export function findRecentExerciseUse(userId: string, take: number): Promise<Exe
     select: {
       exerciseId: true,
       workout: { select: { id: true, startedAt: true } },
-      sets: { where: { isFlagged: false }, orderBy: { setOrder: "asc" }, select: { id: true, reps: true, weightKg: true } },
+      sets: historySets,
     },
     orderBy: [{ workout: { startedAt: "desc" } }, { order: "asc" }],
     take,

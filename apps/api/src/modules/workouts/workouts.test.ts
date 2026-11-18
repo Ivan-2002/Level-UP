@@ -170,7 +170,7 @@ describe("POST /workouts validation", () => {
 
   it.each<[string, () => unknown, string]>([
     ["reps of 0", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 0, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
-    ["reps of 101", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 101, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
+    ["reps of 601 (above every unit's limit)", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["plank"]!, sets: [{ reps: 601, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
     ["fractional reps", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 7.5, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
     ["negative weight", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["deadlift"]!, sets: [{ reps: 5, weightKg: -1 }] }] }), "exercises.0.sets.0.weightKg"],
     ["weight over 500 kg", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["deadlift"]!, sets: [{ reps: 5, weightKg: 501 }] }] }), "exercises.0.sets.0.weightKg"],
@@ -223,6 +223,32 @@ describe("POST /workouts validation", () => {
     expect(res.body.error).toBe("UnknownExercise");
     expect(res.body.message).toContain(missingId);
     expect(await prisma.workout.count()).toBe(0);
+  });
+});
+
+describe("POST /workouts reps limits by unit", () => {
+  const oneSet = (slug: string, reps: number) => validWorkout({ exercises: [{ exerciseId: exerciseIds[slug]!, sets: [{ reps: 8, weightKg: 0 }, { reps, weightKg: 0 }] }] });
+
+  it("rejects more than 100 reps on a reps exercise, naming the exercise and set", async () => {
+    const res = await finish(user, oneSet("pull-up", 101));
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "RepsOutOfRange", message: "Pull-up, set 2: at most 100 reps." });
+    expect(await prisma.workout.count()).toBe(0);
+  });
+
+  it("allows a timed exercise up to 600 seconds, and no more", async () => {
+    expect((await finish(user, oneSet("plank", 600))).status).toBe(201);
+
+    const res = await finish(user, oneSet("plank", 601));
+    expect(res.status).toBe(400); // the schema's outer limit catches 601
+  });
+
+  it("rejects 150 seconds' worth of reps on a reps exercise even though a plank may hold 150 s", async () => {
+    const res = await finish(user, oneSet("pull-up", 150));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("RepsOutOfRange");
   });
 });
 

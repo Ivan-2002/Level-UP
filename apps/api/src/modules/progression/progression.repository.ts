@@ -3,7 +3,10 @@ import type { BodyPart, XpSource } from "../../generated/prisma/client.js";
 
 // The only file that queries the xp_event ledger.
 
-export type NewXpEvent = { userId: string; amount: number; sourceId: string; bodyPart: BodyPart };
+/** `earnedOn`: the player's local calendar day ("YYYY-MM-DD") the XP belongs to. */
+export type NewXpEvent = { userId: string; amount: number; sourceId: string; bodyPart: BodyPart; earnedOn: string };
+
+const toDate = (day: string) => new Date(`${day}T00:00:00Z`); // a Postgres DATE
 
 /**
  * One row per completed set. (source, sourceId) is unique, so even if this ran twice for
@@ -11,7 +14,7 @@ export type NewXpEvent = { userId: string; amount: number; sourceId: string; bod
  */
 export async function insertSetXpEvents(db: Db, events: NewXpEvent[]): Promise<void> {
   if (events.length === 0) return;
-  await db.xpEvent.createMany({ data: events.map((e) => ({ ...e, source: "workout_set" as const })) });
+  await db.xpEvent.createMany({ data: events.map((e) => ({ ...e, earnedOn: toDate(e.earnedOn), source: "workout_set" as const })) });
 }
 
 /**
@@ -20,8 +23,11 @@ export async function insertSetXpEvents(db: Db, events: NewXpEvent[]): Promise<v
  * inside a transaction (a failed INSERT would abort the whole transaction in Postgres).
  * True if it was recorded now.
  */
-export async function insertBonusXpEvent(db: Db, event: { userId: string; amount: number; source: XpSource; sourceId: string }): Promise<boolean> {
-  const { count } = await db.xpEvent.createMany({ data: [{ ...event, bodyPart: null }], skipDuplicates: true });
+export async function insertBonusXpEvent(
+  db: Db,
+  event: { userId: string; amount: number; source: XpSource; sourceId: string; earnedOn: string },
+): Promise<boolean> {
+  const { count } = await db.xpEvent.createMany({ data: [{ ...event, earnedOn: toDate(event.earnedOn), bodyPart: null }], skipDuplicates: true });
   return count === 1;
 }
 
@@ -36,13 +42,25 @@ export async function sumBonusXp(sourceId: string): Promise<{ weeklyGoal: number
   return { weeklyGoal: of("weekly_goal"), streakMilestone: of("streak_milestone") };
 }
 
-/** XP awarded for these sets. */
-export async function sumSetXp(setIds: string[]): Promise<number> {
-  const result = await prisma.xpEvent.aggregate({
-    where: { source: "workout_set", sourceId: { in: setIds } },
+/**
+ * XP already recorded on one local day (`earnedOn`, "YYYY-MM-DD") from these sources: what
+ * the daily cap has used up. Uses the (userId, earnedOn) index.
+ */
+export async function sumXpOnDay(db: Db, userId: string, earnedOn: string, sources: readonly XpSource[]): Promise<number> {
+  const result = await db.xpEvent.aggregate({
+    where: { userId, earnedOn: toDate(earnedOn), source: { in: [...sources] } },
     _sum: { amount: true },
   });
   return result._sum.amount ?? 0;
+}
+
+/** XP awarded for each of these sets (a set with no row earned nothing). */
+export async function setXpBySet(setIds: string[]): Promise<Map<string, number>> {
+  const rows = await prisma.xpEvent.findMany({
+    where: { source: "workout_set", sourceId: { in: setIds } },
+    select: { sourceId: true, amount: true },
+  });
+  return new Map(rows.map((r) => [r.sourceId, r.amount]));
 }
 
 /** The player's total XP from everything recorded before `before`. */

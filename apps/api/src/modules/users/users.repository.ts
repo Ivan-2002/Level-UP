@@ -1,3 +1,4 @@
+import { now } from "../../lib/clock.js";
 import { prisma, type Db } from "../../lib/prisma.js";
 import { Prisma, type Profile as ProfileRow } from "../../generated/prisma/client.js";
 
@@ -54,7 +55,7 @@ export async function insertProfile(data: NewProfile): Promise<ProfileRecord | "
       prisma.profile.create({ data: profile }),
       ...(bodyweightKg === undefined
         ? []
-        : [prisma.bodyweightEntry.create({ data: { userId: data.userId, kg: bodyweightKg, measuredOn: todayUtc() } })]),
+        : [prisma.bodyweightEntry.create({ data: { userId: data.userId, kg: bodyweightKg, measuredOn: todayUtc(), receivedAt: now() } })]),
     ]);
     return withLatestBodyweight(row);
   } catch (err) {
@@ -66,17 +67,26 @@ export async function insertProfile(data: NewProfile): Promise<ProfileRecord | "
   }
 }
 
-/** One entry per day: recording today's weight again replaces it. */
+/**
+ * One entry per day: recording a date's weight again replaces it. Every write stamps
+ * receivedAt with the server's time, the update too: the XP bodyweight rule then treats a
+ * re-entered date as just received, so editing an old entry can't dodge the 2% a week limit.
+ */
 export function upsertBodyweight(userId: string, kg: number, measuredOn: Date) {
+  const receivedAt = now();
   return prisma.bodyweightEntry.upsert({
     where: { userId_measuredOn: { userId, measuredOn } },
-    create: { userId, kg, measuredOn },
-    update: { kg },
+    create: { userId, kg, measuredOn, receivedAt },
+    update: { kg, receivedAt },
   });
 }
 
 export function findBodyweightEntries(userId: string, db: Db = prisma) {
-  return db.bodyweightEntry.findMany({ where: { userId }, orderBy: { measuredOn: "asc" }, select: { kg: true, measuredOn: true } });
+  return db.bodyweightEntry.findMany({
+    where: { userId },
+    orderBy: { measuredOn: "asc" },
+    select: { kg: true, measuredOn: true, receivedAt: true },
+  });
 }
 
 /**

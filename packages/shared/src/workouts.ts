@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { weeklyGoalStatusSchema } from "./weekly-goal.js";
 import { restSecSchema } from "./progression.js";
+import { levelStatusSchema } from "./levels.js";
+import { flagReasonSchema, setTagSchema } from "./xp-codes.js";
 
 // ---------------------------------------------------------------------------
 // Exercises and workouts (Milestone 4)
@@ -32,7 +34,21 @@ export type RepsUnit = z.infer<typeof repsUnitSchema>;
 // --- Limits (server-enforced; the app shows them as form hints) -------------
 
 export const REPS_MIN = 1;
+/** The most repetitions in one set. */
 export const REPS_MAX = 100;
+/** Timed exercises (plank) log seconds in `reps`, with their own maximum: 10 minutes. */
+export const HOLD_MAX_SEC = 600;
+/**
+ * The largest `reps` value of ANY unit. Schemas that can't see the exercise (a set in
+ * POST /workouts, a routine target) use this; the server then checks repsMaxFor once it
+ * has loaded the exercise, and the app checks repsMaxFor as the player types.
+ */
+export const REPS_MAX_ANY_UNIT = Math.max(REPS_MAX, HOLD_MAX_SEC);
+
+/** The most `reps` a set (or a routine target) can have for this exercise. */
+export function repsMaxFor(repsUnit: RepsUnit): number {
+  return repsUnit === "seconds" ? HOLD_MAX_SEC : REPS_MAX;
+}
 export const WEIGHT_MIN_KG = 0; // 0 = bodyweight only (push-ups) or an empty bar
 export const WEIGHT_MAX_KG = 500;
 export const MAX_SETS_PER_WORKOUT = 100;
@@ -56,7 +72,8 @@ export const workoutSetInputSchema = z.object({
     .number({ error: "Reps must be a number." })
     .int("Reps must be a whole number.")
     .min(REPS_MIN, `Reps must be at least ${REPS_MIN}.`)
-    .max(REPS_MAX, `Reps must be at most ${REPS_MAX}.`),
+    // The exercise isn't known here; the server checks repsMaxFor (100 reps, 600 s) next.
+    .max(REPS_MAX_ANY_UNIT, `Reps must be at most ${REPS_MAX_ANY_UNIT}.`),
   weightKg: z
     .number({ error: "Weight must be a number." })
     .min(WEIGHT_MIN_KG, "Weight can't be negative.")
@@ -162,6 +179,12 @@ export const exerciseSchema = z.object({
   suggestedRestSec: z.number().int(),
   loadFactor: z.number(),
   bodyweightRatio: z.number(),
+  /**
+   * Plausibility overrides (xp-limits.ts); null = the equipment x mechanic default. The
+   * default(null) lets exercise lists cached by older app versions still parse.
+   */
+  maxPlausibleWeightKg: z.number().nullable().default(null),
+  maxPlausibleReps: z.number().int().nullable().default(null),
   isCustom: z.boolean(),
   /** The player's own rest time for this exercise (highest priority), or null. */
   restPreferenceSec: z.number().int().nullable(),
@@ -242,14 +265,37 @@ export const finishSummarySchema = z.object({
     /** A streak milestone (12, 26, 52 weeks) reached by meeting the goal with this workout. */
     streakMilestone: z.number().int(),
     total: z.number().int(),
+    /**
+     * Set XP this workout did NOT get, and why: the daily cap (daily_cap), or it was synced
+     * more than 14 days after it started (too_old). Null when it got everything.
+     */
+    heldBack: z.object({ amount: z.number().int().positive(), reason: z.enum(["daily_cap", "too_old"]) }).nullable(),
   }),
-  /** Total XP before and after; the app draws the level bar with levelProgress(). */
+  /**
+   * Level before and after this workout. statusBefore/statusAfter are what the XP bar draws
+   * (the server owns the curve); before/after/totalXp* are kept for apps older than Milestone 5.
+   */
   level: z.object({
     before: z.number().int(),
     after: z.number().int(),
     totalXpBefore: z.number().int(),
     totalXpAfter: z.number().int(),
+    statusBefore: levelStatusSchema,
+    statusAfter: levelStatusSchema,
   }),
+  /**
+   * Every set of the workout, in the order of `workout.exercises[].sets`: the XP the ledger
+   * recorded for it (after the daily cap), its tag and why it was flagged or capped.
+   * Workouts from before Milestone 5 have no tags or reasons.
+   */
+  sets: z.array(
+    z.object({
+      setId: z.uuid(),
+      xp: z.number().int(),
+      tag: setTagSchema.nullable(),
+      flagReason: flagReasonSchema.nullable(),
+    }),
+  ),
   stats: sessionStatsSchema.extend({
     /** The previous workout of the same routine (or any previous workout); null if none. */
     previous: sessionStatsSchema.nullable(),
@@ -359,3 +405,14 @@ export const recentExerciseListSchema = z.object({
   items: z.array(z.object({ exercise: exerciseSchema, lastDoneAt: z.iso.datetime(), lastSets: z.array(loggedSetSchema) })),
 });
 export type RecentExerciseList = z.infer<typeof recentExerciseListSchema>;
+
+/**
+ * Response of GET /exercises/xp-history: for every exercise the player has done, the
+ * history the shared scoring needs (ExerciseXpHistory), so the app can preview XP offline.
+ * Values are estimated 1RM in lifted kg, or seconds for timed exercises. Worked out from
+ * logged sets on each request; the app updates its copy after each Finish.
+ */
+export const exerciseXpHistoryListSchema = z.object({
+  items: z.array(z.object({ exerciseId: z.uuid(), recentBest: z.number().nullable(), jumpBaseline: z.number().nullable() })),
+});
+export type ExerciseXpHistoryList = z.infer<typeof exerciseXpHistoryListSchema>;

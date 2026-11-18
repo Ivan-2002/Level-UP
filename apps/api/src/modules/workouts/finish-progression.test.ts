@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { finishWorkoutResponseSchema, fromInputWeight, toDisplayWeight, type FinishWorkoutInput } from "@levelup/shared";
+import { finishWorkoutResponseSchema, fromInputWeight, toDisplayWeight, xpForLevel, type FinishWorkoutInput } from "@levelup/shared";
 import { prisma } from "../../lib/prisma.js";
 import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/helpers.js";
 
@@ -46,21 +46,41 @@ const times = (n: number, set: SetInput) => Array.from({ length: n }, () => set)
 
 describe("XP at Finish", () => {
   it("writes one ledger row per completed set, using the shared formula", async () => {
-    const user = await signUpPlayer({ bodyweightKg: 80 });
+    // 75 kg is the XP reference bodyweight (factor 1), so the arithmetic is the plain formula.
+    const user = await signUpPlayer({ bodyweightKg: 75 });
 
-    // Bench (loadFactor 1.25): 8 x 60 -> round(8 x 60 x 1.25 / 10) = 60 XP per set.
+    // Bench (loadFactor 1.25): 8 x 60 kg -> load 75 kg, estimated 1RM 95 kg, x 0.73 = 69 XP per set.
     const { workout: saved, summary } = await finish(user, workout(0, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]));
 
     const events = await prisma.xpEvent.findMany({ where: { userId: user.userId } });
-    expect(events.map((e) => [e.amount, e.source, e.bodyPart])).toEqual(times(3, [60, "workout_set", "chest"] as never));
+    expect(events.map((e) => [e.amount, e.source, e.bodyPart])).toEqual(times(3, [69, "workout_set", "chest"] as never));
     expect(events.map((e) => e.sourceId).sort()).toEqual(saved.exercises[0]!.sets.map((s) => s.id).sort());
-    expect(summary.xp).toEqual({ sets: 180, weeklyGoal: 0, streakMilestone: 0, total: 180 });
-    expect(summary.level).toEqual({ before: 1, after: 2, totalXpBefore: 0, totalXpAfter: 180 }); // level 2 starts at 100
-    expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(180);
+    expect(summary.xp).toEqual({ sets: 207, weeklyGoal: 0, streakMilestone: 0, total: 207, heldBack: null });
+    // Level 2 starts at 400, so level 1 spans 400 XP.
+    expect(summary.level).toEqual({
+      before: 1,
+      after: 1,
+      totalXpBefore: 0,
+      totalXpAfter: 207,
+      statusBefore: { level: 1, xpIntoLevel: 0, xpForNextLevel: 400 },
+      statusAfter: { level: 1, xpIntoLevel: 207, xpForNextLevel: 400 },
+    });
+    expect(summary.sets).toEqual(saved.exercises[0]!.sets.map((s) => ({ setId: s.id, xp: 69, tag: null, flagReason: null })));
+    expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(207);
+  });
+
+  it("reports a level-up when the workout crosses a level (level 2 at 400 XP)", async () => {
+    const user = await signUpPlayer({ bodyweightKg: 75 });
+
+    // 7 x 69 XP bench sets = 483 XP.
+    const { summary } = await finish(user, workout(0, [["barbell-bench-press", times(7, { reps: 8, weightKg: 60 })]]));
+
+    expect(summary.level).toMatchObject({ before: 1, after: 2, totalXpBefore: 0, totalXpAfter: 483 });
+    expect(summary.level.statusAfter).toEqual({ level: 2, xpIntoLevel: 83, xpForNextLevel: xpForLevel(3) - 400 });
   });
 
   it("never awards XP twice: a repeat returns the same summary and writes nothing", async () => {
-    const user = await signUpPlayer({ bodyweightKg: 80 });
+    const user = await signUpPlayer({ bodyweightKg: 75 });
     const input = workout(0, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]);
 
     const first = await finish(user, input, 201);
@@ -68,11 +88,11 @@ describe("XP at Finish", () => {
 
     expect(repeat).toEqual(first);
     expect(await prisma.xpEvent.count()).toBe(3);
-    expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(180);
+    expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(207);
   });
 
   it("awards XP once when two identical Finishes race", async () => {
-    const user = await signUpPlayer({ bodyweightKg: 80 });
+    const user = await signUpPlayer({ bodyweightKg: 75 });
     const input = workout(0, [["barbell-bench-press", times(2, { reps: 8, weightKg: 60 })]]);
 
     await Promise.all([
@@ -81,28 +101,29 @@ describe("XP at Finish", () => {
     ]);
 
     expect(await prisma.xpEvent.count()).toBe(2);
-    expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(120);
+    expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(138);
   });
 
-  it("uses the bodyweight in effect on the workout's date, so a 0 kg pull-up still earns XP", async () => {
+  it("uses the bodyweight in effect on the workout's date, and XP is relative to it", async () => {
     const user = await signUpPlayer(); // no bodyweight at sign-up
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 70, measuredOn: isoDate(Date.now() - 10 * DAY) });
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 90 });
 
-    // 5 days ago the 70 kg entry was in effect: round(10 x (0 + 70 x 1.0) x 1.25 / 10) = 88.
-    const { summary } = await finish(user, workout(5, [["pull-up", [{ reps: 10, weightKg: 0 }]]]));
+    // 5 days ago the 70 kg entry was in effect: load 75 kg x sqrt(75 / 70), estimated 1RM
+    // x 0.73 = 72 XP. (At today's 90 kg the same set would earn 63.)
+    const { summary } = await finish(user, workout(5, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
 
     expect(summary.bodyweightKg).toBe(70);
-    expect(summary.xp.sets).toBe(88);
+    expect(summary.xp.sets).toBe(72);
   });
 
-  it("falls back to 75 kg when no bodyweight was ever entered", async () => {
+  it("falls back to 75 kg when no bodyweight was ever entered, and a 0 kg pull-up still earns XP", async () => {
     const user = await signUpPlayer();
 
     const { summary } = await finish(user, workout(0, [["pull-up", [{ reps: 10, weightKg: 0 }]]]));
 
     expect(summary.bodyweightKg).toBe(75);
-    expect(summary.xp.sets).toBe(94); // round(10 x 75 x 1.25 / 10) = round(93.75)
+    expect(summary.xp.sets).toBe(91); // 75 kg x 1.25 = 93.75 kg, x (1 + 10/30) x 0.73
   });
 });
 

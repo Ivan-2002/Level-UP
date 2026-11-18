@@ -33,15 +33,19 @@ import * as repo from "./weekly-goal.repository.js";
  */
 export type DaysTrainedIn = (weekStart: LocalDate, timeZone: string) => Promise<number>;
 
+/** The workout being finished, as Finish hands it over. */
+export type MetBy = { workoutId: string; startedAt: Date };
+
 /**
  * Brings the player's weeks up to date and returns this week's status. Runs inside the
  * caller's transaction; the player's profile row stays locked until it commits.
- * `metByWorkoutId`: the workout being finished, credited if it meets a week's goal.
+ * `metBy`: the workout being finished, credited if it meets a week's goal; its bonus is
+ * dated the local day it started. (Progression never reads workouts: Finish passes this.)
  */
 export async function syncWeeklyGoal(
   db: Db,
   userId: string,
-  options: { now: Date; daysTrainedIn: DaysTrainedIn; metByWorkoutId?: string },
+  options: { now: Date; daysTrainedIn: DaysTrainedIn; metBy?: MetBy },
 ): Promise<WeeklyGoalStatus> {
   const { timeZone, createdAt } = await usersService.lockGoalContext(db, userId);
   const currentWeek = weekStartOf(localDate(options.now, timeZone));
@@ -60,6 +64,8 @@ export async function syncWeeklyGoal(
   let streakBefore = (await repo.findWeek(userId, addDays(week.weekStart, -7), db))?.streakAfter ?? 0;
 
   // Close every week that has ended, oldest first, opening the next one each time.
+  // One at a time, awaited in the loop on purpose: each week's target and streak come
+  // from the week before it, so the weeks can't be closed in parallel.
   while (week.weekStart < currentWeek) {
     // A week already closed keeps its result: closing is final.
     const closed = week.closedAt ? week : await settleWeek(db, userId, week, streakBefore, timeZone, options, true);
@@ -67,7 +73,7 @@ export async function syncWeeklyGoal(
       userId,
       weekStart: addDays(week.weekStart, 7),
       kind: "goal",
-      target: nextWeeklyTarget({ kind: week.kind, target: week.target, met: closed.met }),
+      target: nextWeeklyTarget({ kind: week.kind, target: week.target, daysTrained: closed.daysTrained }),
       streakAfter: closed.streakAfter, // carried until this week is met or missed
     });
     streakBefore = closed.streakAfter;
@@ -85,7 +91,7 @@ async function settleWeek(
   week: repo.WeekRow,
   streakBefore: number,
   timeZone: string,
-  options: { daysTrainedIn: DaysTrainedIn; metByWorkoutId?: string },
+  options: { daysTrainedIn: DaysTrainedIn; metBy?: MetBy },
   closed: boolean,
 ): Promise<WeekEvaluation & { daysTrained: number }> {
   // Days only ever go up: a recount that comes out lower (e.g. the time zone changed and a
@@ -98,24 +104,28 @@ async function settleWeek(
     daysTrained,
     met: evaluation.met,
     streakAfter: evaluation.streakAfter,
-    metByWorkoutId: week.metByWorkoutId ?? (newlyMet ? (options.metByWorkoutId ?? null) : null),
+    metByWorkoutId: week.metByWorkoutId ?? (newlyMet ? (options.metBy?.workoutId ?? null) : null),
     ...(closed ? { closedAt: now() } : {}),
   });
 
   if (evaluation.met) {
+    // Dated the local day the workout that met the goal started; the week's Monday when no
+    // workout did (e.g. a recount found it met). Bonuses are outside the daily cap, so
+    // this date is only what the player sees.
+    const earnedOn = newlyMet && options.metBy ? localDate(options.metBy.startedAt, timeZone) : week.weekStart;
     // Idempotent: on a later visit these find their rows already there and do nothing.
-    await payBonus(db, userId, "weekly_goal", week.id, evaluation.bonusXp);
+    await payBonus(db, userId, "weekly_goal", week.id, evaluation.bonusXp, earnedOn);
     for (const milestone of evaluation.milestones) {
-      await payBonus(db, userId, "streak_milestone", week.id, milestone.xp);
+      await payBonus(db, userId, "streak_milestone", week.id, milestone.xp, earnedOn);
       await repo.insertAchievement(db, userId, `streak_${milestone.weeks}`, week.id); // badge: once ever
     }
   }
   return { ...evaluation, daysTrained };
 }
 
-async function payBonus(db: Db, userId: string, source: "weekly_goal" | "streak_milestone", weekId: string, amount: number) {
+async function payBonus(db: Db, userId: string, source: "weekly_goal" | "streak_milestone", weekId: string, amount: number, earnedOn: string) {
   if (amount <= 0) return;
-  const paidNow = await xpRepo.insertBonusXpEvent(db, { userId, amount, source, sourceId: weekId });
+  const paidNow = await xpRepo.insertBonusXpEvent(db, { userId, amount, source, sourceId: weekId, earnedOn });
   if (paidNow) await usersService.addTotalXp(db, userId, amount);
 }
 

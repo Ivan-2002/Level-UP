@@ -68,6 +68,27 @@ describe("POST /routines", () => {
   });
 });
 
+describe("routine targets by unit", () => {
+  const withTarget = (slug: string, targetReps: number): RoutineInput => ({
+    name: "Core",
+    exercises: [{ exerciseId: ids[slug]!, targetSets: 3, targetReps }],
+  });
+
+  it("takes a timed exercise's target in seconds, up to 600", async () => {
+    const res = await create(user, withTarget("plank", 120));
+
+    expect(res.status).toBe(201);
+    expect(res.body.exercises[0].targetReps).toBe(120);
+  });
+
+  it("keeps the 100 limit for reps exercises", async () => {
+    const res = await create(user, withTarget("hanging-leg-raise", 120));
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "RepsOutOfRange", message: "Hanging Leg Raise, target: at most 100 reps." });
+  });
+});
+
 describe("GET /routines", () => {
   it("lists your routines in the order you made them, with counts and last done", async () => {
     await create(user, pushDay());

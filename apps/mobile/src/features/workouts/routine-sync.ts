@@ -1,4 +1,4 @@
-import { REPS_MAX, routineInputSchema, TARGET_SETS_MAX, type RoutineInput } from "@levelup/shared";
+import { repsMaxFor, routineInputSchema, TARGET_SETS_MAX, type RoutineInput } from "@levelup/shared";
 import type { ActiveWorkout, DraftExercise, PlannedExercise, Result } from "./active-workout";
 
 // Finish's two questions, as plain functions:
@@ -78,5 +78,5 @@ export function routineFromWorkout(workout: ActiveWorkout, name: string): Result
 function repsFromSets(draft: DraftExercise): number {
   const typed = draft.sets.map((s) => Number(s.reps)).filter((r) => Number.isInteger(r) && r >= 1);
   const fallback = draft.exercise.repsUnit === "seconds" ? 30 : 8;
-  return Math.min(REPS_MAX, typed.length ? Math.max(...typed) : fallback);
+  return Math.min(repsMaxFor(draft.exercise.repsUnit), typed.length ? Math.max(...typed) : fallback);
 }

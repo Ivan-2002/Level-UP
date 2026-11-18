@@ -74,21 +74,32 @@ describe("countTrainingDays", () => {
   });
 });
 
-describe("nextWeeklyTarget", () => {
-  const goal = (target: number, met: boolean) => ({ kind: "goal" as WeekKind, target, met });
+describe("nextWeeklyTarget: rises only when beaten", () => {
+  const goal = (target: number, daysTrained: number) => ({ kind: "goal" as WeekKind, target, daysTrained });
 
-  it("goes up one when met and down one when missed", () => {
-    expect(nextWeeklyTarget(goal(2, true))).toBe(3);
-    expect(nextWeeklyTarget(goal(3, false))).toBe(2);
+  it("goes up one when beaten, stays when met exactly, and goes down one when missed", () => {
+    expect(nextWeeklyTarget(goal(2, 3))).toBe(3);
+    expect(nextWeeklyTarget(goal(3, 3))).toBe(3);
+    expect(nextWeeklyTarget(goal(3, 2))).toBe(2);
+  });
+
+  it("keeps a steady 3-day player at 3 instead of pushing them to 4 and back", () => {
+    let target: number = WEEKLY_GOAL.startTarget;
+    const targets: number[] = [];
+    for (let week = 0; week < 5; week++) {
+      targets.push(target);
+      target = nextWeeklyTarget(goal(target, 3));
+    }
+    expect(targets).toEqual([2, 3, 3, 3, 3]); // the old rule gave 2, 3, 4, 3, 4: a miss every other week
   });
 
   it("stays within 2 and 4", () => {
-    expect(nextWeeklyTarget(goal(4, true))).toBe(4);
-    expect(nextWeeklyTarget(goal(2, false))).toBe(2);
+    expect(nextWeeklyTarget(goal(4, 6))).toBe(4);
+    expect(nextWeeklyTarget(goal(2, 0))).toBe(2);
   });
 
   it("doesn't move after a warm-up week", () => {
-    expect(nextWeeklyTarget({ kind: "warm_up", target: 2, met: false })).toBe(2);
+    expect(nextWeeklyTarget({ kind: "warm_up", target: 2, daysTrained: 5 })).toBe(2);
   });
 });
 
@@ -99,9 +110,9 @@ describe("streaks and milestones", () => {
   });
 
   it("reaches a milestone on the week the streak arrives at it", () => {
-    expect(milestonesReached(11, 12)).toEqual([{ weeks: 12, xp: 500 }]);
+    expect(milestonesReached(11, 12)).toEqual([{ weeks: 12, xp: 3000 }]);
     expect(milestonesReached(12, 13)).toEqual([]);
-    expect(milestonesReached(51, 52)).toEqual([{ weeks: 52, xp: 3000 }]);
+    expect(milestonesReached(51, 52)).toEqual([{ weeks: 52, xp: 20000 }]);
     expect(milestonesReached(52, 53)).toEqual([]); // nothing after 52, for now
   });
 
@@ -114,7 +125,7 @@ describe("streaks and milestones", () => {
       paid.push(...evaluation.milestones.map((m) => m.xp));
       streak = evaluation.streakAfter;
     }
-    expect(paid).toEqual([500, 500]);
+    expect(paid).toEqual([3000, 3000]);
     expect(streak).toBe(12);
   });
 });
@@ -127,7 +138,7 @@ describe("evaluateWeek", () => {
   });
 
   it("pays the same bonus for extra days", () => {
-    expect(evaluateWeek(week(5, true)).bonusXp).toBe(60);
+    expect(evaluateWeek(week(5, true)).bonusXp).toBe(400);
   });
 
   it("keeps the streak alive while the week is still open", () => {
