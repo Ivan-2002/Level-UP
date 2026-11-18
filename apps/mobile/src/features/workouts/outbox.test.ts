@@ -35,6 +35,7 @@ function setup(script: Record<string, unknown[]> = {}) {
   const sent: string[] = [];
   const timers: { callback: () => void; ms: number }[] = [];
   const onSynced = jest.fn();
+  const onNeedsAttention = jest.fn();
   const processor = createOutboxProcessor({
     store,
     send: async (body) => {
@@ -49,8 +50,9 @@ function setup(script: Record<string, unknown[]> = {}) {
     setTimer: (callback, ms) => timers.push({ callback, ms }),
     clearTimer: () => {},
     onSynced,
+    onNeedsAttention,
   });
-  return { store, processor, sent, timers, onSynced, item: (id: string) => store.getState().items.find((i) => i.clientId === id) };
+  return { store, processor, sent, timers, onSynced, onNeedsAttention, item: (id: string) => store.getState().items.find((i) => i.clientId === id) };
 }
 
 describe("classifyFailure: retry or stop", () => {
@@ -154,6 +156,18 @@ describe("outbox processor", () => {
 
     expect(item("a")).toMatchObject({ status: "needs_attention", lastError: "A workout can last at most 6 hours." });
     expect(timers).toEqual([]);
+  });
+
+  it("reports a rejected workout once (so the app can refetch data that assumed it was saved)", async () => {
+    const { store, processor, onNeedsAttention, onSynced } = setup({ a: [new FakeApiError(400)] });
+    enqueue(store, "a");
+
+    await processor.flush();
+    await processor.flush();
+
+    expect(onNeedsAttention).toHaveBeenCalledTimes(1);
+    expect(onNeedsAttention.mock.calls[0][0]).toMatchObject({ clientId: "a" });
+    expect(onSynced).not.toHaveBeenCalled();
   });
 
   it("sends a workout that needed attention again once the user taps Retry", async () => {
