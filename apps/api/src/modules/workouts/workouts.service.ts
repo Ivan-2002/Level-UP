@@ -75,7 +75,8 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         startedAt,
         receivedAt: now(),
         earnedOn,
-        sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg }))),
+        // completedAt orders each exercise's sets for scoring (list order if any is missing).
+        sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg, completedAt: set.completedAt }))),
         exercises,
         pastSessions: await pastSessions(userId, [...exercises.keys()], startedAt, tx),
       });

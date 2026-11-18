@@ -95,18 +95,26 @@ describe("scoreLiveWorkout: the live preview runs the server's pipeline", () => 
     expect(set.xp).toBeLessThan(fresh.xp);
   });
 
-  it("tags an easy set against the 12-week best", () => {
+  it("tags light sets against the 12-week best: a warm-up before any working set, an easy set after one", () => {
     const history = new Map([[benchPress.id, { recentBest: epleyOneRepMax(120, 8), jumpBaseline: epleyOneRepMax(120, 8) }]]);
-    const w = fill(workout(), 0, 0, "62.5", "8", 5);
+    let w = fill(workout(), 0, 0, "62.5", "8", 5);
+    w = fill(w, 0, 1, "115", "8", 9);
+    w = fill(w, 0, 2, "62.5", "8", 13);
+    const score = scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } });
 
-    expect(scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } }).bySet.get(w.exercises[0]!.sets[0]!.id)).toMatchObject({ tag: "easy_set" });
+    expect(w.exercises[0]!.sets.map((s) => score.bySet.get(s.id)!.tag)).toEqual(["warm_up", null, "easy_set"]);
   });
 });
 
-describe("re-scoring earlier sets as the session goes on", () => {
+describe("re-scoring earlier sets: only in a baseline session", () => {
   const context = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 } };
+  // Last time's best on bench: 100 x 5.
+  const withHistory = {
+    history: new Map([[benchPress.id, { recentBest: epleyOneRepMax(100, 5), jumpBaseline: epleyOneRepMax(100, 5) }]]),
+    bodyweight: { xp: 80, typed: 80 },
+  };
 
-  it("turns 60 x 5 into a warm-up once 100 x 5 follows it", () => {
+  it("baseline session (no history): turns 60 x 5 into a warm-up once 100 x 5 follows it", () => {
     let w = fill(workout(), 0, 0, "60", "5", 5);
     const first = w.exercises[0]!.sets[0]!.id;
     const alone = scoreLiveWorkout(w, context).bySet.get(first)!;
@@ -123,6 +131,29 @@ describe("re-scoring earlier sets as the session goes on", () => {
     expect(setXpNote(rescored).text).toBe(`+${rescored.xp} XP · Warm-up`);
     // The total is always the sum of what the rows show: no hidden carry-over.
     expect(after.total).toBe([...after.bySet.values()].reduce((sum, s) => sum + s.xp, 0));
+  });
+
+  it("with history: a done row's XP and tag never change when a heavier set is ticked", () => {
+    let w = fill(workout(), 0, 0, "60", "5", 5);
+    const first = w.exercises[0]!.sets[0]!.id;
+    const before = scoreLiveWorkout(w, withHistory).bySet.get(first)!;
+    expect(before.tag).toBe("warm_up");
+
+    w = fill(w, 0, 1, "100", "5", 9);
+    w = fill(w, 0, 2, "102.5", "5", 13); // beats last time's best
+    expect(scoreLiveWorkout(w, withHistory).bySet.get(first)).toEqual(before);
+  });
+
+  it("scores in the order ticked: a heavier set higher in the list, ticked later, doesn't re-score the rows ticked before it", () => {
+    // Set 1 is 100 x 5 but ticked last; sets 2 and 3 (60 x 5) were ticked first.
+    let w = fill(workout(), 0, 1, "60", "5", 1);
+    w = fill(w, 0, 2, "60", "5", 4);
+    const sixty = w.exercises[0]!.sets[1]!.id;
+    const before = scoreLiveWorkout(w, withHistory).bySet.get(sixty)!;
+
+    w = fill(w, 0, 0, "100", "5", 9);
+    expect(scoreLiveWorkout(w, withHistory).bySet.get(sixty)).toEqual(before);
+    expect(before.tag).toBe("warm_up"); // in list order it would follow a working set: an easy set
   });
 });
 

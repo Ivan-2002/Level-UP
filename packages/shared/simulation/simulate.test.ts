@@ -106,6 +106,29 @@ describe("simulate", () => {
     }
   });
 
+  it("keeps every honest player under the daily cap, also when they log warm-ups", () => {
+    // The warm-up table in run.ts. With warm-ups the biggest honest day is 3,086 (14 under
+    // the cap); this test fails if a rule change pushes it over.
+    for (const player of SIM_PLAYERS.filter((p) => !p.cheat)) {
+      for (const logsWarmUps of [undefined, true] as const) {
+        const r = simulate({ ...player, logsWarmUps }, player.weeks);
+        expect({ player: player.name, logsWarmUps, cappedDays: r.cappedDays }).toEqual({ player: player.name, logsWarmUps, cappedDays: 0 });
+      }
+    }
+  });
+
+  it("logs the warm-up ramp before barbell lifts only, as warm-ups once the exercise has history", () => {
+    // Two squat sessions: the second has a 12-week best, so its ramp (40/60/80% of 100 kg) is warm-ups.
+    const plain = simulate({ ...twiceAWeek, sessions: [squat(100)] }, 1);
+    const warm = simulate({ ...twiceAWeek, sessions: [squat(100)], logsWarmUps: true }, 1);
+    const ramp = xp(5, 40) + xp(3, 60) + xp(2, 80);
+    expect(warm.setXp).toBeGreaterThan(plain.setXp);
+    expect(warm.setXp - plain.setXp).toBeLessThan(ramp); // warm-ups earn far less than at full effort
+    expect(simulate({ ...twiceAWeek, sessions: [[sets(3, 10, 20, "dumbbell-curl")]], logsWarmUps: true }, 1).setXp).toBe(
+      simulate({ ...twiceAWeek, sessions: [[sets(3, 10, 20, "dumbbell-curl")]] }, 1).setXp,
+    );
+  });
+
   it("doesn't count a session of only warm-ups as a training day", () => {
     // Session 1 (3 x 8 x 100 kg) sets the 12-week best; session 2 is 3 x 8 x 20 kg: easy sets.
     const result = simulate({ ...twiceAWeek, sessions: [[sets(3, 8, 100)], [sets(3, 8, 20)]] }, 1);

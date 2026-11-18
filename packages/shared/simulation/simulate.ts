@@ -4,7 +4,7 @@ import { evaluateWeek, firstWeekKind, nextWeeklyTarget, qualifiesAsTrainingDay, 
 import { xpForLevel } from "../src/index.js";
 import { applyDailyCap, type DailyCapResult } from "../src/xp-limits.js";
 import { SIM_EXERCISES } from "./exercises.js";
-import type { PlannedExercise, Session, SimPlayer } from "./players.js";
+import { WARM_UP_RAMP, type PlannedExercise, type Session, type SimPlayer } from "./players.js";
 
 // Plays a player's training through the REAL rules in @levelup/shared, week by week.
 // Nothing here re-implements a game rule: when a rule or constant changes, rerunning
@@ -130,7 +130,7 @@ function playSession(state: SimState, week: number, day: number, strength: numbe
   const session = player.sessions[totals.sessions % player.sessions.length]!;
 
   const bodyweight = { xp: xpBodyweightOnDate(state.bodyweights, startedAt, { signedUpAt: SIGN_UP.toISOString() }), typed: bodyweightOnDate(state.bodyweights, startedAt) };
-  const { setXps, flagged, jumpCapped, beyondLimit, qualifies } = scoreSession(session, strength, bodyweight, { baselines: state.baselines, histories: state.histories, today: startedAt });
+  const { setXps, flagged, jumpCapped, beyondLimit, qualifies } = scoreSession(session, strength, bodyweight, { baselines: state.baselines, histories: state.histories, today: startedAt, warmUps: state.player.logsWarmUps === true });
   const dayXp = setXps.reduce((a, b) => a + b, 0);
   totals.days.push({ day, xp: dayXp });
   // One session a day, so nothing was awarded earlier that day.
@@ -186,11 +186,12 @@ function scoreSession(
   session: Session,
   strength: number,
   bodyweight: { xp: number; typed: number },
-  state: { baselines: Map<string, number | null>; histories: Map<string, { date: string; value: number }[]>; today: string },
+  state: { baselines: Map<string, number | null>; histories: Map<string, { date: string; value: number }[]>; today: string; warmUps?: boolean },
 ): { setXps: number[]; flagged: number; jumpCapped: number; beyondLimit: number; qualifies: boolean } {
   const sets: SessionSet[] = session.flatMap((planned) => {
     const set = setAtStrength(planned, strength);
-    return Array.from({ length: planned.sets }, () => ({ exerciseId: planned.slug, ...set }));
+    const working = Array.from({ length: planned.sets }, () => ({ exerciseId: planned.slug, ...set }));
+    return [...(state.warmUps ? warmUpSets(planned.slug, set.weightKg) : []), ...working];
   });
   const history = new Map<string, ExerciseXpHistory>(
     session.map((p) => [p.slug, { recentBest: recentBest(state.histories.get(p.slug) ?? [], state.today), jumpBaseline: state.baselines.get(p.slug) ?? null }]),
@@ -209,6 +210,12 @@ function scoreSession(
     beyondLimit: score.sets.filter((s) => s.tag === "beyond_set_limit").length,
     qualifies: qualifiesAsTrainingDay({ sets: score.sets }),
   };
+}
+
+/** The warm-up ramp before a barbell lift's working sets (none for other equipment). */
+function warmUpSets(slug: PlannedExercise["slug"], workingKg: number): SessionSet[] {
+  if (SIM_EXERCISES[slug].equipment !== "barbell" || workingKg <= 20) return [];
+  return WARM_UP_RAMP.map((step) => ({ exerciseId: slug, reps: step.reps, weightKg: Math.max(20, Math.round(workingKg * step.share * 2) / 2) }));
 }
 
 function setAtStrength(planned: PlannedExercise, strength: number): { reps: number; weightKg: number } {

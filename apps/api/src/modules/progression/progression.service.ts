@@ -33,7 +33,7 @@ export type WorkoutToScore = {
   receivedAt: Date;
   /** The local day it started ("YYYY-MM-DD"): the daily cap's day. */
   earnedOn: string;
-  /** Every set of the workout, in the order logged (exercise by exercise). */
+  /** Every set of the workout, in the order logged (exercise by exercise), with completedAt when the app sent it. */
   sets: SessionSet[];
   exercises: Map<string, ScoringExercise>;
   /** Per exercise in the workout: its sessions in workouts that started earlier, oldest first. */

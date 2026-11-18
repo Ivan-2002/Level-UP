@@ -144,12 +144,12 @@ describe("training days", () => {
     expect(two.summary.weeklyGoal).toMatchObject({ daysTrained: 0 });
   });
 
-  it("doesn't count 3 empty-bar sets (tagged easy) as a training day", async () => {
+  it("doesn't count 3 empty-bar sets (warm-ups: no working set came before them) as a training day", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
     await train(user, "2026-10-06T07:00:00", { kg: 100 }); // sets the 12-week best
     const emptyBar = await train(user, "2026-10-07T07:00:00", { kg: 20 });
 
-    expect(emptyBar.summary.sets.map((s) => s.tag)).toEqual(["easy_set", "easy_set", "easy_set"]);
+    expect(emptyBar.summary.sets.map((s) => s.tag)).toEqual(["warm_up", "warm_up", "warm_up"]);
     expect(emptyBar.summary.weeklyGoal).toMatchObject({ daysTrained: 1, met: false });
   });
 

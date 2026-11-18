@@ -179,6 +179,23 @@ describe("the 10-set limit and tags at Finish", () => {
     const summary = (await request(app).get(`/v1/workouts/${saved.id}/summary`).set("Cookie", user.cookie)).body;
     expect(finishWorkoutResponseSchema.parse(summary).summary.sets.map((s) => [s.xp, s.tag])).toEqual(expected.sets.map((s) => [s.xp, s.tag]));
   });
+
+  it("scores each exercise's sets in the order they were ticked (completedAt), as the live view does", async () => {
+    const user = await signUpPlayer({ bodyweightKg: 75 });
+    await finish(user, workout(2, [["barbell-bench-press", times(3, { reps: 8, weightKg: 100 })]])); // a 12-week best
+
+    // Listed heavy first, but the 40 kg set was ticked first: before any working set, a warm-up.
+    // In list order it would follow a working set and be an easy set.
+    const body = workout(0, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }, { reps: 5, weightKg: 40 }]]]);
+    const started = Date.parse(body.startedAt);
+    body.exercises[0]!.sets = [
+      { reps: 8, weightKg: 100, completedAt: iso(started + 20 * MINUTE) },
+      { reps: 5, weightKg: 40, completedAt: iso(started + 10 * MINUTE) },
+    ];
+    const { workout: saved } = await finish(user, body);
+
+    expect((await storedSets(saved.id)).map((s) => s.xpTag)).toEqual([null, "warm_up"]);
+  });
 });
 
 describe("the daily cap at Finish", () => {

@@ -54,15 +54,15 @@ export type LiveScore = {
 };
 
 /**
- * Scores the done sets with the shared pipeline (scoreSessionSets), in the order Finish
- * sends them (buildFinishPayload: exercise by exercise, each exercise's sets in order),
- * which is the order the server scores them in. So the preview matches the server's
- * number, except for what only the server can know (the daily cap, the 14-day rule).
+ * Scores the done sets with the shared pipeline (scoreSessionSets), as Finish sends them
+ * (buildFinishPayload: exercise by exercise, each set with its doneAt as completedAt), so
+ * both score each exercise's sets in the order they were ticked. The preview matches the
+ * server's number, except for what only the server can know (the daily cap, the 14-day rule).
  */
 export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringContext): LiveScore {
   const done = workout.exercises.flatMap((draft) => doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })));
   const score = scoreSessionSets({
-    sets: done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg })),
+    sets: done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg, completedAt: d.set.doneAt })),
     exercises: new Map(workout.exercises.map((draft) => [draft.exercise.id, draft.exercise])),
     history: context.history,
     bodyweight: context.bodyweight,
