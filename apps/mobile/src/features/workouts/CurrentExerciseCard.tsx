@@ -15,7 +15,7 @@ import { createStyles, useTheme } from "@/theme/use-theme";
 import type { ActiveWorkout, DraftExercise } from "./active-workout";
 import { E1rmChart } from "./E1rmChart";
 import { capitalise, formatRest } from "./format";
-import { e1rmBars, lastSessionText, livePrs, nextUp, previousSetText, suggestedRestText, todayBestE1rm } from "./live-workout";
+import { e1rmBars, lastSessionText, livePrs, nextUp, previousSetText, setXpNote, suggestedRestText, todayBestE1rm, type LiveScore } from "./live-workout";
 import { loggingConvention } from "./logging-conventions";
 
 type Props = {
@@ -24,10 +24,12 @@ type Props = {
   /** This exercise's history; undefined while loading or never fetched (offline). */
   summary: ExerciseSummary | undefined;
   bodyweightKg: number;
+  /** Each done set's score (scoreLiveWorkout), by set id. */
+  scores: LiveScore["bySet"];
 };
 
 /** The exercise on screen: last time, the coach's target, rest, the sets, the trend. */
-export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: Props) {
+export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, scores }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const styles = useStyles();
   const t = useTheme();
@@ -115,6 +117,7 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
         <SetTableHeader weightUnit={unit} repsUnit={repsUnit} previousLabel="Last time" />
         {draft.sets.map((set, index) => {
           const pr = prs.get(set.id);
+          const score = set.doneAt !== null ? scores.get(set.id) : undefined;
           return (
             <SetRow
               key={set.id}
@@ -129,6 +132,7 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
               bodyweight={exercise.equipment === "bodyweight"}
               done={set.doneAt !== null}
               onToggleDone={() => toggle(set.id)}
+              xpNote={score ? setXpNote(score) : undefined}
               prText={pr ? `New PR · est. 1RM ${formatWeight(pr, unit, { decimals: 0 })}` : undefined}
               error={errors[set.id]}
               numberHint="Removes this set"

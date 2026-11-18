@@ -65,6 +65,12 @@ type SetRowProps = {
   bodyweight?: boolean;
   done: boolean;
   onToggleDone: () => void;
+  /**
+   * A done set's XP and tag, e.g. "+12 XP · Warm-up", with an optional sentence under it.
+   * It can change after later sets are ticked (a set becomes a warm-up once a heavier one
+   * follows), so it updates in place: no animation, and not announced to screen readers.
+   */
+  xpNote?: { text: string; tone: "inkMuted" | "danger"; detail?: string };
   /** "New PR · est. 1RM 79 kg": shown in purple under the row. */
   prText?: string;
   /** Why the tick was refused, e.g. "Enter reps first." */
@@ -75,7 +81,7 @@ type SetRowProps = {
 };
 
 export function SetRow(props: SetRowProps) {
-  const { number, previous, weight, reps, weightUnit, repsUnit, bodyweight = false, done, prText, error } = props;
+  const { number, previous, weight, reps, weightUnit, repsUnit, bodyweight = false, done, xpNote, prText, error } = props;
   const styles = useStyles();
   const t = useTheme();
   const flexible = previous === undefined;
@@ -141,6 +147,18 @@ export function SetRow(props: SetRowProps) {
         </Pressable>
       </View>
 
+      {xpNote ? (
+        <View style={styles.xpNote}>
+          <Text variant="caption" tone={xpNote.tone} tabular>
+            {xpNote.text}
+          </Text>
+          {xpNote.detail ? (
+            <Text variant="caption" tone="inkMuted">
+              {xpNote.detail}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       {prText ? (
         <View style={styles.note} accessibilityLiveRegion="polite">
           <Icon name="pr" size={14} color={t.colors.purple} />
@@ -217,4 +235,5 @@ const useStyles = createStyles((t) => ({
   pressed: { opacity: 0.7 },
   note: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 4, paddingLeft: COLUMNS.set + COLUMNS.gap },
   noteText: { paddingTop: 4, paddingLeft: COLUMNS.set + COLUMNS.gap },
+  xpNote: { paddingTop: 2, paddingLeft: COLUMNS.set + COLUMNS.gap },
 }));

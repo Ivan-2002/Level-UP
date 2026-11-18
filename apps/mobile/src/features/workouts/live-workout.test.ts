@@ -1,14 +1,15 @@
-import { epleyOneRepMax, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
+import { epleyOneRepMax, JUMP_CAP_TEXT, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
 import { addExercise, buildFinishPayload, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
 import {
   e1rmBars,
   lastSessionText,
-  liveXp,
   livePrs,
   nextUp,
+  pinContext,
   previousSetText,
   scoreLiveWorkout,
+  setXpNote,
   suggestedRestText,
   todayBestE1rm,
   workoutSegments,
@@ -39,11 +40,11 @@ function workout(unit: "kg" | "lb" = "kg") {
 
 describe("live XP and progress", () => {
   it("adds XP for completed sets only, with the shared formula", () => {
-    // Estimated 1RM of the XP load (x sqrt(75 / 80) here) x 0.73:
+    // Estimated 1RM of the XP load (x sqrt(75 / 80) here) x 0.73, at full effort:
     let w = fill(workout(), 0, 0, "62.5", "8", 5); // bench: 78.1 kg load -> 70 XP
     w = fill(w, 1, 0, "0", "10", 8); // pull-up: 100 kg load -> 94 XP
 
-    expect(liveXp(w, 80)).toBe(164);
+    expect(scoreLiveWorkout(w, { history: new Map(), bodyweight: { xp: 80, typed: 80 } }).total).toBe(164);
   });
 
   it("gives one segment per exercise, sized by its sets", () => {
@@ -99,6 +100,76 @@ describe("scoreLiveWorkout: the live preview runs the server's pipeline", () => 
     const w = fill(workout(), 0, 0, "62.5", "8", 5);
 
     expect(scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } }).bySet.get(w.exercises[0]!.sets[0]!.id)).toMatchObject({ tag: "easy_set" });
+  });
+});
+
+describe("re-scoring earlier sets as the session goes on", () => {
+  const context = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 } };
+
+  it("turns 60 x 5 into a warm-up once 100 x 5 follows it", () => {
+    let w = fill(workout(), 0, 0, "60", "5", 5);
+    const first = w.exercises[0]!.sets[0]!.id;
+    const alone = scoreLiveWorkout(w, context).bySet.get(first)!;
+    // On its own it's the session's best: full effort, no tag.
+    expect(alone).toMatchObject({ tag: null, effort: 1 });
+
+    w = fill(w, 0, 1, "100", "5", 9);
+    const after = scoreLiveWorkout(w, context);
+    const rescored = after.bySet.get(first)!;
+
+    // Now measured against 100 x 5: low effort, before the heaviest set -> a warm-up.
+    expect(rescored.tag).toBe("warm_up");
+    expect(rescored.xp).toBeLessThan(alone.xp);
+    expect(setXpNote(rescored).text).toBe(`+${rescored.xp} XP · Warm-up`);
+    // The total is always the sum of what the rows show: no hidden carry-over.
+    expect(after.total).toBe([...after.bySet.values()].reduce((sum, s) => sum + s.xp, 0));
+  });
+});
+
+describe("pinContext: the total only moves when a set does", () => {
+  const history = new Map<string, ExerciseXpHistory>([[benchPress.id, { recentBest: 100, jumpBaseline: 100 }]]);
+  const bodyweight = { xp: 80, typed: 80 };
+
+  it("waits for the history before the first tick, then keeps it for the whole workout", () => {
+    const w = workout();
+    expect(pinContext(null, w, { history: undefined, bodyweight })).toBeNull();
+
+    const pinned = pinContext(null, w, { history, bodyweight })!;
+    // A refetch (new history object, a changed XP bodyweight) doesn't change it.
+    const later = pinContext(pinned, w, { history: new Map(), bodyweight: { xp: 70, typed: 70 } });
+    expect(later).toBe(pinned);
+  });
+
+  it("pins with an empty history once a set is ticked offline before any history arrived", () => {
+    const w = fill(workout(), 0, 0, "60", "5", 5);
+    expect(pinContext(null, w, { history: undefined, bodyweight })?.context.history.size).toBe(0);
+  });
+
+  it("takes a fresh context for the next workout", () => {
+    const pinned = pinContext(null, workout(), { history, bodyweight })!;
+    const next = { ...workout(), clientId: "next" };
+    expect(pinContext(pinned, next, { history, bodyweight })).not.toBe(pinned);
+  });
+});
+
+describe("setXpNote", () => {
+  const base = { xp: 70, effort: 1, flagReason: null, isFlagged: false };
+
+  it("shows the XP, then the tag when there is one", () => {
+    expect(setXpNote({ ...base, tag: null })).toEqual({ text: "+70 XP", tone: "inkMuted" });
+    expect(setXpNote({ ...base, xp: 3, tag: "easy_set" })).toEqual({ text: "+3 XP · Easy set", tone: "inkMuted" });
+  });
+
+  it("explains a jump-capped set with the fixed sentence", () => {
+    expect(setXpNote({ ...base, tag: "above_history", flagReason: "above_history" })).toEqual({
+      text: "+70 XP · Above your best · +25%",
+      tone: "inkMuted",
+      detail: JUMP_CAP_TEXT,
+    });
+  });
+
+  it("shows a flagged set as 0 XP in red", () => {
+    expect(setXpNote({ ...base, xp: 0, tag: "check_set", flagReason: "weight_above_range", isFlagged: true })).toEqual({ text: "0 XP · Check this set", tone: "danger" });
   });
 });
 

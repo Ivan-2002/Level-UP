@@ -1,8 +1,9 @@
 import {
   estimatedOneRepMax,
+  JUMP_CAP_TEXT,
   liftedKg,
   scoreSessionSets,
-  setXp,
+  setTagText,
   toDisplayWeight,
   type Exercise,
   type ExerciseSession,
@@ -73,12 +74,33 @@ export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringCon
   };
 }
 
-/** XP earned so far, with the shared per-set formula. Replaced by scoreLiveWorkout in Phase 4c. */
-export function liveXp(workout: ActiveWorkout, bodyweightKg: number): number {
-  return workout.exercises.reduce(
-    (sum, draft) => sum + doneSets(draft, workout.weightUnit).reduce((s, d) => s + setXp(d, bodyweightKg, draft.exercise), 0),
-    0,
-  );
+/**
+ * The scoring context a workout is previewed with, PINNED per workout: taken once, when
+ * the history first arrives (or when the first set is ticked, if it hasn't by then), and
+ * kept until the workout ends. Without this, a background refetch (the profile, or the
+ * history after an earlier workout syncs) would shift the total mid-workout; pinned, the
+ * total only changes when the player ticks or edits a set.
+ */
+export type PinnedContext = { clientId: string; context: LiveScoringContext };
+
+export function pinContext(
+  pinned: PinnedContext | null,
+  workout: Pick<ActiveWorkout, "clientId" | "exercises">,
+  available: { history: LiveScoringContext["history"] | undefined; bodyweight: LiveScoringContext["bodyweight"] },
+): PinnedContext | null {
+  if (pinned?.clientId === workout.clientId) return pinned;
+  const anyDone = workout.exercises.some((e) => e.sets.some((s) => s.doneAt !== null));
+  if (available.history === undefined && !anyDone) return null; // wait a little for the history
+  return { clientId: workout.clientId, context: { history: available.history ?? new Map(), bodyweight: available.bodyweight } };
+}
+
+/** The line under a done set: its XP and why it's lower, if it is ("+12 XP · Warm-up"). */
+export type SetXpNote = { text: string; tone: "inkMuted" | "danger"; detail?: string };
+
+export function setXpNote(score: ScoredSet): SetXpNote {
+  if (score.isFlagged) return { text: `0 XP · ${setTagText("check_set")}`, tone: "danger" };
+  const text = score.tag ? `+${score.xp} XP · ${setTagText(score.tag)}` : `+${score.xp} XP`;
+  return score.tag === "above_history" ? { text, tone: "inkMuted", detail: JUMP_CAP_TEXT } : { text, tone: "inkMuted" };
 }
 
 /** One progress segment per exercise, plus which one is on screen. */

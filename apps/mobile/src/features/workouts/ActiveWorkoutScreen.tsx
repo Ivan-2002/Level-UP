@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,9 +19,12 @@ import { useProfile } from "@/features/profile/use-profile";
 import { currentExercise, setCounts, type ActiveWorkout } from "./active-workout";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
 import { ElapsedTimer } from "./ElapsedTimer";
-import { lastSessionText, liveXp, nextUp, workoutSegments } from "./live-workout";
+import { lastSessionText, nextUp, pinContext, scoreLiveWorkout, workoutSegments, type LiveScore, type PinnedContext } from "./live-workout";
 import { RestBar } from "./RestBar";
 import { exerciseSummaryQuery, useExerciseSummary } from "./use-exercise-summary";
+import { useXpHistory } from "./use-xp-history";
+
+const EMPTY_SCORES: LiveScore["bySet"] = new Map();
 
 function goHome() {
   if (router.canGoBack()) router.back();
@@ -63,6 +66,20 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   const styles = useStyles();
   const t = useTheme();
   const bodyweightKg = profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG;
+  const xpHistory = useXpHistory(userId);
+
+  // Live XP with the server's pipeline. The context (history, bodyweights) is pinned for
+  // the workout (see pinContext), so the total only moves when a set is ticked or edited.
+  // React's pattern for "remember something from earlier renders": state, updated during
+  // render only when it actually changes (once per workout).
+  const [pinned, setPinned] = useState<PinnedContext | null>(null);
+  const nextPinned = pinContext(pinned, workout, {
+    history: xpHistory,
+    bodyweight: { xp: profile?.xpBodyweightKg ?? bodyweightKg, typed: bodyweightKg },
+  });
+  if (nextPinned !== pinned) setPinned(nextPinned);
+  const context = nextPinned?.context;
+  const live = useMemo(() => (context ? scoreLiveWorkout(workout, context) : null), [workout, context]);
 
   // Load every exercise's history up front (and save it on the phone), so switching
   // exercises at the gym doesn't wait for the network.
@@ -112,7 +129,7 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
         <View style={styles.tiles}>
           <StatTile label="Elapsed" icon="timer" value={<ElapsedTimer startedAt={workout.startedAt} />} accessibilityLabel="Elapsed time" />
           <StatTile label="Sets left" value={String(total - done)} suffix={` / ${total}`} accessibilityLabel={`${total - done} of ${total} sets left`} />
-          <StatTile label="XP earned" icon="xp" tone="progress" value={`+${liveXp(workout, bodyweightKg)}`} />
+          <StatTile label="XP earned" icon="xp" tone="progress" value={live ? `+${live.total}` : "…"} accessibilityLabel={live ? `XP earned, ${live.total}` : "XP earned, loading"} />
         </View>
 
         {segments.length > 0 ? <ProgressSegments segments={segments} currentIndex={index} /> : null}
@@ -140,7 +157,7 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft ? (
-            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} />
+            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} scores={live?.bySet ?? EMPTY_SCORES} />
           ) : (
             <Card>
               <Text variant="heading">Add your first exercise</Text>
