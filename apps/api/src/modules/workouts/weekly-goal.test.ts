@@ -27,7 +27,7 @@ async function playerSignedUpAt(local: string): Promise<TestUser> {
 }
 
 /** Finishes a workout that started at `local` and lasted an hour (the clock moves to its end). */
-async function train(user: TestUser, local: string, options: { sets?: number; clientId?: string } = {}) {
+async function train(user: TestUser, local: string, options: { sets?: number; kg?: number; clientId?: string } = {}) {
   const startedAt = new Date(at(local));
   const finishedAt = new Date(startedAt.getTime() + 3_600_000);
   setNow(finishedAt);
@@ -38,7 +38,7 @@ async function train(user: TestUser, local: string, options: { sets?: number; cl
       clientId: options.clientId ?? randomUUID(),
       startedAt: startedAt.toISOString(),
       finishedAt: finishedAt.toISOString(),
-      exercises: [{ exerciseId: ids["barbell-bench-press"], sets: Array.from({ length: options.sets ?? 3 }, () => ({ reps: 8, weightKg: 60 })) }],
+      exercises: [{ exerciseId: ids["barbell-bench-press"], sets: Array.from({ length: options.sets ?? 3 }, () => ({ reps: 8, weightKg: options.kg ?? 60 })) }],
     });
   expect(res.status, res.text).toBeLessThan(300);
   return finishWorkoutResponseSchema.parse(res.body);
@@ -134,11 +134,23 @@ describe("training days", () => {
     expect(await bonusRows(user)).toEqual([{ source: "weekly_goal", amount: BONUS }]);
   });
 
-  it("needs at least 3 completed sets", async () => {
+  it("needs at least 3 sets that count: a 1-set or 2-set workout earns XP but isn't a training day", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
-    const short = await train(user, "2026-10-06T07:00:00", { sets: 2 });
+    const one = await train(user, "2026-10-06T07:00:00", { sets: 1 });
+    const two = await train(user, "2026-10-07T07:00:00", { sets: 2 });
 
-    expect(short.summary.weeklyGoal).toMatchObject({ daysTrained: 0 });
+    expect(one.summary.xp.sets).toBeGreaterThan(0);
+    expect(one.summary.weeklyGoal).toMatchObject({ daysTrained: 0 });
+    expect(two.summary.weeklyGoal).toMatchObject({ daysTrained: 0 });
+  });
+
+  it("doesn't count 3 empty-bar sets (tagged easy) as a training day", async () => {
+    const user = await playerSignedUpAt("2026-10-05T08:00:00");
+    await train(user, "2026-10-06T07:00:00", { kg: 100 }); // sets the 12-week best
+    const emptyBar = await train(user, "2026-10-07T07:00:00", { kg: 20 });
+
+    expect(emptyBar.summary.sets.map((s) => s.tag)).toEqual(["easy_set", "easy_set", "easy_set"]);
+    expect(emptyBar.summary.weeklyGoal).toMatchObject({ daysTrained: 1, met: false });
   });
 
   it("counts workouts just before and just after local midnight as two days", async () => {

@@ -37,11 +37,12 @@ describe("simulate", () => {
   };
 
   it("pays the weekly goal through the real rules", () => {
-    const result = simulate(twiceAWeek, 2);
+    // 3 sets a session: a 1-set session isn't a training day (qualifiesAsTrainingDay).
+    const result = simulate({ ...twiceAWeek, sessions: [[sets(3, 8, 100)]] }, 2);
 
     // 2 days meets the target of 2 each week. Meeting it exactly keeps it at 2 (it rises
     // only when beaten), so both weeks pay and the streak reaches 2.
-    expect(result.setXp).toBe(4 * xp(8, 100));
+    expect(result.setXp).toBe(4 * 3 * xp(8, 100));
     expect(result.bonusXp).toBe(2 * WEEKLY_GOAL.weeklyBonusXp);
     expect(result.longestStreak).toBe(2);
   });
@@ -92,16 +93,24 @@ describe("simulate", () => {
     expect(bigDay).toMatchObject({ setXp: capped.awarded.reduce((a, b) => a + b, 0), heldBackXp: capped.heldBack, cappedDays: 1 });
   });
 
-  it("never flags, jump-caps or limits a set of the honest player types, over their whole simulation", () => {
+  it("never flags, jump-caps or limits a set of the honest player types, and every session is a training day", () => {
     for (const player of SIM_PLAYERS.filter((p) => !p.cheat)) {
       const r = simulate(player, player.weeks);
-      expect({ player: player.name, flagged: r.flaggedSets, capped: r.jumpCappedSets, beyond: r.beyondLimitSets }).toEqual({
+      expect({ player: player.name, flagged: r.flaggedSets, capped: r.jumpCappedSets, beyond: r.beyondLimitSets, notTrainingDays: r.notTrainingDays }).toEqual({
         player: player.name,
         flagged: 0,
         capped: 0,
         beyond: 0,
+        notTrainingDays: 0,
       });
     }
+  });
+
+  it("doesn't count a session of only warm-ups as a training day", () => {
+    // Session 1 (3 x 8 x 100 kg) sets the 12-week best; session 2 is 3 x 8 x 20 kg: easy sets.
+    const result = simulate({ ...twiceAWeek, sessions: [[sets(3, 8, 100)], [sets(3, 8, 20)]] }, 1);
+    expect(result.notTrainingDays).toBe(1);
+    expect(result.bonusXp).toBe(0); // 1 training day of the 2 needed
   });
 
   it("is deterministic", () => {

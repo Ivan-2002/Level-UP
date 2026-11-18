@@ -1,3 +1,4 @@
+import { setTagSchema } from "@levelup/shared";
 import { isUuid } from "../../lib/ids.js";
 import { prisma, type Db } from "../../lib/prisma.js";
 import { Prisma, type XpHeldBackReason } from "../../generated/prisma/client.js";
@@ -219,7 +220,8 @@ export function findHistoryPage(
 /**
  * Workouts that may fall in a week: a window one day wider on each side than the UTC week,
  * because the player's local week can be up to 14 hours off UTC. The caller keeps those
- * whose LOCAL day is in the week. completedSets excludes flagged sets.
+ * whose LOCAL day is in the week. Each set comes with how scoring tagged it, for
+ * qualifiesAsTrainingDay (a code this version doesn't know reads as no tag).
  */
 export async function findWorkoutsAround(db: Db, userId: string, weekStart: string) {
   const from = new Date(`${weekStart}T00:00:00Z`);
@@ -228,11 +230,11 @@ export async function findWorkoutsAround(db: Db, userId: string, weekStart: stri
   to.setUTCDate(to.getUTCDate() + 9);
   const rows = await db.workout.findMany({
     where: { userId, startedAt: { gte: from, lt: to } },
-    select: { startedAt: true, createdAt: true, exercises: { select: { _count: { select: { sets: { where: { isFlagged: false } } } } } } },
+    select: { startedAt: true, createdAt: true, exercises: { select: { sets: { select: { isFlagged: true, xpTag: true } } } } },
   });
   return rows.map((w) => ({
     startedAt: w.startedAt,
     savedAt: w.createdAt,
-    completedSets: w.exercises.reduce((sum, e) => sum + e._count.sets, 0),
+    sets: w.exercises.flatMap((e) => e.sets.map((s) => ({ isFlagged: s.isFlagged, tag: setTagSchema.safeParse(s.xpTag).data ?? null }))),
   }));
 }
