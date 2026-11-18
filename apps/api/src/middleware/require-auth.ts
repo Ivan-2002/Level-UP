@@ -4,6 +4,8 @@ import { auth, type Session } from "../lib/auth.js";
 
 // Tell TypeScript that, after this middleware, req.session exists.
 declare global {
+  // Express's own types declare Request in this global namespace, so extending it needs one.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       session?: Session;
