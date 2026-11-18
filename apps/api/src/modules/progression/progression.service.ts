@@ -14,7 +14,7 @@ import {
   XP_SOURCES_UNDER_DAILY_CAP,
 } from "@levelup/shared";
 import type { XpHeldBackReason } from "../../generated/prisma/client.js";
-import type { Db } from "../../lib/prisma.js";
+import { prisma, type Db } from "../../lib/prisma.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./progression.repository.js";
 
@@ -85,6 +85,14 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
   const dayXpBefore = await repo.sumXpOnDay(db, userId, workout.earnedOn, XP_SOURCES_UNDER_DAILY_CAP);
   const capped = applyDailyCap(dayXpBefore, setXp);
   return { sets: score.sets, awardedXp: capped.awarded, heldBack: heldBack(capped.heldBack, "daily_cap"), bodyweightKg: typed };
+}
+
+/**
+ * Set XP already awarded on a local day (the daily cap's count, as Finish sums it):
+ * what the app's live preview starts the day from (GET /exercises/xp-history).
+ */
+export async function setXpOnDay(userId: string, earnedOn: string): Promise<number> {
+  return repo.sumXpOnDay(prisma, userId, earnedOn, XP_SOURCES_UNDER_DAILY_CAP);
 }
 
 // Zero means nothing was held back: no reason (the database's CHECK insists on that).

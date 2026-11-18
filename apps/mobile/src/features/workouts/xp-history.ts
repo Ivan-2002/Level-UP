@@ -29,7 +29,7 @@ export type ReplayContext = {
   bodyweight: { xp: number; typed: number };
 };
 
-export function historyFromList(list: ExerciseXpHistoryList): XpHistory {
+export function historyFromList(list: Pick<ExerciseXpHistoryList, "items">): XpHistory {
   return new Map(list.items.map((i) => [i.exerciseId, { recentBest: i.recentBest, jumpBaseline: i.jumpBaseline }]));
 }
 

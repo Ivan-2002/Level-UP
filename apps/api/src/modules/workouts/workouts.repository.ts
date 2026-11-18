@@ -1,4 +1,4 @@
-import { setTagSchema } from "@levelup/shared";
+import { localDate, setTagSchema } from "@levelup/shared";
 import { isUuid } from "../../lib/ids.js";
 import { prisma, type Db } from "../../lib/prisma.js";
 import { Prisma, type XpHeldBackReason } from "../../generated/prisma/client.js";
@@ -215,6 +215,23 @@ export function findHistoryPage(
     take,
     select: summarySelect,
   });
+}
+
+/**
+ * The clientIds of the player's workouts that STARTED on a local day (in `timeZone`): the
+ * same rule that dates their set XP (earned_on). Read from a window a day wider on each
+ * side of the UTC day, then filtered by local day, as findWorkoutsAround does.
+ */
+export async function findClientIdsStartedOn(userId: string, date: string, timeZone: string): Promise<string[]> {
+  const from = new Date(`${date}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const to = new Date(from);
+  to.setUTCDate(to.getUTCDate() + 3);
+  const rows = await prisma.workout.findMany({
+    where: { userId, startedAt: { gte: from, lt: to } },
+    select: { clientId: true, startedAt: true },
+  });
+  return rows.filter((w) => localDate(w.startedAt, timeZone) === date).map((w) => w.clientId);
 }
 
 /**

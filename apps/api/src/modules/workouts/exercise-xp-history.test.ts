@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { epleyOneRepMax, exerciseXpHistoryListSchema, JUMP_CAP, type FinishWorkoutInput } from "@levelup/shared";
+import { DAILY_XP_CAP, epleyOneRepMax, exerciseXpHistoryListSchema, finishWorkoutResponseSchema, JUMP_CAP, type FinishWorkoutInput } from "@levelup/shared";
+import { setNow } from "../../lib/clock.js";
 import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/helpers.js";
 
 // GET /v1/exercises/xp-history: each exercise's 12-week best and jump baseline, for the
@@ -82,5 +83,56 @@ describe("GET /v1/exercises/xp-history", () => {
     await finish(other, workout(1, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
 
     expect(await xpHistory(await signUpPlayer())).toEqual([]);
+  });
+});
+
+describe("GET /v1/exercises/xp-history: the daily cap for the live preview", () => {
+  // Auckland is UTC+13 in October: the player's local day and the UTC day differ for most
+  // of the morning, so these tests show "today" is the PROFILE's day, as Finish dates XP.
+  const TZ = "Pacific/Auckland";
+  const local = (time: string) => new Date(`${time}+13:00`);
+
+
+  async function finishAt(user: TestUser, startLocal: string) {
+    const startedAt = local(startLocal);
+    const body: FinishWorkoutInput = {
+      clientId: randomUUID(),
+      startedAt: startedAt.toISOString(),
+      finishedAt: iso(startedAt.getTime() + 30 * MINUTE),
+      exercises: [{ exerciseId: ids["barbell-bench-press"]!, sets: [{ reps: 8, weightKg: 60 }, { reps: 8, weightKg: 60 }] }],
+    };
+    setNow(new Date(startedAt.getTime() + 30 * MINUTE));
+    const res = await request(app).post("/v1/workouts").set("Cookie", user.cookie).send(body);
+    expect(res.status, res.text).toBe(201);
+    return { clientId: body.clientId, setXp: finishWorkoutResponseSchema.parse(res.body).summary.xp.sets };
+  }
+
+  it("sends the cap's values, so the app never hardcodes them", async () => {
+    const res = await request(app).get("/v1/exercises/xp-history").set("Cookie", (await signUpPlayer()).cookie);
+    expect(exerciseXpHistoryListSchema.parse(res.body).dailyCap).toEqual({
+      limit: DAILY_XP_CAP.limit,
+      bandRate: DAILY_XP_CAP.bandRate,
+      ceilingMultiple: DAILY_XP_CAP.ceilingMultiple,
+    });
+  });
+
+  it("counts today's set XP and the workouts in it by the LOCAL day each started", async () => {
+    setNow(local("2026-10-14T08:00:00"));
+    const user = await signUpPlayer({ timeZone: TZ });
+    const yesterday = await finishAt(user, "2026-10-14T22:00:00"); // 09:00 UTC on the 14th
+    const today = await finishAt(user, "2026-10-15T00:30:00"); // 11:30 UTC, also on the 14th
+
+    setNow(local("2026-10-15T03:00:00"));
+    const res = await request(app).get("/v1/exercises/xp-history").set("Cookie", user.cookie);
+
+    expect(exerciseXpHistoryListSchema.parse(res.body).today).toEqual({ date: "2026-10-15", setXp: today.setXp, clientIds: [today.clientId] });
+    expect(today.setXp).toBeGreaterThan(0);
+    expect(yesterday.setXp).toBeGreaterThan(0); // left out for its day, not for having no XP
+  });
+
+  it("is an empty day before the first workout today", async () => {
+    setNow(local("2026-10-15T03:00:00"));
+    const res = await request(app).get("/v1/exercises/xp-history").set("Cookie", (await signUpPlayer({ timeZone: TZ })).cookie);
+    expect(exerciseXpHistoryListSchema.parse(res.body).today).toEqual({ date: "2026-10-15", setXp: 0, clientIds: [] });
   });
 });
