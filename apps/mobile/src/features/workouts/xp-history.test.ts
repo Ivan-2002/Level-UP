@@ -1,7 +1,21 @@
-import { epleyOneRepMax, JUMP_CAP, type FinishWorkoutInput } from "@levelup/shared";
+import { applyDailyCap, epleyOneRepMax, exerciseXpHistoryListSchema, JUMP_CAP, type FinishWorkoutInput } from "@levelup/shared";
+import { readCached, writeCached } from "@/lib/device-cache";
 import { benchPress, pullUp, testUuid } from "@/test/fixtures";
 import type { OutboxItem } from "./outbox";
-import { effectiveXpHistory, historyAfterWorkout, historyFromList, type ReplayContext, type XpHistory } from "./xp-history";
+import { dayXpBefore, effectiveXpHistory, historyAfterWorkout, historyFromList, replayOutbox, xpHistoryCacheKey, type ReplayContext, type XpHistory } from "./xp-history";
+
+// expo-sqlite's kv-store is native: stand in an in-memory map with the same sync API.
+jest.mock("expo-sqlite/kv-store", () => {
+  const data = new Map<string, string>();
+  return {
+    __esModule: true,
+    default: {
+      getItemSync: (key: string) => data.get(key) ?? null,
+      setItemSync: (key: string, value: string) => void data.set(key, value),
+      removeItemSync: (key: string) => void data.delete(key),
+    },
+  };
+});
 
 const context: ReplayContext = { exercises: new Map([benchPress, pullUp].map((e) => [e.id, e])), bodyweight: { xp: 80, typed: 80 } };
 const empty: XpHistory = new Map();
@@ -80,5 +94,69 @@ describe("effectiveXpHistory: the server's copy plus the outbox", () => {
 
   it("is the server's copy when nothing is queued", () => {
     expect(effectiveXpHistory(server, [], "user-1", context)).toBe(server);
+  });
+});
+
+describe("lost responses: a workout the server already counted isn't counted twice", () => {
+  const server: XpHistory = new Map();
+
+  it("skips a queued workout whose clientId the server's copy lists, in the history and the day", () => {
+    const lost = queued(bench(3, 100)); // reached the server; the response was lost, so it's still queued
+    const replayed = replayOutbox(server, [lost], "user-1", context, new Set([lost.clientId]));
+
+    expect(replayed.history).toBe(server); // the server's copy already has its bests
+    expect(replayed.workouts).toEqual([]); // and its XP is in today.setXp
+  });
+
+  it("still counts a queued workout the server hasn't seen", () => {
+    const replayed = replayOutbox(server, [queued(bench(3, 100))], "user-1", context, new Set([testUuid(9)]));
+    expect(replayed.workouts).toHaveLength(1);
+    expect(replayed.workouts[0]!.setXp.every((xp) => xp > 0)).toBe(true);
+  });
+});
+
+describe("dayXpBefore: the daily cap's starting point", () => {
+  const cap = { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 };
+  // Auckland is UTC+13 in November: 10:30 UTC on the 17th is 23:30 on the 17th there, 11:30 UTC is 00:30 on the 18th.
+  const TZ = "Pacific/Auckland";
+  const workoutAt = (startedAt: string, setXp: number[]) => ({ clientId: testUuid(5), startedAt, setXp });
+
+  it("starts from the server's count when its copy is for the workout's day", () => {
+    const today = { date: "2026-11-18", setXp: 1200, clientIds: [] };
+    expect(dayXpBefore({ day: "2026-11-18", timeZone: TZ, today, cap, queued: [] })).toBe(1200);
+  });
+
+  it("ignores a server copy from another day (it says nothing about today)", () => {
+    const yesterday = { date: "2026-11-17", setXp: 2500, clientIds: [] };
+    expect(dayXpBefore({ day: "2026-11-18", timeZone: TZ, today: yesterday, cap, queued: [] })).toBe(0);
+  });
+
+  it("adds queued workouts that STARTED that local day in the profile's zone, not the UTC day", () => {
+    const queuedXp = [
+      workoutAt("2026-11-17T11:30:00.000Z", [500, 500]), // 00:30 on the 18th in Auckland: counts
+      workoutAt("2026-11-17T10:30:00.000Z", [700]), // 23:30 on the 17th in Auckland: same UTC day, doesn't count
+    ];
+    const today = { date: "2026-11-18", setXp: 1200, clientIds: [] };
+    expect(dayXpBefore({ day: "2026-11-18", timeZone: TZ, today, cap, queued: queuedXp })).toBe(2200);
+  });
+
+  it("caps each queued workout in turn, as the server will when they're sent", () => {
+    const big = workoutAt("2026-11-17T11:30:00.000Z", [1500, 1500]);
+    const today = { date: "2026-11-18", setXp: 2000, clientIds: [] };
+    const awarded = applyDailyCap(2000, [1500, 1500], cap).awarded.reduce((a, b) => a + b, 0);
+    expect(dayXpBefore({ day: "2026-11-18", timeZone: TZ, today, cap, queued: [big] })).toBe(2000 + awarded);
+    expect(awarded).toBeLessThan(3000);
+  });
+});
+
+describe("the saved copy from before the daily cap fields", () => {
+  it("is still read, with its history and no cap data, so offline exercises aren't all baseline sessions", () => {
+    const old = { items: [{ exerciseId: benchPress.id, recentBest: epleyOneRepMax(100, 8), jumpBaseline: epleyOneRepMax(100, 8) }] };
+    writeCached(xpHistoryCacheKey("user-1"), old);
+
+    // The read the query does on open (initialData), with the app's key and schema.
+    const cached = readCached(xpHistoryCacheKey("user-1"), exerciseXpHistoryListSchema)!;
+    expect(cached).toEqual({ ...old, dailyCap: null, today: null });
+    expect(historyFromList(cached).get(benchPress.id)?.recentBest).toBe(epleyOneRepMax(100, 8));
   });
 });

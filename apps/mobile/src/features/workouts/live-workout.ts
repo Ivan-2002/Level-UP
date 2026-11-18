@@ -1,10 +1,12 @@
 import {
+  applyDailyCap,
   estimatedOneRepMax,
   JUMP_CAP_TEXT,
   liftedKg,
   scoreSessionSets,
   setTagText,
   toDisplayWeight,
+  type DailyCapConfig,
   type Exercise,
   type ExerciseSession,
   type ExerciseXpHistory,
@@ -42,13 +44,20 @@ export type LiveScoringContext = {
   history: Map<string, ExerciseXpHistory>;
   /** `xp`: the XP bodyweight (profile.xpBodyweightKg); `typed`: the real one (profile.bodyweightKg), for lifted kg. */
   bodyweight: { xp: number; typed: number };
+  /** The daily cap with the server's values, and the set XP already counted on the workout's day; null = no cap data. */
+  dailyCap: LiveDailyCap | null;
 };
 
+export type LiveDailyCap = { config: DailyCapConfig; xpBefore: number };
+
 export type LiveScore = {
-  /** Set XP so far. Before the daily cap and the 14-day rule: only the server knows the day. */
+  /** Set XP so far, after the daily cap (not the 14-day rule: a workout in progress is today's). */
   total: number;
-  /** Each done set's XP, effort and tag, by its draft set id. */
+  /** Each done set's XP (after the daily cap, as the summary shows it), effort and tag, by its draft set id. */
   bySet: Map<string, ScoredSet>;
+  /** Set XP the daily cap holds back, and the line that says so (null when nothing is held back). */
+  heldBack: number;
+  dailyCapNote: string | null;
   /** Per exercise, for the NEXT session: what the cached history becomes after this Finish. */
   exercises: SessionScore["exercises"];
 };
@@ -56,8 +65,10 @@ export type LiveScore = {
 /**
  * Scores the done sets with the shared pipeline (scoreSessionSets), as Finish sends them
  * (buildFinishPayload: exercise by exercise, each set with its doneAt as completedAt), so
- * both score each exercise's sets in the order they were ticked. The preview matches the
- * server's number, except for what only the server can know (the daily cap, the 14-day rule).
+ * both score each exercise's sets in the order they were ticked. Then the daily cap, in
+ * the order the server applies it (the order sent), from the XP already counted that day.
+ * So the preview matches the server's number, except when the pinned day count is out of
+ * date (another phone trained today) or the cached copy has no cap data.
  */
 export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringContext): LiveScore {
   const done = workout.exercises.flatMap((draft) => doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })));
@@ -67,11 +78,23 @@ export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringCon
     history: context.history,
     bodyweight: context.bodyweight,
   });
+  const cap = context.dailyCap;
+  const capped = cap ? applyDailyCap(cap.xpBefore, score.sets.map((s) => s.xp), cap.config) : null;
+  const sets = capped ? score.sets.map((s, i) => ({ ...s, xp: capped.awarded[i]! })) : score.sets;
+  const total = sets.reduce((sum, s) => sum + s.xp, 0);
   return {
-    total: score.sets.reduce((sum, s) => sum + s.xp, 0),
-    bySet: new Map(done.map((d, i) => [d.set.id, score.sets[i]!])),
+    total,
+    bySet: new Map(done.map((d, i) => [d.set.id, sets[i]!])),
+    heldBack: capped?.heldBack ?? 0,
+    dailyCapNote: cap && capped && capped.heldBack > 0 ? dailyCapNote(cap.config, cap.xpBefore + total) : null,
     exercises: score.exercises,
   };
+}
+
+/** The line under the tiles once the daily cap holds XP back. */
+export function dailyCapNote(config: DailyCapConfig, dayXpAfter: number): string {
+  if (dayXpAfter >= config.limit * config.ceilingMultiple) return "Daily maximum reached: sets earn no more XP today";
+  return `Daily limit reached: sets now earn ${Math.round(config.bandRate * 100)}%`;
 }
 
 /**
@@ -86,13 +109,18 @@ export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringCon
  */
 export function snapshotToPin(
   workout: Pick<ActiveWorkout, "exercises" | "scoring">,
-  available: { history: LiveScoringContext["history"] | undefined; bodyweight: LiveScoringContext["bodyweight"] },
+  available: {
+    history: LiveScoringContext["history"] | undefined;
+    bodyweight: LiveScoringContext["bodyweight"];
+    /** Null when there's no cap data (an old saved copy, or no history yet). */
+    dailyCap: LiveDailyCap | null;
+  },
 ): PinnedScoring | null {
   if (workout.scoring !== null) return null;
   const anyDone = workout.exercises.some((e) => e.sets.some((s) => s.doneAt !== null));
   if (available.history === undefined && !anyDone) return null; // wait a little for the history
   const history = [...(available.history ?? new Map<string, ExerciseXpHistory>())].map(([exerciseId, h]) => ({ exerciseId, ...h }));
-  return { history, bodyweight: available.bodyweight };
+  return { history, bodyweight: available.bodyweight, dailyCap: available.history === undefined ? null : available.dailyCap };
 }
 
 /** The saved snapshot as the context scoreLiveWorkout takes. */
@@ -100,6 +128,7 @@ export function scoringContext(scoring: PinnedScoring): LiveScoringContext {
   return {
     history: new Map(scoring.history.map((h) => [h.exerciseId, { recentBest: h.recentBest, jumpBaseline: h.jumpBaseline }])),
     bodyweight: scoring.bodyweight,
+    dailyCap: scoring.dailyCap,
   };
 }
 

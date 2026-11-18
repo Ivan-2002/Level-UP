@@ -10,6 +10,7 @@ import {
   lastSetsFrom,
   migrateV1,
   migrateV2,
+  migrateV3,
   removeExercise,
   startWorkout,
   stepRest,
@@ -422,13 +423,13 @@ describe("a workout saved by the previous app version (store v1)", () => {
 });
 
 describe("the pinned scoring context (store v3)", () => {
-  const scoring = { history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }], bodyweight: { xp: 80, typed: 80 } };
+  const scoring = { history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }], bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
 
   it("pins once per workout: a later pin doesn't replace it", () => {
     const { store } = setup();
     store.getState().start("user-1", "kg");
     store.getState().pinScoring(scoring);
-    store.getState().pinScoring({ history: [], bodyweight: { xp: 70, typed: 70 } });
+    store.getState().pinScoring({ history: [], bodyweight: { xp: 70, typed: 70 }, dailyCap: null });
     expect(store.getState().workout!.scoring).toEqual(scoring);
   });
 
@@ -441,7 +442,7 @@ describe("the pinned scoring context (store v3)", () => {
 
     const after = setup(storage).store;
     expect(after.getState().workout!.scoring).toEqual(scoring);
-    expect(JSON.parse(storage.getItem("levelup.active-workout") as string).version).toBe(3);
+    expect(JSON.parse(storage.getItem("levelup.active-workout") as string).version).toBe(4);
   });
 
   it("upgrades a v2 save with a workout in progress: nothing lost, unpinned, then pins on next open", () => {
@@ -472,10 +473,22 @@ describe("the pinned scoring context (store v3)", () => {
     expect(upgraded).toEqual({ ...v2Workout, scoring: null });
 
     // On next open the screen pins: a set is done, so it pins even before the history arrives.
-    const snapshot = snapshotToPin(upgraded, { history: undefined, bodyweight: { xp: 80, typed: 80 } })!;
+    const snapshot = snapshotToPin(upgraded, { history: undefined, bodyweight: { xp: 80, typed: 80 }, dailyCap: null })!;
     store.getState().pinScoring(snapshot);
-    expect(store.getState().workout!.scoring).toEqual({ history: [], bodyweight: { xp: 80, typed: 80 } });
+    expect(store.getState().workout!.scoring).toEqual({ history: [], bodyweight: { xp: 80, typed: 80 }, dailyCap: null });
     expect(migrateV2(null)).toBeNull();
+  });
+
+  it("upgrades a v3 save: its pin is kept, with no cap data, so its total doesn't change", () => {
+    const storage = memoryStorage();
+    const before = setup(storage).store;
+    before.getState().start("user-1", "kg");
+    const { dailyCap: _, ...v3Scoring } = scoring;
+    const v3Workout = { ...before.getState().workout!, scoring: v3Scoring };
+    storage.setItem("levelup.active-workout", JSON.stringify({ version: 3, state: { workout: v3Workout } }));
+
+    expect(setup(storage).store.getState().workout!.scoring).toEqual({ ...v3Scoring, dailyCap: null });
+    expect(migrateV3({ ...v3Workout, scoring: null })!.scoring).toBeNull();
   });
 
   it("upgrades a v1 save all the way, unpinned", () => {

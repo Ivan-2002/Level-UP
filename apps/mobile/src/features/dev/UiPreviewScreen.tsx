@@ -66,7 +66,7 @@ function demoWorkout(second: boolean): ActiveWorkout {
 
 function LiveXpMoment({ title, workout }: { title: string; workout: ActiveWorkout }) {
   const styles = useStyles();
-  const live = scoreLiveWorkout(workout, { history: new Map(), bodyweight: { xp: 80, typed: 80 } });
+  const live = scoreLiveWorkout(workout, { history: new Map(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null });
   const draft = workout.exercises[0]!;
   return (
     <View style={styles.moment}>

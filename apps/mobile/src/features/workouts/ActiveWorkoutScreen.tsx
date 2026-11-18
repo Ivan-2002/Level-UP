@@ -3,7 +3,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-n
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { BODYWEIGHT_FALLBACK_KG } from "@levelup/shared";
+import { BODYWEIGHT_FALLBACK_KG, localDate } from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { AddChip, Chip } from "@/components/Chip";
@@ -72,9 +72,13 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   // per workout and saved with it (see snapshotToPin), so the total only moves when a set
   // is ticked or edited, also after leaving the screen or the app being killed.
   // An effect, not a store update during render: React warns when a render updates a store.
+  // The cap's day is the local day the workout STARTED, in the profile's time zone
+  // (the server's rule), not the phone's zone or today's date.
+  const capDay = localDate(workout.startedAt, profile?.timeZone ?? "UTC");
   const snapshot = snapshotToPin(workout, {
-    history: xpHistory,
+    history: xpHistory?.history,
     bodyweight: { xp: profile?.xpBodyweightKg ?? bodyweightKg, typed: bodyweightKg },
+    dailyCap: xpHistory?.dailyCap ? { config: xpHistory.dailyCap.config, xpBefore: xpHistory.dailyCap.xpBeforeOn(capDay) } : null,
   });
   useEffect(() => {
     if (snapshot) activeWorkoutStore.getState().pinScoring(snapshot);
@@ -133,6 +137,11 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
           <StatTile label="Sets left" value={String(total - done)} suffix={` / ${total}`} accessibilityLabel={`${total - done} of ${total} sets left`} />
           <StatTile label="XP earned" icon="xp" tone="progress" value={live ? `+${live.total}` : "…"} accessibilityLabel={live ? `XP earned, ${live.total}` : "XP earned, loading"} />
         </View>
+        {live?.dailyCapNote ? (
+          <Text variant="caption" tone="inkMuted" style={styles.capNote}>
+            {live.dailyCapNote}
+          </Text>
+        ) : null}
 
         {segments.length > 0 ? <ProgressSegments segments={segments} currentIndex={index} /> : null}
 
@@ -209,6 +218,7 @@ const useStyles = createStyles((t) => ({
   header: { paddingTop: t.space[4], paddingHorizontal: t.space[4], paddingBottom: t.space[3], gap: t.space[3], borderBottomWidth: 1, borderBottomColor: t.colors.border },
   titleRow: { flexDirection: "row", alignItems: "center", gap: t.space[3] },
   tiles: { flexDirection: "row", gap: t.space[2] },
+  capNote: { marginTop: -t.space[1] },
   tabsScroll: { marginHorizontal: -t.space[4] },
   tabs: { paddingHorizontal: t.space[4], gap: t.space[2] },
   content: { padding: t.space[4], gap: t.space[4], paddingBottom: t.space[6] },

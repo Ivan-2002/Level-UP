@@ -217,8 +217,13 @@ export type DailyCapResult = {
  * (rounded like set XP), stopping at the ceiling. Rounding per set can lose up to half
  * an XP on a set in the 25% band; in exchange each ledger row can be explained on its own.
  */
-export function applyDailyCap(dayXpBefore: number, setXp: number[]): DailyCapResult {
-  const { limit, bandRate, ceilingMultiple } = DAILY_XP_CAP;
+export function applyDailyCap(
+  dayXpBefore: number,
+  setXp: number[],
+  /** The cap's values: the server's own constants, or (in the app) the ones the server sent. */
+  cap: { limit: number; bandRate: number; ceilingMultiple: number } = DAILY_XP_CAP,
+): DailyCapResult {
+  const { limit, bandRate, ceilingMultiple } = cap;
   const ceiling = limit * ceilingMultiple;
   let day = dayXpBefore;
   let heldBack = 0;

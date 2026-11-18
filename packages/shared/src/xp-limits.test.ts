@@ -137,6 +137,10 @@ describe("jump cap: estimated 1RM (Epley) at every rep count, or seconds for tim
 });
 
 describe("applyDailyCap: full XP to 3,100, 25% beyond, never more than 6,200 a day", () => {
+  it("takes other cap values (the app uses the ones the server sent)", () => {
+    expect(applyDailyCap(0, [80, 80], { limit: 100, bandRate: 0.5, ceilingMultiple: 2 })).toEqual({ awarded: [80, 50], heldBack: 30 }); // 20 to the limit, then 50% of 60
+  });
+
   it("uses the limit chosen with the simulation", () => {
     expect(DAILY_XP_CAP).toEqual({ limit: 3100, bandRate: 0.25, ceilingMultiple: 2 });
   });

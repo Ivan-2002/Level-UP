@@ -1,7 +1,8 @@
-import { epleyOneRepMax, JUMP_CAP_TEXT, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
+import { applyDailyCap, epleyOneRepMax, JUMP_CAP_TEXT, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
 import { addExercise, buildFinishPayload, pinScoring, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
 import {
+  dailyCapNote,
   e1rmBars,
   lastSessionText,
   livePrs,
@@ -45,7 +46,7 @@ describe("live XP and progress", () => {
     let w = fill(workout(), 0, 0, "62.5", "8", 5); // bench: 78.1 kg load -> 70 XP
     w = fill(w, 1, 0, "0", "10", 8); // pull-up: 100 kg load -> 94 XP
 
-    expect(scoreLiveWorkout(w, { history: new Map(), bodyweight: { xp: 80, typed: 80 } }).total).toBe(164);
+    expect(scoreLiveWorkout(w, { history: new Map(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null }).total).toBe(164);
   });
 
   it("gives one segment per exercise, sized by its sets", () => {
@@ -55,7 +56,7 @@ describe("live XP and progress", () => {
 });
 
 describe("scoreLiveWorkout: the live preview runs the server's pipeline", () => {
-  const noHistory = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 } };
+  const noHistory = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
 
   it("scores exactly the sets Finish sends, in the order the server scores them", () => {
     let w: ActiveWorkout = { ...workout(), clientId: "6f1d1c1e-0000-4000-8000-000000000001" }; // Finish needs a UUID
@@ -89,7 +90,7 @@ describe("scoreLiveWorkout: the live preview runs the server's pipeline", () => 
     const history = new Map([[benchPress.id, { recentBest: epleyOneRepMax(50, 8), jumpBaseline: epleyOneRepMax(50, 8) }]]);
     const w = fill(workout(), 0, 0, "65", "8", 5); // 30% above 50 x 8 (the line is +25%)
 
-    const set = scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } }).bySet.get(w.exercises[0]!.sets[0]!.id)!;
+    const set = scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 }, dailyCap: null }).bySet.get(w.exercises[0]!.sets[0]!.id)!;
     const fresh = scoreLiveWorkout(w, noHistory).bySet.get(w.exercises[0]!.sets[0]!.id)!;
 
     expect(set).toMatchObject({ tag: "above_history", flagReason: "above_history" });
@@ -101,18 +102,19 @@ describe("scoreLiveWorkout: the live preview runs the server's pipeline", () => 
     let w = fill(workout(), 0, 0, "62.5", "8", 5);
     w = fill(w, 0, 1, "115", "8", 9);
     w = fill(w, 0, 2, "62.5", "8", 13);
-    const score = scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 } });
+    const score = scoreLiveWorkout(w, { history, bodyweight: { xp: 80, typed: 80 }, dailyCap: null });
 
     expect(w.exercises[0]!.sets.map((s) => score.bySet.get(s.id)!.tag)).toEqual(["warm_up", null, "easy_set"]);
   });
 });
 
 describe("re-scoring earlier sets: only in a baseline session", () => {
-  const context = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 } };
+  const context = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
   // Last time's best on bench: 100 x 5.
   const withHistory = {
     history: new Map([[benchPress.id, { recentBest: epleyOneRepMax(100, 5), jumpBaseline: epleyOneRepMax(100, 5) }]]),
     bodyweight: { xp: 80, typed: 80 },
+    dailyCap: null,
   };
 
   it("baseline session (no history): turns 60 x 5 into a warm-up once 100 x 5 follows it", () => {
@@ -164,28 +166,69 @@ describe("snapshotToPin: the total only moves when a set does", () => {
 
   it("waits for the history before the first tick, then pins it once", () => {
     const w = workout();
-    expect(snapshotToPin(w, { history: undefined, bodyweight })).toBeNull();
+    expect(snapshotToPin(w, { history: undefined, bodyweight, dailyCap: null })).toBeNull();
 
-    const snapshot = snapshotToPin(w, { history, bodyweight })!;
-    expect(snapshot).toEqual({ history: [{ exerciseId: benchPress.id, recentBest: 100, jumpBaseline: 100 }], bodyweight });
+    const snapshot = snapshotToPin(w, { history, bodyweight, dailyCap: null })!;
+    expect(snapshot).toEqual({ history: [{ exerciseId: benchPress.id, recentBest: 100, jumpBaseline: 100 }], bodyweight, dailyCap: null });
     // Once pinned, a refetch (new history, a changed XP bodyweight) has nothing to pin.
     const pinned = pinScoring(w, snapshot);
-    expect(snapshotToPin(pinned, { history: new Map(), bodyweight: { xp: 70, typed: 70 } })).toBeNull();
-    expect(pinScoring(pinned, { history: [], bodyweight: { xp: 70, typed: 70 } })).toBe(pinned);
+    expect(snapshotToPin(pinned, { history: new Map(), bodyweight: { xp: 70, typed: 70 }, dailyCap: null })).toBeNull();
+    expect(pinScoring(pinned, { history: [], bodyweight: { xp: 70, typed: 70 }, dailyCap: null })).toBe(pinned);
   });
 
   it("pins with an empty history once a set is ticked offline before any history arrived", () => {
     const w = fill(workout(), 0, 0, "60", "5", 5);
-    expect(snapshotToPin(w, { history: undefined, bodyweight })?.history).toEqual([]);
+    expect(snapshotToPin(w, { history: undefined, bodyweight, dailyCap: null })?.history).toEqual([]);
   });
 
   it("gives back the same scoring context it saved (JSON in between, as on the phone)", () => {
-    const saved = JSON.parse(JSON.stringify(snapshotToPin(workout(), { history, bodyweight })));
-    expect(scoringContext(saved)).toEqual({ history, bodyweight });
+    const saved = JSON.parse(JSON.stringify(snapshotToPin(workout(), { history, bodyweight, dailyCap: null })));
+    expect(scoringContext(saved)).toEqual({ history, bodyweight, dailyCap: null });
   });
 
   it("starts every new workout unpinned", () => {
     expect(workout().scoring).toBeNull();
+  });
+});
+
+describe("the daily cap, live", () => {
+  const cap = { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 };
+  const noCap = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
+  const twoSets = () => fill(fill(workout(), 0, 0, "100", "8", 5), 0, 1, "100", "8", 9);
+
+  it("leaves the score alone on a normal day", () => {
+    const w = twoSets();
+    const uncapped = scoreLiveWorkout(w, noCap);
+    const capped = scoreLiveWorkout(w, { ...noCap, dailyCap: { config: cap, xpBefore: 500 } });
+    expect(capped.total).toBe(uncapped.total);
+    expect(capped).toMatchObject({ heldBack: 0, dailyCapNote: null });
+  });
+
+  it("applies the cap from the day's XP so far, in the order sent, and says so", () => {
+    const w = twoSets();
+    const raw = [...scoreLiveWorkout(w, noCap).bySet.values()].map((s) => s.xp);
+    const expected = applyDailyCap(3050, raw, cap);
+
+    const live = scoreLiveWorkout(w, { ...noCap, dailyCap: { config: cap, xpBefore: 3050 } });
+    // Rows show the XP awarded, as the summary will.
+    expect([...live.bySet.values()].map((s) => s.xp)).toEqual(expected.awarded);
+    expect(live.total).toBe(expected.awarded.reduce((a, b) => a + b, 0));
+    expect(live.heldBack).toBe(expected.heldBack);
+    expect(live.dailyCapNote).toBe("Daily limit reached: sets now earn 25%");
+  });
+
+  it("uses the server's values, not built-in ones", () => {
+    expect(dailyCapNote({ limit: 2000, bandRate: 0.1, ceilingMultiple: 2 }, 2100)).toBe("Daily limit reached: sets now earn 10%");
+    expect(dailyCapNote(cap, 6200)).toBe("Daily maximum reached: sets earn no more XP today");
+  });
+
+  it("pins the cap with the history, and none while waiting for the history", () => {
+    const dailyCap = { config: cap, xpBefore: 1200 };
+    const history = new Map<string, ExerciseXpHistory>();
+    expect(snapshotToPin(workout(), { history, bodyweight: { xp: 80, typed: 80 }, dailyCap })?.dailyCap).toEqual(dailyCap);
+    // Ticked offline before any history arrived: pinned without the cap.
+    const w = fill(workout(), 0, 0, "60", "5", 5);
+    expect(snapshotToPin(w, { history: undefined, bodyweight: { xp: 80, typed: 80 }, dailyCap })?.dailyCap).toBeNull();
   });
 });
 

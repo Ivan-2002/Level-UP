@@ -11,6 +11,7 @@ import {
   toDisplayWeight,
   WEIGHT_MAX_KG,
   WEIGHT_MIN_KG,
+  type DailyCapConfig,
   type Exercise,
   type FinishWorkoutInput,
   type LastSessionList,
@@ -84,6 +85,8 @@ export type ActiveWorkout = {
 export type PinnedScoring = {
   history: { exerciseId: string; recentBest: number | null; jumpBaseline: number | null }[];
   bodyweight: { xp: number; typed: number };
+  /** The daily cap's values and the set XP already counted on the workout's day (store v4); null = no cap data. */
+  dailyCap: { config: DailyCapConfig; xpBefore: number } | null;
 };
 
 export type PlannedExercise = { exerciseId: string; targetSets: number; targetReps: number; restSec: number | null };
@@ -350,6 +353,16 @@ export function migrateV1(saved: unknown): ActiveWorkout | null {
 export function migrateV2(saved: unknown): ActiveWorkout | null {
   if (!saved || typeof saved !== "object") return null;
   return { ...(saved as Omit<ActiveWorkout, "scoring">), scoring: null };
+}
+
+/**
+ * Upgrades a workout saved by version 3 of the store (scoring pinned without the daily
+ * cap): its pin is kept and gets no cap data, so its total doesn't change after the update.
+ */
+export function migrateV3(saved: unknown): ActiveWorkout | null {
+  if (!saved || typeof saved !== "object") return null;
+  const old = saved as Omit<ActiveWorkout, "scoring"> & { scoring: Omit<PinnedScoring, "dailyCap"> | null };
+  return { ...old, scoring: old.scoring ? { ...old.scoring, dailyCap: null } : null };
 }
 
 // --- Helpers ----------------------------------------------------------------------

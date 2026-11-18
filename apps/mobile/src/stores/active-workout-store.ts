@@ -79,14 +79,16 @@ export function createActiveWorkoutStore(deps: { storage: StateStorage; newId: (
         name: "levelup.active-workout",
         // v2: weights typed in the player's unit, targets, rest per exercise, current exercise.
         // v3: the live preview's pinned scoring context (ActiveWorkout.scoring).
-        version: 3,
+        // v4: the pin also holds the daily cap (PinnedScoring.dailyCap).
+        version: 4,
         // A workout in progress must survive an app update: upgrade older saved shapes,
-        // one version at a time (v1 -> v2 -> v3).
+        // one version at a time (v1 -> v2 -> v3 -> v4).
         migrate: (saved, version) => {
           const state = saved as { workout?: unknown };
           let current = state.workout ?? null;
           if (version < 2) current = workout.migrateV1(current);
           if (version < 3) current = workout.migrateV2(current);
+          if (version < 4) current = workout.migrateV3(current);
           return { workout: current as ActiveWorkout | null };
         },
         storage: createJSONStorage(() => deps.storage),
