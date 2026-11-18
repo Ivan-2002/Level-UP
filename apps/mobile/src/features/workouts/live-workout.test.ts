@@ -1,12 +1,13 @@
 import { epleyOneRepMax, JUMP_CAP_TEXT, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
-import { addExercise, buildFinishPayload, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
+import { addExercise, buildFinishPayload, pinScoring, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
 import {
   e1rmBars,
   lastSessionText,
   livePrs,
   nextUp,
-  pinContext,
+  scoringContext,
+  snapshotToPin,
   previousSetText,
   scoreLiveWorkout,
   setXpNote,
@@ -157,29 +158,34 @@ describe("re-scoring earlier sets: only in a baseline session", () => {
   });
 });
 
-describe("pinContext: the total only moves when a set does", () => {
+describe("snapshotToPin: the total only moves when a set does", () => {
   const history = new Map<string, ExerciseXpHistory>([[benchPress.id, { recentBest: 100, jumpBaseline: 100 }]]);
   const bodyweight = { xp: 80, typed: 80 };
 
-  it("waits for the history before the first tick, then keeps it for the whole workout", () => {
+  it("waits for the history before the first tick, then pins it once", () => {
     const w = workout();
-    expect(pinContext(null, w, { history: undefined, bodyweight })).toBeNull();
+    expect(snapshotToPin(w, { history: undefined, bodyweight })).toBeNull();
 
-    const pinned = pinContext(null, w, { history, bodyweight })!;
-    // A refetch (new history object, a changed XP bodyweight) doesn't change it.
-    const later = pinContext(pinned, w, { history: new Map(), bodyweight: { xp: 70, typed: 70 } });
-    expect(later).toBe(pinned);
+    const snapshot = snapshotToPin(w, { history, bodyweight })!;
+    expect(snapshot).toEqual({ history: [{ exerciseId: benchPress.id, recentBest: 100, jumpBaseline: 100 }], bodyweight });
+    // Once pinned, a refetch (new history, a changed XP bodyweight) has nothing to pin.
+    const pinned = pinScoring(w, snapshot);
+    expect(snapshotToPin(pinned, { history: new Map(), bodyweight: { xp: 70, typed: 70 } })).toBeNull();
+    expect(pinScoring(pinned, { history: [], bodyweight: { xp: 70, typed: 70 } })).toBe(pinned);
   });
 
   it("pins with an empty history once a set is ticked offline before any history arrived", () => {
     const w = fill(workout(), 0, 0, "60", "5", 5);
-    expect(pinContext(null, w, { history: undefined, bodyweight })?.context.history.size).toBe(0);
+    expect(snapshotToPin(w, { history: undefined, bodyweight })?.history).toEqual([]);
   });
 
-  it("takes a fresh context for the next workout", () => {
-    const pinned = pinContext(null, workout(), { history, bodyweight })!;
-    const next = { ...workout(), clientId: "next" };
-    expect(pinContext(pinned, next, { history, bodyweight })).not.toBe(pinned);
+  it("gives back the same scoring context it saved (JSON in between, as on the phone)", () => {
+    const saved = JSON.parse(JSON.stringify(snapshotToPin(workout(), { history, bodyweight })));
+    expect(scoringContext(saved)).toEqual({ history, bodyweight });
+  });
+
+  it("starts every new workout unpinned", () => {
+    expect(workout().scoring).toBeNull();
   });
 });
 

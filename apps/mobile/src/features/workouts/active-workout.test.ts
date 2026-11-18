@@ -9,6 +9,7 @@ import {
   currentExercise,
   lastSetsFrom,
   migrateV1,
+  migrateV2,
   removeExercise,
   startWorkout,
   stepRest,
@@ -17,6 +18,7 @@ import {
   type ActiveWorkout,
 } from "./active-workout";
 import { finishActiveWorkout } from "./finish-workout";
+import { snapshotToPin } from "./live-workout";
 import { loggingConvention } from "./logging-conventions";
 
 const START = new Date("2026-11-10T06:00:00.000Z");
@@ -416,5 +418,85 @@ describe("a workout saved by the previous app version (store v1)", () => {
       exercises: [{ restSec: 180, restChanged: false, targetReps: null, sets: [{ weight: "62.5", reps: "8" }] }],
     });
     expect(migrateV1(null)).toBeNull();
+  });
+});
+
+describe("the pinned scoring context (store v3)", () => {
+  const scoring = { history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }], bodyweight: { xp: 80, typed: 80 } };
+
+  it("pins once per workout: a later pin doesn't replace it", () => {
+    const { store } = setup();
+    store.getState().start("user-1", "kg");
+    store.getState().pinScoring(scoring);
+    store.getState().pinScoring({ history: [], bodyweight: { xp: 70, typed: 70 } });
+    expect(store.getState().workout!.scoring).toEqual(scoring);
+  });
+
+  it("survives the app being killed: a new store reads the same pin", () => {
+    const storage = memoryStorage();
+    const before = setup(storage).store;
+    before.getState().start("user-1", "kg");
+    before.getState().addExercises([benchPress]);
+    before.getState().pinScoring(scoring);
+
+    const after = setup(storage).store;
+    expect(after.getState().workout!.scoring).toEqual(scoring);
+    expect(JSON.parse(storage.getItem("levelup.active-workout") as string).version).toBe(3);
+  });
+
+  it("upgrades a v2 save with a workout in progress: nothing lost, unpinned, then pins on next open", () => {
+    const storage = memoryStorage();
+    const v2Workout = {
+      userId: "user-1",
+      clientId: testUuid(1),
+      startedAt: START.toISOString(),
+      name: "Push",
+      weightUnit: "kg",
+      routineId: null,
+      currentExerciseKey: "e1",
+      exercises: [
+        {
+          id: "e1",
+          exercise: benchPress,
+          sets: [{ id: "s1", weight: "62.5", reps: "8", doneAt: minutesLater(5).toISOString() }],
+          targetReps: 8,
+          restSec: 120,
+          restChanged: false,
+        },
+      ],
+    };
+    storage.setItem("levelup.active-workout", JSON.stringify({ version: 2, state: { workout: v2Workout } }));
+
+    const { store } = setup(storage);
+    const upgraded = store.getState().workout!;
+    expect(upgraded).toEqual({ ...v2Workout, scoring: null });
+
+    // On next open the screen pins: a set is done, so it pins even before the history arrives.
+    const snapshot = snapshotToPin(upgraded, { history: undefined, bodyweight: { xp: 80, typed: 80 } })!;
+    store.getState().pinScoring(snapshot);
+    expect(store.getState().workout!.scoring).toEqual({ history: [], bodyweight: { xp: 80, typed: 80 } });
+    expect(migrateV2(null)).toBeNull();
+  });
+
+  it("upgrades a v1 save all the way, unpinned", () => {
+    const storage = memoryStorage();
+    const v1Workout = { userId: "user-1", clientId: testUuid(1), startedAt: START.toISOString(), name: "", exercises: [] };
+    storage.setItem("levelup.active-workout", JSON.stringify({ version: 1, state: { workout: v1Workout } }));
+    expect(setup(storage).store.getState().workout).toMatchObject({ weightUnit: "kg", scoring: null });
+  });
+
+  it("never sends the pin to the API", () => {
+    const { store } = setup();
+    store.getState().start("user-1", "kg");
+    store.getState().addExercises([benchPress]);
+    store.getState().pinScoring(scoring);
+    const w = store.getState().workout!;
+    const set = w.exercises[0]!.sets[0]!;
+    store.getState().updateSet(w.exercises[0]!.id, set.id, { weight: "60", reps: "8" });
+    store.getState().toggleSetDone(w.exercises[0]!.id, set.id);
+
+    const payload = buildFinishPayload(store.getState().workout!, minutesLater(30));
+    if (!payload.ok) throw new Error(payload.message);
+    expect("scoring" in payload.value).toBe(false);
   });
 });

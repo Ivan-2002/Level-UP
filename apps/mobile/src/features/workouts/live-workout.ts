@@ -16,7 +16,7 @@ import {
 } from "@levelup/shared";
 import type { Segment } from "@/components/progress-segments";
 import { formatRest } from "./format";
-import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet } from "./active-workout";
+import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet, type PinnedScoring } from "./active-workout";
 
 // What the active workout screen SHOWS, worked out from the workout in progress: live XP,
 // sets left, progress segments, PRs as they happen, "Next: ...", last time's numbers and
@@ -75,23 +75,32 @@ export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringCon
 }
 
 /**
- * The scoring context a workout is previewed with, PINNED per workout: taken once, when
+ * The scoring context a workout is previewed with is PINNED per workout: taken once, when
  * the history first arrives (or when the first set is ticked, if it hasn't by then), and
- * kept until the workout ends. Without this, a background refetch (the profile, or the
- * history after an earlier workout syncs) would shift the total mid-workout; pinned, the
- * total only changes when the player ticks or edits a set.
+ * saved with the workout (ActiveWorkout.scoring), so it survives leaving the screen and
+ * the app being killed. Without this, a background refetch (the profile, or the history
+ * after an earlier workout syncs) or reopening the screen would shift the total mid-workout;
+ * pinned, the total only changes when the player ticks or edits a set.
+ *
+ * Returns the snapshot to pin now, or null: already pinned, or still waiting for the history.
  */
-export type PinnedContext = { clientId: string; context: LiveScoringContext };
-
-export function pinContext(
-  pinned: PinnedContext | null,
-  workout: Pick<ActiveWorkout, "clientId" | "exercises">,
+export function snapshotToPin(
+  workout: Pick<ActiveWorkout, "exercises" | "scoring">,
   available: { history: LiveScoringContext["history"] | undefined; bodyweight: LiveScoringContext["bodyweight"] },
-): PinnedContext | null {
-  if (pinned?.clientId === workout.clientId) return pinned;
+): PinnedScoring | null {
+  if (workout.scoring !== null) return null;
   const anyDone = workout.exercises.some((e) => e.sets.some((s) => s.doneAt !== null));
   if (available.history === undefined && !anyDone) return null; // wait a little for the history
-  return { clientId: workout.clientId, context: { history: available.history ?? new Map(), bodyweight: available.bodyweight } };
+  const history = [...(available.history ?? new Map<string, ExerciseXpHistory>())].map(([exerciseId, h]) => ({ exerciseId, ...h }));
+  return { history, bodyweight: available.bodyweight };
+}
+
+/** The saved snapshot as the context scoreLiveWorkout takes. */
+export function scoringContext(scoring: PinnedScoring): LiveScoringContext {
+  return {
+    history: new Map(scoring.history.map((h) => [h.exerciseId, { recentBest: h.recentBest, jumpBaseline: h.jumpBaseline }])),
+    bodyweight: scoring.bodyweight,
+  };
 }
 
 /** The line under a done set: its XP and why it's lower, if it is ("+12 XP · Warm-up"). */

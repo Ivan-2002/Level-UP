@@ -68,6 +68,22 @@ export type ActiveWorkout = {
    * with these changes?" on Finish. Optional: workouts saved before it existed have none.
    */
   plan?: PlannedExercise[];
+  /**
+   * What the live XP preview scores against, PINNED once per workout (see pinScoring in
+   * live-workout.ts) and saved with it, so the total stays the same after leaving the
+   * screen or the app being killed. Null until pinned. Never sent to the API.
+   */
+  scoring: PinnedScoring | null;
+};
+
+/**
+ * The scoring context as saved on the phone (plain JSON: the history is a list, not a Map).
+ * `history`: each exercise's 12-week best and jump baseline (the offline XP history when pinned);
+ * `bodyweight.xp`: the XP bodyweight, `bodyweight.typed`: the real one.
+ */
+export type PinnedScoring = {
+  history: { exerciseId: string; recentBest: number | null; jumpBaseline: number | null }[];
+  bodyweight: { xp: number; typed: number };
 };
 
 export type PlannedExercise = { exerciseId: string; targetSets: number; targetReps: number; restSec: number | null };
@@ -93,7 +109,13 @@ export function startWorkout(args: { userId: string; clientId: string; now: Date
     exercises: [],
     routineId: null,
     currentExerciseKey: null,
+    scoring: null,
   };
+}
+
+/** Saves the scoring context for this workout, once: a workout already pinned keeps its own. */
+export function pinScoring(workout: ActiveWorkout, scoring: PinnedScoring): ActiveWorkout {
+  return workout.scoring === null ? { ...workout, scoring } : workout;
 }
 
 /**
@@ -300,7 +322,7 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
  */
 export function migrateV1(saved: unknown): ActiveWorkout | null {
   if (!saved || typeof saved !== "object") return null;
-  const old = saved as Omit<ActiveWorkout, "weightUnit" | "exercises" | "routineId" | "currentExerciseKey"> & {
+  const old = saved as Omit<ActiveWorkout, "weightUnit" | "exercises" | "routineId" | "currentExerciseKey" | "scoring"> & {
     routineId?: string | null;
     exercises: { id: string; exercise: Exercise; sets: { id: string; weightKg: string; reps: string; doneAt: string | null }[] }[];
   };
@@ -309,6 +331,7 @@ export function migrateV1(saved: unknown): ActiveWorkout | null {
     weightUnit: "kg", // version 1 always typed kg
     routineId: old.routineId ?? null,
     currentExerciseKey: old.exercises[0]?.id ?? null,
+    scoring: null, // pinned again on next open (see migrateV2)
     exercises: old.exercises.map((e) => ({
       id: e.id,
       exercise: e.exercise,
@@ -318,6 +341,15 @@ export function migrateV1(saved: unknown): ActiveWorkout | null {
       restChanged: false,
     })),
   };
+}
+
+/**
+ * Upgrades a workout saved by version 2 of the store (before 4c's pinned scoring) to
+ * today's shape: nothing pinned yet, so the live view pins on next open, as it did then.
+ */
+export function migrateV2(saved: unknown): ActiveWorkout | null {
+  if (!saved || typeof saved !== "object") return null;
+  return { ...(saved as Omit<ActiveWorkout, "scoring">), scoring: null };
 }
 
 // --- Helpers ----------------------------------------------------------------------

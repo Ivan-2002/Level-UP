@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ import { useProfile } from "@/features/profile/use-profile";
 import { currentExercise, setCounts, type ActiveWorkout } from "./active-workout";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
 import { ElapsedTimer } from "./ElapsedTimer";
-import { lastSessionText, nextUp, pinContext, scoreLiveWorkout, workoutSegments, type LiveScore, type PinnedContext } from "./live-workout";
+import { lastSessionText, nextUp, scoreLiveWorkout, scoringContext, snapshotToPin, workoutSegments, type LiveScore } from "./live-workout";
 import { RestBar } from "./RestBar";
 import { exerciseSummaryQuery, useExerciseSummary } from "./use-exercise-summary";
 import { useXpHistory } from "./use-xp-history";
@@ -68,17 +68,19 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   const bodyweightKg = profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG;
   const xpHistory = useXpHistory(userId);
 
-  // Live XP with the server's pipeline. The context (history, bodyweights) is pinned for
-  // the workout (see pinContext), so the total only moves when a set is ticked or edited.
-  // React's pattern for "remember something from earlier renders": state, updated during
-  // render only when it actually changes (once per workout).
-  const [pinned, setPinned] = useState<PinnedContext | null>(null);
-  const nextPinned = pinContext(pinned, workout, {
+  // Live XP with the server's pipeline. The context (history, bodyweights) is pinned once
+  // per workout and saved with it (see snapshotToPin), so the total only moves when a set
+  // is ticked or edited, also after leaving the screen or the app being killed.
+  // An effect, not a store update during render: React warns when a render updates a store.
+  const snapshot = snapshotToPin(workout, {
     history: xpHistory,
     bodyweight: { xp: profile?.xpBodyweightKg ?? bodyweightKg, typed: bodyweightKg },
   });
-  if (nextPinned !== pinned) setPinned(nextPinned);
-  const context = nextPinned?.context;
+  useEffect(() => {
+    if (snapshot) activeWorkoutStore.getState().pinScoring(snapshot);
+  }, [snapshot]);
+  // workout.scoring keeps its identity across set edits (the store copies the workout, not it).
+  const context = useMemo(() => (workout.scoring ? scoringContext(workout.scoring) : null), [workout.scoring]);
   const live = useMemo(() => (context ? scoreLiveWorkout(workout, context) : null), [workout, context]);
 
   // Load every exercise's history up front (and save it on the phone), so switching
