@@ -25,6 +25,7 @@ import Timer from "lucide-react-native/icons/timer";
 import Trash2 from "lucide-react-native/icons/trash-2";
 import TrendingUp from "lucide-react-native/icons/trending-up";
 import TriangleAlert from "lucide-react-native/icons/triangle-alert";
+import Weight from "lucide-react-native/icons/weight";
 import X from "lucide-react-native/icons/x";
 import Zap from "lucide-react-native/icons/zap";
 import { useTheme } from "@/theme/use-theme";
@@ -35,6 +36,7 @@ import { ICON_STROKE } from "@/theme/tokens";
 const icons = {
   alert: TriangleAlert,
   back: ChevronLeft,
+  bodyweight: Weight,
   check: Check,
   close: X,
   coach: TrendingUp,

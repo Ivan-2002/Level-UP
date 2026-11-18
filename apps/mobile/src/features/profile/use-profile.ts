@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateProfileInput, Profile } from "@levelup/shared";
+import type { BodyweightEntry, CreateProfileInput, Profile, RecordBodyweightInput } from "@levelup/shared";
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 
 // Server state for the player's profile, via TanStack Query.
@@ -46,5 +46,17 @@ export function useCreateProfile(userId: string) {
         void queryClient.invalidateQueries({ queryKey: profileQueryKey(userId) });
       }
     },
+  });
+}
+
+/**
+ * POST /bodyweight. On success the profile is refetched: its bodyweightKg and the XP
+ * bodyweight (xpBodyweightKg, limited by the server's 2% a week rule) both may change.
+ */
+export function useRecordBodyweight(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RecordBodyweightInput) => apiPost<BodyweightEntry>("/bodyweight", input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: profileQueryKey(userId) }),
   });
 }
