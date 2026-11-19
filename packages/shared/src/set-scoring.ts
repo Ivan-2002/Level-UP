@@ -3,7 +3,6 @@ import type { RepsUnit } from "./workouts.js";
 import type { FlagReason, SetTag } from "./xp-codes.js";
 import {
   judgeSession,
-  jumpBaseline,
   JUMP_CAP,
   jumpCappedXp,
   jumpCheckValue,
@@ -111,7 +110,7 @@ export type ScoredSet = {
 export type SessionScore = {
   /** One per input set, in the same order. */
   sets: ScoredSet[];
-  /** Per exercise, for the NEXT session: its jump baseline and this session's best value. */
+  /** Per exercise, for the NEXT session: its jump baseline and this session's best value (jump-capped sets left out; null if none is left). */
   exercises: Map<string, { jumpBaselineAfter: number | null; sessionBest: number | null }>;
 };
 
@@ -145,7 +144,7 @@ export function scoreSessionSets(input: {
     const lifted = valid.map((i) => liftedKg(input.sets[i]!.weightKg, input.bodyweight.typed, exercise.bodyweightRatio));
     const values = valid.map((i, n) => jumpCheckValue({ reps: input.sets[i]!.reps, loadKg: lifted[n]! }, exercise.repsUnit));
     const judged = judgeSession(history.jumpBaseline, values);
-    const sessionBest = Math.max(...values);
+    const sessionBest = trustedBest(values, judged.aboveHistory);
     summary.set(exerciseId, { jumpBaselineAfter: judged.baselineAfter, sessionBest });
 
     // 3-6. Effort, tags, the 10-set limit and the XP.
@@ -188,16 +187,19 @@ function scoreValidSets(
   const baseline = isBaselineSession(input.recentBest);
   // With a 12-week best, the reference grows as the session goes on, raised by each set as
   // it's scored (this one included, so a new best is effort 1), never by a later set. In a
-  // baseline session it's the whole session's best from the start.
-  let reference = baseline ? Math.max(...values) : input.recentBest!;
-  const heaviestAt = baseline ? firstHeaviestPosition(valid.map((i) => sets[i]!.weightKg)) : -1;
+  // baseline session it's the whole session's best from the start. A jump-capped set
+  // (above_history) never raises it or counts as the heaviest: a mistyped 80 kg instead of
+  // 50 would otherwise turn every honest set after it into a warm-up or an easy set.
+  const trusted = (n: number) => !judged.aboveHistory[n];
+  let reference = baseline ? (trustedBest(values, judged.aboveHistory) ?? 0) : input.recentBest!;
+  const heaviestAt = baseline ? firstHeaviestPosition(valid.map((i, n) => (trusted(n) ? sets[i]!.weightKg : -Infinity))) : -1;
   let workingSetDone = false;
   let warmUps = 0;
   let counted = 0;
 
   valid.forEach((i, n) => {
     const set = sets[i]!;
-    reference = Math.max(reference, values[n]!);
+    if (trusted(n)) reference = Math.max(reference, values[n]!);
     const effort = timed ? 1 : setEffort(set.reps, lifted[n]!, reference);
     const lowEffort = !timed && effort < LOW_EFFORT;
     const warmUp = lowEffort && (baseline ? n < heaviestAt : !workingSetDone) && warmUps < MAX_WARM_UPS_PER_EXERCISE;
@@ -225,7 +227,16 @@ export function isBaselineSession(recentBest: number | null): boolean {
   return recentBest === null;
 }
 
-/** The position of the first of the heaviest weights, in the order given. */
+/**
+ * The best value that can be a reference for effort: jump-capped sets left out. Null if
+ * every set was jump-capped (or there are none).
+ */
+function trustedBest(values: number[], aboveHistory: boolean[]): number | null {
+  const trusted = values.filter((_, n) => !aboveHistory[n]);
+  return trusted.length > 0 ? Math.max(...trusted) : null;
+}
+
+/** The position of the first of the heaviest weights, in the order given (-Infinity entries are never chosen). */
 function firstHeaviestPosition(weights: number[]): number {
   return weights.indexOf(Math.max(...weights));
 }
@@ -270,9 +281,10 @@ export type PastExerciseSession = { date: string; bodyweightKg: number; sets: { 
 
 /**
  * An exercise's ExerciseXpHistory before a session on `today`, rebuilt from its earlier
- * sessions (oldest first). Leave out is_flagged sets; KEEP jump-capped ones (judgeSession
- * caps them at the line itself). Gives the same values the simulation carries from one
- * session to the next with scoreSessionSets' jumpBaselineAfter and sessionBest.
+ * sessions (oldest first). Leave out is_flagged sets; KEEP jump-capped ones: replaying
+ * judgeSession here finds them again, so they count for the jump baseline at the line and
+ * not at all for the 12-week best (as in scoreSessionSets). Gives the same values the
+ * simulation carries from one session to the next with jumpBaselineAfter and sessionBest.
  *
  * It replays the player's whole history of the exercise: fine at today's sizes (see the
  * performance test in the API); the planned next step is a stored row per player and
@@ -286,6 +298,13 @@ export function exerciseXpHistory(
   const values = sessions.map((s) =>
     s.sets.map((set) => jumpCheckValue({ reps: set.reps, loadKg: liftedKg(set.weightKg, s.bodyweightKg, exercise.bodyweightRatio) }, exercise.repsUnit)),
   );
-  const bests = sessions.flatMap((s, i) => (values[i]!.length > 0 ? [{ date: s.date, value: Math.max(...values[i]!) }] : []));
-  return { recentBest: recentBest(bests, today), jumpBaseline: jumpBaseline(values) };
+  let baseline: number | null = null;
+  const bests: { date: string; value: number }[] = [];
+  sessions.forEach((s, i) => {
+    const judged = judgeSession(baseline, values[i]!);
+    const best = trustedBest(values[i]!, judged.aboveHistory);
+    if (best !== null) bests.push({ date: s.date, value: best });
+    baseline = judged.baselineAfter;
+  });
+  return { recentBest: recentBest(bests, today), jumpBaseline: baseline };
 }

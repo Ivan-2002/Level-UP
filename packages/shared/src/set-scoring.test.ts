@@ -10,6 +10,7 @@ import {
   setTagText,
   JUMP_CAP_TEXT,
   setXp,
+  qualifiesAsTrainingDay,
   type ExerciseXpHistory,
   type PastExerciseSession,
   type ScoringExercise,
@@ -210,6 +211,50 @@ describe("scoreSessionSets", () => {
     });
   });
 
+  describe("a jump-capped set (a mistype) is never a reference for effort", () => {
+    // History: best 100 x 8. 200 x 8 is far above the +25% line: a typo for 100.
+    it("doesn't raise the reference for the sets after it in the session", () => {
+      const { sets } = score([set("squat", 8, 100), set("squat", 8, 200), set("squat", 8, 100)]);
+      expect(sets.map((s) => s.tag)).toEqual([null, "above_history", null]);
+      expect(sets[2]).toMatchObject({ xp: 92, effort: 1 });
+    });
+
+    it("isn't the heaviest set of a baseline session after a break (no warm-ups before it)", () => {
+      // 12+ weeks off: no 12-week best, but the jump baseline remembers 100 x 8.
+      const comeback = new Map([["squat", { recentBest: null, jumpBaseline: epleyOneRepMax(100, 8) }]]);
+      const { sets } = score([set("squat", 8, 100), set("squat", 8, 200), set("squat", 8, 100)], comeback);
+      expect(sets.map((s) => s.tag)).toEqual([null, "above_history", null]);
+      expect([sets[0]!.xp, sets[2]!.xp]).toEqual([92, 92]);
+    });
+
+    it("is left out of the session's best for the next session, but counts at the line for the jump baseline", () => {
+      const { exercises: after } = score([set("squat", 8, 100), set("squat", 8, 200)]);
+      expect(after.get("squat")).toEqual({ jumpBaselineAfter: epleyOneRepMax(100, 8) * 1.25, sessionBest: epleyOneRepMax(100, 8) });
+
+      const onlyCapped = score([set("squat", 8, 200)]).exercises.get("squat")!;
+      expect(onlyCapped.sessionBest).toBeNull();
+    });
+
+    it("doesn't change the next honest session's effort, tags or training day", () => {
+      // 50 kg dumbbells x 10, then a session with 80 typed for 50 on its last set.
+      const honest = { reps: 10, weightKg: 50 };
+      const week1: PastExerciseSession = { date: "2026-11-03", bodyweightKg: 75, sets: [honest, honest, honest] };
+      const typo: PastExerciseSession = { date: "2026-11-10", bodyweightKg: 75, sets: [honest, honest, { reps: 10, weightKg: 80 }] };
+      const clean: PastExerciseSession = { ...typo, sets: [honest, honest, honest] };
+      const next = times(3, set("squat", 10, 50));
+      const after = (sessions: PastExerciseSession[]) => score(next, new Map([["squat", exerciseXpHistory(sessions, squat, "2026-11-17")]])).sets;
+
+      // The typo really was jump-capped (so it's this rule that protects the next session).
+      const typoScored = score(typo.sets.map((x) => set("squat", x.reps, x.weightKg)), new Map([["squat", exerciseXpHistory([week1], squat, "2026-11-10")]]));
+      expect(typoScored.sets[2]!.tag).toBe("above_history");
+
+      const withTypo = after([week1, typo]);
+      expect(withTypo).toEqual(after([week1, clean]));
+      expect(withTypo.map((s) => [s.effort, s.tag])).toEqual([[1, null], [1, null], [1, null]]);
+      expect(qualifiesAsTrainingDay({ sets: withTypo.map((s) => ({ isFlagged: s.isFlagged, tag: s.tag })) })).toBe(true);
+    });
+  });
+
   it("reports each exercise's baseline and best for the next session", () => {
     const { exercises: after } = score([set("squat", 8, 100), set("squat", 5, 110)]);
     expect(after.get("squat")).toEqual({ jumpBaselineAfter: epleyOneRepMax(110, 5), sessionBest: epleyOneRepMax(110, 5) });
@@ -250,11 +295,12 @@ describe("exerciseXpHistory: history rebuilt from stored sessions", () => {
     expect(exerciseXpHistory(sessions, squat, "2026-11-17")).toEqual(carried);
   });
 
-  it("keeps a jump-capped session at the line, and its raw best for effort", () => {
+  it("keeps a jump-capped session at the line for the jump baseline, and out of the 12-week best", () => {
     const history = exerciseXpHistory(sessions, squat, "2026-11-17");
     const before = Math.max(epleyOneRepMax(70, 8), epleyOneRepMax(80, 5));
     expect(history.jumpBaseline).toBeCloseTo(before * 1.25);
-    expect(history.recentBest).toBeCloseTo(epleyOneRepMax(150, 8));
+    // Not 150 x 8: the 12-week best is October's (August's 60 x 8 is outside the window).
+    expect(history.recentBest).toBeCloseTo(before);
   });
 
   it("counts the bodyweight share of bodyweight exercises, and seconds for timed ones", () => {

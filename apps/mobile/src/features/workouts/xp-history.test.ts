@@ -55,7 +55,7 @@ describe("historyAfterWorkout", () => {
   it("holds a jump of more than 25% to the line, as the server's replay does", () => {
     const after = historyAfterWorkout(historyAfterWorkout(empty, bench(1, 60), context), bench(2, 100), context).get(benchPress.id)!;
     expect(after.jumpBaseline).toBeCloseTo(epleyOneRepMax(60, 8) * (1 + JUMP_CAP.maxJump));
-    expect(after.recentBest).toBeCloseTo(epleyOneRepMax(100, 8)); // the 12-week best keeps the lift itself
+    expect(after.recentBest).toBeCloseTo(epleyOneRepMax(60, 8)); // a jump-capped lift is never the 12-week best
   });
 
   it("skips exercises missing from the library", () => {

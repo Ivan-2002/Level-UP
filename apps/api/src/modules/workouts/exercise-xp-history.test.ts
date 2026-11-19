@@ -67,7 +67,7 @@ describe("GET /v1/exercises/xp-history", () => {
     expect(items.find((i) => i.exerciseId === ids["pull-up"])).toMatchObject({ recentBest: epleyOneRepMax(80, 8) });
   });
 
-  it("keeps a jump-capped session at the line and leaves out flagged sets", async () => {
+  it("keeps a jump-capped set at the line for the baseline, out of the 12-week best, and leaves out flagged sets", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
     await finish(user, workout(3, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
     await finish(user, workout(2, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }, { reps: 8, weightKg: 400 }]]])); // capped; flagged
@@ -75,7 +75,7 @@ describe("GET /v1/exercises/xp-history", () => {
     const [bench] = await xpHistory(user);
 
     expect(bench!.jumpBaseline).toBeCloseTo(epleyOneRepMax(60, 8) * (1 + JUMP_CAP.maxJump));
-    expect(bench!.recentBest).toBeCloseTo(epleyOneRepMax(100, 8)); // not 400 kg
+    expect(bench!.recentBest).toBeCloseTo(epleyOneRepMax(60, 8)); // neither the capped 100 kg nor the flagged 400 kg
   });
 
   it("only ever includes the player's own workouts", async () => {

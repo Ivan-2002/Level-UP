@@ -110,6 +110,28 @@ describe("the jump cap at Finish", () => {
     expect(await storedSets(saved.id)).toEqual([{ xp: capped, isFlagged: false, flagReason: "above_history", xpTag: "above_history" }]);
   });
 
+  it("doesn't let a jump-capped typo change the next honest workout's XP, tags or training day", async () => {
+    // Two players with the same three workouts, except one typed 100 for 60 on a set of
+    // the second. A typo kept as the 12-week best would turn every honest 60 kg set of
+    // the third workout into a warm-up, and the workout into a non-training day.
+    const honest = { reps: 8, weightKg: 60 };
+    const playThrough = async (typo: SetInput) => {
+      const user = await signUpPlayer({ bodyweightKg: 75 });
+      await finish(user, workout(4, [["barbell-bench-press", times(3, honest)]]));
+      const second = await finish(user, workout(2, [["barbell-bench-press", [honest, honest, typo]]]));
+      const third = await finish(user, workout(0, [["barbell-bench-press", times(3, honest)]]));
+      return { typoSet: (await storedSets(second.workout.id))[2]!, sets: await storedSets(third.workout.id), weeklyGoal: third.summary.weeklyGoal };
+    };
+
+    const withTypo = await playThrough({ reps: 8, weightKg: 100 });
+    const clean = await playThrough(honest);
+
+    expect(withTypo.typoSet.flagReason).toBe("above_history");
+    expect(withTypo.sets).toEqual(clean.sets);
+    expect(withTypo.sets.map((s) => s.xpTag)).toEqual([null, null, null]);
+    expect(withTypo.weeklyGoal?.daysTrained).toBe(clean.weeklyGoal?.daysTrained);
+  });
+
   it("compares with workouts that STARTED earlier, including ones synced after it", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
     await finish(user, workout(1, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }]]]));
