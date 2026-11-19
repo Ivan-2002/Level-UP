@@ -19,12 +19,10 @@ import { useProfile } from "@/features/profile/use-profile";
 import { currentExercise, setCounts, type ActiveWorkout } from "./active-workout";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
 import { ElapsedTimer } from "./ElapsedTimer";
-import { lastSessionText, nextUp, scoreLiveWorkout, scoringContext, snapshotToPin, workoutSegments, type LiveScore } from "./live-workout";
+import { lastSessionText, nextUp, scoreLiveWorkout, scoringContext, snapshotToPin, workoutSegments } from "./live-workout";
 import { RestBar } from "./RestBar";
 import { exerciseSummaryQuery, useExerciseSummary } from "./use-exercise-summary";
 import { useXpHistory } from "./use-xp-history";
-
-const EMPTY_SCORES: LiveScore["bySet"] = new Map();
 
 function goHome() {
   if (router.canGoBack()) router.back();
@@ -184,7 +182,7 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft ? (
-            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} scores={live?.bySet ?? EMPTY_SCORES} />
+            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} live={live} context={context} />
           ) : (
             <Card>
               <Text variant="heading">Add your first exercise</Text>

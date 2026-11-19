@@ -1,6 +1,7 @@
 import {
   applyDailyCap,
   estimatedOneRepMax,
+  isBaselineSession,
   JUMP_CAP_TEXT,
   liftedKg,
   scoreSessionSets,
@@ -17,7 +18,7 @@ import {
   type WeightUnit,
 } from "@levelup/shared";
 import type { Segment } from "@/components/progress-segments";
-import { formatRest } from "./format";
+import { capitalise, formatRest } from "./format";
 import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet, type PinnedScoring } from "./active-workout";
 
 // What the active workout screen SHOWS, worked out from the workout in progress: live XP,
@@ -143,6 +144,61 @@ export function setXpNote(score: ScoredSet): SetXpNote {
   if (score.isFlagged) return { text: `0 XP · ${setTagText("check_set")}`, tone: "danger" };
   const text = score.tag ? `+${score.xp} XP · ${setTagText(score.tag)}` : `+${score.xp} XP`;
   return score.tag === "above_history" ? { text, tone: "inkMuted", detail: JUMP_CAP_TEXT } : { text, tone: "inkMuted" };
+}
+
+// --- Feedback when a set is ticked --------------------------------------------------
+
+/** "3 earlier sets now warm-ups" / "1 earlier set now a warm-up". */
+const rescoredText = (n: number) => (n === 1 ? "1 earlier set now a warm-up" : `${n} earlier sets now warm-ups`);
+
+export type TickFeedback = {
+  /** Read out by the screen reader on every tick, so a drop in the total is heard too. */
+  announcement: string;
+  /** Earlier done sets this tick turned into warm-ups (only in a baseline session). */
+  rescoredAsWarmUps: number;
+};
+
+/**
+ * What a tick or untick of set `setNumber` changed, from the live score before and after:
+ * "Set 4 done, plus 85 XP, 115 total. 3 earlier sets now warm-ups." It leads with the
+ * set's own gain; the total already carries the net change (no "-123").
+ * `before`/`after` null: no score yet (nothing pinned), so just the tick itself.
+ */
+export function tickFeedback(input: {
+  setId: string;
+  setNumber: number;
+  /** Whether the set is done after the tap (a tick) or not (an untick). */
+  done: boolean;
+  before: LiveScore | null;
+  after: LiveScore | null;
+}): TickFeedback {
+  const { setId, setNumber, done, before, after } = input;
+  const score = after?.bySet.get(setId);
+  if (!before || !after) return { announcement: `Set ${setNumber} ${done ? "done" : "not done"}`, rescoredAsWarmUps: 0 };
+  if (!done || !score) return { announcement: `Set ${setNumber} not done, ${after.total} total`, rescoredAsWarmUps: 0 };
+
+  let rescored = 0;
+  for (const [id, was] of before.bySet) {
+    if (id !== setId && was.tag !== "warm_up" && after.bySet.get(id)?.tag === "warm_up") rescored++;
+  }
+  const parts = [`Set ${setNumber} done, plus ${score.xp} XP, ${after.total} total.`];
+  if (rescored > 0) parts.push(`${capitalise(rescoredText(rescored))}.`);
+  if (after.dailyCapNote && !before.dailyCapNote) parts.push(`${after.dailyCapNote}.`);
+  return { announcement: parts.join(" "), rescoredAsWarmUps: rescored };
+}
+
+/** The ticked row's line while it's the latest tick: "+85 XP · 3 earlier sets now warm-ups". */
+export function tickLine(note: SetXpNote, rescoredAsWarmUps: number): SetXpNote {
+  return rescoredAsWarmUps > 0 ? { ...note, text: `${note.text} · ${rescoredText(rescoredAsWarmUps)}` } : note;
+}
+
+/** The caption on an exercise in a baseline session (its first, or the first after 12 weeks off). */
+export const BASELINE_CAPTION = "First session: this sets your baseline. Earlier sets may be re-scored as warm-ups.";
+
+/** Whether the exercise on screen gets the baseline caption: a reps exercise with no 12-week best in the pinned history. */
+export function showsBaselineCaption(exercise: Pick<Exercise, "id" | "repsUnit">, context: LiveScoringContext | null): boolean {
+  if (!context || exercise.repsUnit !== "reps") return false; // timed sets have no warm-ups
+  return isBaselineSession(context.history.get(exercise.id)?.recentBest ?? null);
 }
 
 /** One progress segment per exercise, plus which one is on screen. */

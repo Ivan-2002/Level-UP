@@ -2,6 +2,7 @@ import { applyDailyCap, epleyOneRepMax, JUMP_CAP_TEXT, scoreSessionSets, type Ex
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
 import {
   addExercise,
+  addSet,
   buildFinishPayload,
   doneSetError,
   endEditing,
@@ -13,6 +14,7 @@ import {
   type ActiveWorkout,
 } from "./active-workout";
 import {
+  BASELINE_CAPTION,
   dailyCapNote,
   e1rmBars,
   lastSessionText,
@@ -23,7 +25,10 @@ import {
   previousSetText,
   scoreLiveWorkout,
   setXpNote,
+  showsBaselineCaption,
   suggestedRestText,
+  tickFeedback,
+  tickLine,
   todayBestE1rm,
   workoutSegments,
 } from "./live-workout";
@@ -301,6 +306,86 @@ describe("editing done sets", () => {
     w = edit(w, 0, { weight: "90" });
     toggle(0, 21); // tick again
     expect(w.exercises[0]!.sets[0]!.scored).toEqual({ weight: "90", reps: "8" });
+  });
+});
+
+describe("feedback on a tick: the announcement, the tick line and the baseline caption", () => {
+  const noHistory = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
+  const withHistory = {
+    ...noHistory,
+    history: new Map([[benchPress.id, { recentBest: epleyOneRepMax(100, 5), jumpBaseline: epleyOneRepMax(100, 5) }]]),
+  };
+  /** Three 60 x 5 sets, then 100 x 5 in a fourth set (added after the three planned ones). */
+  function rampThenHeavy() {
+    let w = fill(fill(fill(workout(), 0, 0, "60", "5", 1), 0, 1, "60", "5", 4), 0, 2, "60", "5", 7);
+    w = addSet(w, w.exercises[0]!.id, () => "set-4");
+    return { before: w, after: fill(w, 0, 3, "100", "5", 10) };
+  }
+
+  it("baseline session: leads with the gain, names the re-scored sets, and gives the new total", () => {
+    const { before, after } = rampThenHeavy();
+    const was = scoreLiveWorkout(before, noHistory);
+    const now = scoreLiveWorkout(after, noHistory);
+    const heavy = now.bySet.get("set-4")!;
+    const feedback = tickFeedback({ setId: "set-4", setNumber: 4, done: true, before: was, after: now });
+
+    expect(now.total).toBeLessThan(was.total + heavy.xp); // the earlier rows lost XP
+    expect(feedback).toEqual({
+      announcement: `Set 4 done, plus ${heavy.xp} XP, ${now.total} total. 3 earlier sets now warm-ups.`,
+      rescoredAsWarmUps: 3,
+    });
+    // The row: the gain first, no minus number (the total shows the net change).
+    expect(tickLine(setXpNote(heavy), 3).text).toBe(`+${heavy.xp} XP · 3 earlier sets now warm-ups`);
+  });
+
+  it("says nothing about re-scoring when nothing was (with history)", () => {
+    const { before, after } = rampThenHeavy();
+    const now = scoreLiveWorkout(after, withHistory);
+    const feedback = tickFeedback({ setId: "set-4", setNumber: 4, done: true, before: scoreLiveWorkout(before, withHistory), after: now });
+    expect(feedback).toEqual({ announcement: `Set 4 done, plus ${now.bySet.get("set-4")!.xp} XP, ${now.total} total.`, rescoredAsWarmUps: 0 });
+    expect(tickLine({ text: "+85 XP", tone: "inkMuted" }, 0).text).toBe("+85 XP");
+  });
+
+  it("uses the singular for one re-scored set", () => {
+    let w = fill(workout(), 0, 0, "60", "5", 1);
+    const before = scoreLiveWorkout(w, noHistory);
+    w = fill(w, 0, 1, "100", "5", 4);
+    const feedback = tickFeedback({ setId: w.exercises[0]!.sets[1]!.id, setNumber: 2, done: true, before, after: scoreLiveWorkout(w, noHistory) });
+    expect(feedback.announcement).toMatch(/\. 1 earlier set now a warm-up\.$/);
+  });
+
+  it("announces an untick with the new total", () => {
+    const { after } = rampThenHeavy();
+    const result = toggleSetDone(after, after.exercises[0]!.id, "set-4", at(12));
+    if (!result.ok) throw new Error(result.message);
+    const now = scoreLiveWorkout(result.value, noHistory);
+    expect(tickFeedback({ setId: "set-4", setNumber: 4, done: false, before: scoreLiveWorkout(after, noHistory), after: now }).announcement).toBe(
+      `Set 4 not done, ${now.total} total`,
+    );
+  });
+
+  it("announces just the tick before anything is pinned", () => {
+    expect(tickFeedback({ setId: "s", setNumber: 1, done: true, before: null, after: null }).announcement).toBe("Set 1 done");
+  });
+
+  it("adds the daily cap line when this tick reached it", () => {
+    const capped = { ...noHistory, dailyCap: { config: { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 }, xpBefore: 3000 } };
+    let w = fill(workout(), 0, 0, "60", "5", 1);
+    const before = scoreLiveWorkout(w, capped);
+    w = fill(w, 0, 1, "100", "8", 4);
+    const after = scoreLiveWorkout(w, capped);
+    expect(before.dailyCapNote).toBeNull();
+    expect(tickFeedback({ setId: w.exercises[0]!.sets[1]!.id, setNumber: 2, done: true, before, after }).announcement).toMatch(
+      /Daily limit reached: sets now earn 25%\.$/,
+    );
+  });
+
+  it("captions a baseline session's reps exercise only", () => {
+    expect(BASELINE_CAPTION).toBe("First session: this sets your baseline. Earlier sets may be re-scored as warm-ups.");
+    expect(showsBaselineCaption(benchPress, noHistory)).toBe(true);
+    expect(showsBaselineCaption(benchPress, withHistory)).toBe(false);
+    expect(showsBaselineCaption(plank, noHistory)).toBe(false); // timed: no warm-ups
+    expect(showsBaselineCaption(benchPress, null)).toBe(false); // nothing pinned yet
   });
 });
 

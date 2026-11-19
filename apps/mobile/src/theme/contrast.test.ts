@@ -35,6 +35,12 @@ describe.each<ColorScheme>(["dark", "light"])("%s theme contrast", (scheme) => {
     expect(contrastRatio(parseColor(c.ink), row)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it("the XP line under a completed set (tinted surface) is at least 4.5:1: muted, and red for '0 XP · Check this set'", () => {
+    const row = parseColor(c.successTint, c.surface);
+    expect(contrastRatio(parseColor(c.inkMuted), row)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(parseColor(c.danger), row)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it.each(NON_TEXT_PAIRS)("%s on %s is at least 3:1", (fg, bg) => {
     expect(contrastRatio(parseColor(c[fg]), parseColor(c[bg]))).toBeGreaterThanOrEqual(3);
   });
