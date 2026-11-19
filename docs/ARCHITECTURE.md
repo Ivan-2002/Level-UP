@@ -99,6 +99,7 @@ Level-UP/
 │   │       ├── theme/          # tokens, fonts, contrast checks
 │   │       ├── lib/            # API client, query client, storage
 │   │       └── stores/         # Zustand stores (active workout)
+│   ├── admin/                  # admin web app (after beta)
 │   └── api/                    # Express API
 │       ├── prisma/schema.prisma
 │       └── src/
@@ -254,6 +255,7 @@ These are designed in from day one but switched on when the milestone needs them
 | Account deletion | `DELETE /v1/me`, asking for the password again. Every table cascades from `user`, so one delete removes everything. Required by the App Store and Google Play | Before beta |
 | Privacy | Privacy policy and store data-safety forms (bodyweight and training history are personal data: POPIA, GDPR) | Before beta |
 | Minimum age | Minimum age at sign-up (13 or 16, to be decided) with an age check, and the app store age rating. The XP and bodyweight rules are designed for adults and older teens | Before beta |
+| Analytics and admin | A read-only reporting user on Postgres and a hosted chart tool (e.g. Metabase) with saved queries; dashboards show aggregates, not individual players' workouts. A custom `admin` module and `apps/admin` web app after the beta | Before beta (chart tool); after beta (custom admin) |
 | Local test files | curl cookie jars and other scratch files are git-ignored (`cookies.txt`), never committed | Now |
 
 The hosting provider is still open; the shortlist is Render, Railway or Fly.io for the API, and Neon or Supabase for Postgres.
@@ -278,13 +280,24 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: the avatar gains its extras at each stage level, untrained body parts stay thin whatever the level, and a part untrained for months visibly shrinks.
    - Leave room for endurance: the avatar design must allow an endurance look (a stamina stat, a lean athletic build) next to muscle size, so a runner's or triathlete's avatar looks different from a lifter's rather than just weaker. No endurance code in this milestone; the design and data shapes just mustn't rule it out.
 7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, minimum age at sign-up (13 or 16, to be decided) with an age check and the app store age rating, testers on TestFlight and Google Play internal testing. The XP and bodyweight rules are designed for adults and older teens. Review the daily cap against the testers' real days: in the simulation the biggest honest day with warm-ups logged is 3,086 against the 3,100 cap, a 14 XP margin.
-   - Done when: five real people use it at the gym for two weeks.
+   - Admin view, built from ready-made tools (no app code):
+     - a read-only Postgres user for reporting, with no write access to the main database;
+     - a hosted chart tool (e.g. Metabase) on that read-only user, with saved queries for: sign-ups per day and week, active players (a workout in the last 7 / 30 days), first workout finished after sign-up, week-2 return, weekly goal met, XP per workout, daily cap hits, and level spread;
+     - optionally, product analytics events from the app (e.g. PostHog) for sign-up and first-workout drop-off.
+   - Done when: five real people use it at the gym for two weeks, and I can open the dashboard and see sign-ups, active players and daily cap hits from the beta.
 
 Later, not yet scheduled: **session backup sync**, an idempotent `PUT /sessions/:clientId` that uploads the whole in-progress session every minute or so. It protects against a lost phone and gives the server its own receive times, which the anti-cheat checks need (sets far above the player's history, or completed implausibly fast, get `is_flagged`, earn no XP and don't count as PRs until confirmed).
 
 Also later: **confirm or edit a flagged set** (today a flagged typo stays flagged), and **revisit the 14-day XP window and backdating** before leaderboards.
 
 Also later: **content beyond level 20** (further avatar stages, titles, cosmetics). Levels themselves have no maximum: `xpForLevel` and `levelFromXp` have no cap, and nothing in the API, the database or the app assumes 20 is the top (checked 2026-11-16).
+
+**After the beta: a custom admin dashboard**, replacing the ready-made tools of Milestone 7 once we know which numbers we actually use:
+
+- **API:** an `admin` module with read-only endpoints that return aggregates, not raw user rows.
+- **Access:** an admin role (Better Auth's admin plugin), strong authentication, and an audit log of admin actions.
+- **App:** a small web app in `apps/admin` that reuses the `packages/shared` types.
+- **Later admin actions:** a review queue for flagged sets (`is_flagged`), and editing exercise tuning (`load_factor`, `bodyweight_ratio`, rest) without a deploy.
 
 **After the beta: endurance and hybrid training** (running, cycling, swimming, rowing and ski erg, and Hyrox-style stations), so the app works for every kind of athlete, not only lifters. Logging and device import are built together, so watch data is used from day one:
 
@@ -324,6 +337,7 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-19 | Admin dashboard: ready-made tools on a read-only database user for the beta; a custom admin module and web app only after the beta. Dashboards show aggregates, not individual players' workouts (POPIA/GDPR); a privacy policy describing what's collected is required before store submission | Less polished and no admin actions during the beta; no code to build or secure until we know which numbers we actually use |
 | 2026-11-19 | Editing a done set: each done set is scored with the values it had when ticked (`DraftSet.scored`), replaced only when **editing ends** (`endEditing`) and the typed values are valid; if they aren't, the set keeps its scored values and the row says why (`doneSetError`), once editing has ended. Editing ends when: the field loses focus, the keyboard is dismissed, another set is focused or ticked, the app goes to the background, the workout is (re)opened (after the app was killed), or Finish is pressed. Untick and delete take the set out of the score at once | Typing 102.5 over 100 no longer moves the total through 1, 10 and 102. After a kill mid-edit the set is scored either with its ticked values (the half-typed value is invalid) or once with the new value (it's valid, e.g. "10" on the way to "105": what the row shows). The saved set gains one field |
 | 2026-11-19 | One store migration for Milestone 5: active-workout store v3 holds the pinned scoring context, the daily cap and the done sets' scored values (`migrateV2`). The intermediate v3 and v4 of 2026-11-18 never left the feature branch, so they were folded into this one version | A workout saved by those branch builds (simulator only) isn't upgraded: finish or discard it before installing |
 | 2026-11-18 | The live view applies the daily cap (`applyDailyCap` with the server's values from `xp-history`). Its starting point (`dayXpBefore`) is pinned with the workout (store v3): the server's set XP for the workout's day (only if its copy is for that day) plus the player's queued workouts that started that day, each capped in outbox order. "The day" is the local day the workout STARTED in the profile's time zone, for the server's count, the queued workouts and the workout in progress alike: the rule that dates `xp_event.earned_on`. Rows show the XP awarded after the cap, as the summary does, and a quiet line says "Daily limit reached: sets now earn 25%". Queued workouts listed in `today.clientIds` are skipped in the history replay and the day count | A saved copy without cap data (from an older app) applies no live cap, as before, but keeps its history. The pinned day count doesn't see a workout logged on another phone during this one. Skipping counted workouts also removes the Phase 4b double-replay of a lost response, for workouts that started today; an older one can still be replayed twice (the baseline only rises slightly until the refetch) |
