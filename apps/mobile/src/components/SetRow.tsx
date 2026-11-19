@@ -59,6 +59,10 @@ type SetRowProps = {
   reps: string;
   onChangeWeight: (text: string) => void;
   onChangeReps: (text: string) => void;
+  /** Either input of this row gained focus. */
+  onFocusInput?: () => void;
+  /** Either input lost focus: editing ended (a done set is re-scored with valid values). */
+  onBlurInput?: () => void;
   weightUnit: WeightUnit;
   repsUnit: RepsUnit;
   /** Bodyweight exercises log ADDED weight, so the input is labelled that way. */
@@ -73,7 +77,7 @@ type SetRowProps = {
   xpNote?: { text: string; tone: "inkMuted" | "danger"; detail?: string };
   /** "New PR · est. 1RM 79 kg": shown in purple under the row. */
   prText?: string;
-  /** Why the tick was refused, e.g. "Enter reps first." */
+  /** Why the tick was refused, or why a done set's edit can't be scored, e.g. "Enter reps first." */
   error?: string;
   /** Tapping the set number (e.g. to remove the set). */
   onPressNumber?: () => void;
@@ -125,6 +129,8 @@ export function SetRow(props: SetRowProps) {
           keyboardType="decimal-pad"
           maxLength={7}
           accessibilityLabel={`Set ${number} ${weightName}`}
+          onFocus={props.onFocusInput}
+          onBlur={props.onBlurInput}
           style={flexible ? styles.flexColumn : styles.weightColumn}
         />
         <NumberInput
@@ -133,6 +139,8 @@ export function SetRow(props: SetRowProps) {
           keyboardType="number-pad"
           maxLength={3}
           accessibilityLabel={`Set ${number} ${repsUnit}`}
+          onFocus={props.onFocusInput}
+          onBlur={props.onBlurInput}
           style={flexible ? styles.flexColumn : styles.repsColumn}
         />
 
@@ -176,7 +184,7 @@ export function SetRow(props: SetRowProps) {
   );
 }
 
-function NumberInput({ style, ...props }: TextInputProps) {
+function NumberInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
   const styles = useStyles();
   const t = useTheme();
   const [focused, setFocused] = useState(false);
@@ -186,8 +194,14 @@ function NumberInput({ style, ...props }: TextInputProps) {
       placeholder="0"
       placeholderTextColor={t.colors.inkMuted}
       selectTextOnFocus // typing replaces the pre-filled number instead of appending to it
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      onFocus={(e) => {
+        setFocused(true);
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        onBlur?.(e);
+      }}
       style={[styles.input, focused && styles.inputFocused, style]}
     />
   );

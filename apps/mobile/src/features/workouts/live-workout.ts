@@ -29,11 +29,15 @@ import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet, type P
 
 type Done = { set: DraftSet; reps: number; weightKg: number };
 
-/** The completed sets of an exercise, parsed (a set ticked done is always valid). */
+/**
+ * The completed sets of an exercise, parsed from the values each is SCORED with
+ * (DraftSet.scored: as ticked, or as last committed when editing ended), not what's typed
+ * right now. So the live XP, PRs and today's best don't move while a done set is edited.
+ */
 function doneSets(draft: DraftExercise, unit: WeightUnit): Done[] {
   return draft.sets.flatMap((set) => {
-    if (set.doneAt === null) return [];
-    const parsed = parseSet(set, draft.exercise, unit);
+    if (set.doneAt === null || set.scored === null) return [];
+    const parsed = parseSet({ ...set, ...set.scored }, draft.exercise, unit);
     return parsed.ok ? [{ set, ...parsed.value }] : [];
   });
 }

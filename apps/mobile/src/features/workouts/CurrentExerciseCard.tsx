@@ -12,7 +12,7 @@ import { Stepper } from "@/components/Stepper";
 import { Text } from "@/components/Text";
 import { activeWorkoutStore, restTimerStore } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
-import type { ActiveWorkout, DraftExercise } from "./active-workout";
+import { doneSetError, type ActiveWorkout, type DraftExercise } from "./active-workout";
 import { E1rmChart } from "./E1rmChart";
 import { capitalise, formatRest } from "./format";
 import { e1rmBars, lastSessionText, livePrs, nextUp, previousSetText, setXpNote, suggestedRestText, todayBestE1rm, type LiveScore } from "./live-workout";
@@ -31,6 +31,8 @@ type Props = {
 /** The exercise on screen: last time, the coach's target, rest, the sets, the trend. */
 export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, scores }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The set being typed in: its done-set error waits until editing ends.
+  const [editing, setEditing] = useState<string | null>(null);
   const styles = useStyles();
   const t = useTheme();
   const unit = workout.weightUnit;
@@ -127,6 +129,15 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, sco
               reps={set.reps}
               onChangeWeight={(weight) => actions.updateSet(draft.id, set.id, { weight })}
               onChangeReps={(reps) => actions.updateSet(draft.id, set.id, { reps })}
+              onFocusInput={() => {
+                // Focusing another set ends editing the previous one (its blur does too).
+                actions.endEditing();
+                setEditing(set.id);
+              }}
+              onBlurInput={() => {
+                actions.endEditing();
+                setEditing((current) => (current === set.id ? null : current));
+              }}
               weightUnit={unit}
               repsUnit={repsUnit}
               bodyweight={exercise.equipment === "bodyweight"}
@@ -134,7 +145,7 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, sco
               onToggleDone={() => toggle(set.id)}
               xpNote={score ? setXpNote(score) : undefined}
               prText={pr ? `New PR · est. 1RM ${formatWeight(pr, unit, { decimals: 0 })}` : undefined}
-              error={errors[set.id]}
+              error={errors[set.id] ?? (editing === set.id ? undefined : (doneSetError(set, exercise, unit) ?? undefined))}
               numberHint="Removes this set"
               onPressNumber={() =>
                 Alert.alert(`Remove set ${index + 1}?`, undefined, [

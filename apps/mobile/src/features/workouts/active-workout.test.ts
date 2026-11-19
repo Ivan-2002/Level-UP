@@ -4,13 +4,13 @@ import { createOutboxStore } from "@/stores/outbox-store";
 import { benchPress, lateralRaise, memoryStorage, plank, pullUp, sequentialIds, testUuid } from "@/test/fixtures";
 import {
   addExercise,
+  doneSetError,
   addSet,
   buildFinishPayload,
   currentExercise,
   lastSetsFrom,
   migrateV1,
   migrateV2,
-  migrateV3,
   removeExercise,
   startWorkout,
   stepRest,
@@ -422,6 +422,49 @@ describe("a workout saved by the previous app version (store v1)", () => {
   });
 });
 
+describe("the app killed while a done set is being edited", () => {
+  /** A bench set ticked at 100 x 8, then edited (`changes`) without editing ending; then the app dies. */
+  function killedMidEdit(changes: { weight?: string; reps?: string }) {
+    const storage = memoryStorage();
+    const { store } = setup(storage);
+    store.getState().start("user-1", "kg");
+    store.getState().addExercises([benchPress]);
+    const w = store.getState().workout!;
+    const e = w.exercises[0]!.id;
+    const s = w.exercises[0]!.sets[0]!.id;
+    store.getState().updateSet(e, s, { weight: "100", reps: "8" });
+    expect(store.getState().toggleSetDone(e, s)).toBeNull();
+    store.getState().updateSet(e, s, changes); // saved on every keystroke...
+    return setup(storage).store; // ...and read back by a fresh store: the app reopened
+  }
+  const firstSet = (store: ReturnType<typeof killedMidEdit>) => store.getState().workout!.exercises[0]!.sets[0]!;
+
+  it("never scores a half-typed invalid value: the set keeps its ticked values and shows why", () => {
+    const reopened = killedMidEdit({ reps: "" }); // reps cleared, about to type new ones
+    expect(firstSet(reopened)).toMatchObject({ reps: "", scored: { weight: "100", reps: "8" } });
+
+    reopened.getState().endEditing(); // the screen ends editing when the workout opens
+    expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" });
+    expect(doneSetError(firstSet(reopened), benchPress, "kg")).not.toBeNull();
+  });
+
+  it("re-scores once with a valid value when the workout reopens", () => {
+    const reopened = killedMidEdit({ weight: "105" });
+    expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" }); // until editing ends
+
+    reopened.getState().endEditing();
+    expect(firstSet(reopened).scored).toEqual({ weight: "105", reps: "8" });
+  });
+
+  it("scores the edit before Finish sends the workout", () => {
+    const reopened = killedMidEdit({ weight: "105" });
+    const outbox = createOutboxStore(memoryStorage());
+    const result = finishActiveWorkout({ activeWorkout: reopened, outbox, now: minutesLater(30) });
+    expect(result.ok).toBe(true);
+    expect(outbox.getState().items[0]!.payload.exercises[0]!.sets[0]).toMatchObject({ weightKg: 105, reps: 8 });
+  });
+});
+
 describe("the pinned scoring context (store v3)", () => {
   const scoring = { history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }], bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
 
@@ -442,7 +485,7 @@ describe("the pinned scoring context (store v3)", () => {
 
     const after = setup(storage).store;
     expect(after.getState().workout!.scoring).toEqual(scoring);
-    expect(JSON.parse(storage.getItem("levelup.active-workout") as string).version).toBe(4);
+    expect(JSON.parse(storage.getItem("levelup.active-workout") as string).version).toBe(3);
   });
 
   it("upgrades a v2 save with a workout in progress: nothing lost, unpinned, then pins on next open", () => {
@@ -470,25 +513,18 @@ describe("the pinned scoring context (store v3)", () => {
 
     const { store } = setup(storage);
     const upgraded = store.getState().workout!;
-    expect(upgraded).toEqual({ ...v2Workout, scoring: null });
+    // Unchanged, except: nothing pinned, and the done set is scored with its typed values (as v2 scored it).
+    expect(upgraded).toEqual({
+      ...v2Workout,
+      scoring: null,
+      exercises: [{ ...v2Workout.exercises[0]!, sets: [{ ...v2Workout.exercises[0]!.sets[0]!, scored: { weight: "62.5", reps: "8" } }] }],
+    });
 
     // On next open the screen pins: a set is done, so it pins even before the history arrives.
     const snapshot = snapshotToPin(upgraded, { history: undefined, bodyweight: { xp: 80, typed: 80 }, dailyCap: null })!;
     store.getState().pinScoring(snapshot);
     expect(store.getState().workout!.scoring).toEqual({ history: [], bodyweight: { xp: 80, typed: 80 }, dailyCap: null });
     expect(migrateV2(null)).toBeNull();
-  });
-
-  it("upgrades a v3 save: its pin is kept, with no cap data, so its total doesn't change", () => {
-    const storage = memoryStorage();
-    const before = setup(storage).store;
-    before.getState().start("user-1", "kg");
-    const { dailyCap: _, ...v3Scoring } = scoring;
-    const v3Workout = { ...before.getState().workout!, scoring: v3Scoring };
-    storage.setItem("levelup.active-workout", JSON.stringify({ version: 3, state: { workout: v3Workout } }));
-
-    expect(setup(storage).store.getState().workout!.scoring).toEqual({ ...v3Scoring, dailyCap: null });
-    expect(migrateV3({ ...v3Workout, scoring: null })!.scoring).toBeNull();
   });
 
   it("upgrades a v1 save all the way, unpinned", () => {

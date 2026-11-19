@@ -1,6 +1,17 @@
 import { applyDailyCap, epleyOneRepMax, JUMP_CAP_TEXT, scoreSessionSets, type ExerciseSession, type ExerciseXpHistory } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
-import { addExercise, buildFinishPayload, pinScoring, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "./active-workout";
+import {
+  addExercise,
+  buildFinishPayload,
+  doneSetError,
+  endEditing,
+  pinScoring,
+  removeSet,
+  startWorkout,
+  toggleSetDone,
+  updateSet,
+  type ActiveWorkout,
+} from "./active-workout";
 import {
   dailyCapNote,
   e1rmBars,
@@ -188,6 +199,90 @@ describe("snapshotToPin: the total only moves when a set does", () => {
 
   it("starts every new workout unpinned", () => {
     expect(workout().scoring).toBeNull();
+  });
+});
+
+describe("editing done sets", () => {
+  const context = { history: new Map<string, ExerciseXpHistory>(), bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
+  // Last time's best on bench: 100 x 8, so these are scored looking back only.
+  const withHistory = {
+    ...context,
+    history: new Map([[benchPress.id, { recentBest: epleyOneRepMax(100, 8), jumpBaseline: epleyOneRepMax(100, 8) }]]),
+  };
+  const ticked = () => fill(fill(workout(), 0, 0, "100", "8", 5), 0, 1, "100", "8", 9);
+  const setId = (w: ActiveWorkout, n: number) => w.exercises[0]!.sets[n]!.id;
+  const edit = (w: ActiveWorkout, n: number, changes: { weight?: string; reps?: string }) => updateSet(w, w.exercises[0]!.id, setId(w, n), changes);
+
+  it("doesn't move the score while a done set is typed in, then re-scores once when editing ends", () => {
+    let w = ticked();
+    const before = scoreLiveWorkout(w, withHistory);
+
+    // Typing 102.5 over 100: every in-between value ("1", "10", "102", "102.") is ignored.
+    for (const weight of ["1", "10", "102", "102.", "102.5"]) {
+      w = edit(w, 0, { weight });
+      expect(scoreLiveWorkout(w, withHistory)).toEqual(before);
+    }
+    w = endEditing(w);
+    const after = scoreLiveWorkout(w, withHistory);
+    expect(after.bySet.get(setId(w, 0))!.xp).toBeGreaterThan(before.bySet.get(setId(w, 0))!.xp);
+    expect(after.bySet.get(setId(w, 1))).toEqual(before.bySet.get(setId(w, 1))); // the other row: unchanged
+  });
+
+  it("keeps an invalid edit out of the score and says why, once editing ends", () => {
+    let w = edit(ticked(), 0, { reps: "" });
+    w = endEditing(w);
+    const set = w.exercises[0]!.sets[0]!;
+
+    expect(set.scored).toEqual({ weight: "100", reps: "8" });
+    expect(scoreLiveWorkout(w, withHistory)).toEqual(scoreLiveWorkout(ticked(), withHistory));
+    expect(doneSetError(set, benchPress, "kg")).toMatch(/counts as it was when ticked/);
+    expect(doneSetError(ticked().exercises[0]!.sets[0]!, benchPress, "kg")).toBeNull();
+  });
+
+  it("ends editing when another set is ticked", () => {
+    let w = edit(ticked(), 0, { weight: "105" });
+    w = fill(w, 0, 2, "100", "8", 13); // ticks set 3
+    expect(w.exercises[0]!.sets[0]!.scored).toEqual({ weight: "105", reps: "8" });
+  });
+
+  it("returns the same workout when no done set changed (no re-render, no save)", () => {
+    const w = ticked();
+    expect(endEditing(w)).toBe(w);
+  });
+
+  it("untick: the set leaves the score; with history, the other rows don't change", () => {
+    const w = ticked();
+    const before = scoreLiveWorkout(w, withHistory);
+    const result = toggleSetDone(w, w.exercises[0]!.id, setId(w, 0), at(20));
+    if (!result.ok) throw new Error(result.message);
+    const after = scoreLiveWorkout(result.value, withHistory);
+
+    expect(result.value.exercises[0]!.sets[0]!.scored).toBeNull();
+    expect(after.bySet.has(setId(w, 0))).toBe(false);
+    expect(after.bySet.get(setId(w, 1))).toEqual(before.bySet.get(setId(w, 1)));
+    expect(after.total).toBe(before.total - before.bySet.get(setId(w, 0))!.xp);
+  });
+
+  it("delete: a removed done set leaves the score; with history, the other rows don't change", () => {
+    const w = ticked();
+    const before = scoreLiveWorkout(w, withHistory);
+    const after = scoreLiveWorkout(removeSet(w, w.exercises[0]!.id, setId(w, 0)), withHistory);
+
+    expect(after.bySet.get(setId(w, 1))).toEqual(before.bySet.get(setId(w, 1)));
+    expect(after.total).toBe(before.total - before.bySet.get(setId(w, 0))!.xp);
+  });
+
+  it("re-ticking a set scores what's typed then", () => {
+    let w = ticked();
+    const toggle = (n: number, minute: number) => {
+      const r = toggleSetDone(w, w.exercises[0]!.id, setId(w, n), at(minute));
+      if (!r.ok) throw new Error(r.message);
+      w = r.value;
+    };
+    toggle(0, 20); // untick
+    w = edit(w, 0, { weight: "90" });
+    toggle(0, 21); // tick again
+    expect(w.exercises[0]!.sets[0]!.scored).toEqual({ weight: "90", reps: "8" });
   });
 });
 

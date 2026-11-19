@@ -15,6 +15,8 @@ export function finishActiveWorkout(deps: {
   outbox: OutboxStore;
   now: Date;
 }): Result<{ clientId: string }> {
+  // Finishing ends editing: a valid edit to a done set is scored before the workout is sent.
+  deps.activeWorkout.getState().endEditing();
   const workout = deps.activeWorkout.getState().workout;
   if (!workout) return { ok: false, message: "No workout in progress." };
 

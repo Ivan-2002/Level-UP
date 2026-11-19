@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { Alert, AppState, Keyboard, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -86,6 +86,22 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   // workout.scoring keeps its identity across set edits (the store copies the workout, not it).
   const context = useMemo(() => (workout.scoring ? scoringContext(workout.scoring) : null), [workout.scoring]);
   const live = useMemo(() => (context ? scoreLiveWorkout(workout, context) : null), [workout, context]);
+
+  // Editing ends (see endEditing): when the workout is (re)opened, e.g. after the app was
+  // killed mid-edit; when the app goes to the background; when the keyboard is dismissed.
+  // Field blur and ticking another set are handled by the card and the store.
+  useEffect(() => {
+    const end = () => activeWorkoutStore.getState().endEditing();
+    end();
+    const app = AppState.addEventListener("change", (state) => {
+      if (state !== "active") end();
+    });
+    const keyboard = Keyboard.addListener("keyboardDidHide", end);
+    return () => {
+      app.remove();
+      keyboard.remove();
+    };
+  }, []);
 
   // Load every exercise's history up front (and save it on the phone), so switching
   // exercises at the gym doesn't wait for the network.
