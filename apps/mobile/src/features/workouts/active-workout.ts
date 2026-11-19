@@ -299,7 +299,12 @@ export function parseSet(set: DraftSet, exercise: Exercise, unit: WeightUnit): R
   if (set.reps.trim() === "" || !Number.isInteger(reps) || reps < REPS_MIN || reps > max) {
     return { ok: false, message: `${label} must be a whole number from ${REPS_MIN} to ${max}.` };
   }
-  // Empty weight means 0: a plain bodyweight set is then just "enter reps, tick".
+  // Empty weight means 0 only for bodyweight exercises ("enter reps, tick"; the weight is
+  // what's ADDED). A barbell, dumbbell, machine, cable or kettlebell lift always has one:
+  // empty is a weight not entered yet, never silently 0 kg. A typed "0" is still 0 kg.
+  if (set.weight.trim() === "" && exercise.equipment !== "bodyweight") {
+    return { ok: false, message: "Enter the weight." };
+  }
   const typed = set.weight.trim() === "" ? 0 : parseDecimal(set.weight);
   const weightKg = Number.isNaN(typed) ? Number.NaN : fromInputWeight(typed, unit);
   if (Number.isNaN(weightKg) || weightKg < WEIGHT_MIN_KG || weightKg > WEIGHT_MAX_KG) {

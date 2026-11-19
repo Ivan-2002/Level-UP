@@ -239,6 +239,24 @@ describe("editing done sets", () => {
     expect(doneSetError(ticked().exercises[0]!.sets[0]!, benchPress, "kg")).toBeNull();
   });
 
+  it("keeps a cleared weight on a loaded lift out of the score (not 0 kg); a typed 0 is 0 kg", () => {
+    let w = endEditing(edit(ticked(), 0, { weight: "" }));
+    expect(w.exercises[0]!.sets[0]!.scored).toEqual({ weight: "100", reps: "8" });
+    expect(scoreLiveWorkout(w, withHistory)).toEqual(scoreLiveWorkout(ticked(), withHistory));
+
+    w = endEditing(edit(w, 0, { weight: "0" }));
+    expect(w.exercises[0]!.sets[0]!.scored).toEqual({ weight: "0", reps: "8" });
+  });
+
+  it("still lets an empty weight mean bodyweight only on a bodyweight exercise", () => {
+    const base = workout();
+    let w = updateSet(base, base.exercises[1]!.id, base.exercises[1]!.sets[0]!.id, { weight: "", reps: "8" });
+    const r = toggleSetDone(w, w.exercises[1]!.id, w.exercises[1]!.sets[0]!.id, at(5)); // pull-up
+    if (!r.ok) throw new Error(r.message);
+    w = r.value;
+    expect(scoreLiveWorkout(w, context).bySet.get(w.exercises[1]!.sets[0]!.id)!.xp).toBeGreaterThan(0);
+  });
+
   it("ends editing when another set is ticked", () => {
     let w = edit(ticked(), 0, { weight: "105" });
     w = fill(w, 0, 2, "100", "8", 13); // ticks set 3

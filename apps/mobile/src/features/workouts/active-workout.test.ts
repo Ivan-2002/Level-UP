@@ -132,6 +132,17 @@ describe("active workout", () => {
       expect(store.getState().workout!.exercises[0]!.sets[0]!.doneAt).toBe(minutesLater(5).toISOString());
     });
 
+    it("refuses an empty weight on a loaded lift (it's not 0 kg), but takes a typed 0", () => {
+      const w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), benchPress, sequentialIds());
+      const { exerciseKey, setKey } = onlySet(w);
+
+      const empty = updateSet(w, exerciseKey, setKey, { weight: "", reps: "8" });
+      expect(toggleSetDone(empty, exerciseKey, setKey, START)).toEqual({ ok: false, message: "Enter the weight." });
+
+      const zero = toggleSetDone(updateSet(w, exerciseKey, setKey, { weight: "0", reps: "8" }), exerciseKey, setKey, START);
+      expect(zero.ok).toBe(true);
+    });
+
     it("unticks a done set", () => {
       const { store } = setup();
       store.getState().start("u", "kg");
@@ -454,6 +465,19 @@ describe("the app killed while a done set is being edited", () => {
 
     reopened.getState().endEditing();
     expect(firstSet(reopened).scored).toEqual({ weight: "105", reps: "8" });
+  });
+
+  it("Finish refuses a done set whose weight was cleared, as the live view does (never sent as 0 kg)", () => {
+    const reopened = killedMidEdit({ weight: "" });
+    reopened.getState().endEditing();
+    expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" }); // the live view keeps its ticked values
+    expect(doneSetError(firstSet(reopened), benchPress, "kg")).toBe("Enter the weight. Until then it counts as it was when ticked.");
+
+    const outbox = createOutboxStore(memoryStorage());
+    const result = finishActiveWorkout({ activeWorkout: reopened, outbox, now: minutesLater(30) });
+    expect(result).toEqual({ ok: false, message: "Bench Press: Enter the weight." });
+    expect(outbox.getState().items).toHaveLength(0);
+    expect(reopened.getState().workout).not.toBeNull(); // nothing lost: fix it and finish again
   });
 
   it("scores the edit before Finish sends the workout", () => {
