@@ -12,7 +12,7 @@ import { StartOrResumeWorkout } from "@/features/workouts/HomeWorkoutCards";
 import { formatLastDone, plural } from "@/features/workouts/format";
 import { useRoutines } from "./use-routines";
 
-// The Workouts tab: your saved routines, plus "Start empty workout".
+// The Workouts tab: "New routine" (the main action), "Start empty workout", and your saved routines.
 export function WorkoutsScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
@@ -31,16 +31,15 @@ export function WorkoutsScreen() {
           Workouts
         </Text>
 
-        {/* The one primary action: start (or resume) a workout. */}
-        <StartOrResumeWorkout userId={userId} label="Start empty workout" />
+        {/* The one primary action is building a routine; a workout without one is secondary.
+            The same two buttons, in the same order, with or without routines. */}
+        <Button label="New routine" icon="plus" onPress={() => router.push("/routines/new")} />
+        <StartOrResumeWorkout userId={userId} label="Start empty workout" variant="secondary" />
 
         <View style={styles.sectionHeader}>
           <Text variant="labelStrong" tone="inkMuted">
             Routines
           </Text>
-          {items && items.length > 0 ? (
-            <Button label="New routine" icon="plus" variant="plain" tone="link" size="md" onPress={() => router.push("/routines/new")} />
-          ) : null}
         </View>
 
         {items === undefined ? (
@@ -85,12 +84,14 @@ function RoutineRow({ routine }: { routine: RoutineSummary }) {
   );
 }
 
+// No button of its own: "New routine" above is the way to create one.
 function EmptyRoutines() {
   return (
     <Card>
       <Text variant="heading">No routines yet</Text>
-      <Text tone="inkMuted">Save the workouts you repeat, like a push day, and start them with one tap. Last time&apos;s numbers come with them.</Text>
-      <Button label="Create a routine" icon="plus" variant="outline" tone="link" size="md" onPress={() => router.push("/routines/new")} />
+      <Text tone="inkMuted">
+        Tap New routine to save the workouts you repeat, like a push day, and start them with one tap. Last time&apos;s numbers come with them.
+      </Text>
     </Card>
   );
 }
