@@ -22,6 +22,18 @@ describe("finished workout store", () => {
     expect(store.getState().last).toMatchObject({ clientId: "a", finishedAt: "2026-11-10T07:00:00.000Z", preview: { setXp: 120 }, response });
   });
 
+  it("keeps the first response when a repeated Finish answers again", () => {
+    const store = createFinishedWorkoutStore(memoryStorage());
+    store.getState().record(finished("a"));
+    store.getState().attachResponse("a", response);
+
+    // E.g. PRs moved because an earlier-started workout synced in between.
+    const later = { summary: { xp: { total: 99 }, prs: [] } } as unknown as FinishWorkoutResponse;
+    store.getState().attachResponse("a", later);
+
+    expect(store.getState().last?.response).toBe(response);
+  });
+
   it("ignores a response for another workout (an older one syncing late)", () => {
     const store = createFinishedWorkoutStore(memoryStorage());
     store.getState().record(finished("b"));

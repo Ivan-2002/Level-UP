@@ -30,7 +30,12 @@ export type FinishedWorkout = {
 type State = {
   last: FinishedWorkout | null;
   record: (finished: Omit<FinishedWorkout, "clientId" | "userId" | "response">) => void;
-  /** The server's answer for a synced workout; ignored unless it's the one on record. */
+  /**
+   * The server's answer for a synced workout; ignored unless it's the one on record.
+   * The FIRST answer is kept: a repeat (the outbox resent after a lost response) can differ
+   * in PRs and "vs last time" if an earlier-started workout synced in between, and the
+   * summary shouldn't change under the player's eyes. XP and the level never differ.
+   */
   attachResponse: (clientId: string, response: FinishWorkoutResponse) => void;
 };
 
@@ -42,7 +47,7 @@ export function createFinishedWorkoutStore(storage: StateStorage) {
         record: (finished) => set({ last: { clientId: finished.workout.clientId, userId: finished.workout.userId, ...finished, response: null } }),
         attachResponse: (clientId, response) => {
           const last = get().last;
-          if (last?.clientId === clientId) set({ last: { ...last, response } });
+          if (last?.clientId === clientId && last.response === null) set({ last: { ...last, response } });
         },
       }),
       {
