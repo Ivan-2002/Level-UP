@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { Icon } from "@/components/Icon";
 import { Text } from "@/components/Text";
 import { authClient } from "@/lib/auth-client";
+import { useActiveWorkout } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { StartOrResumeWorkout } from "@/features/workouts/HomeWorkoutCards";
 import { formatLastDone, plural } from "@/features/workouts/format";
@@ -17,6 +18,7 @@ export function WorkoutsScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
   const routines = useRoutines(userId);
+  const inProgress = useActiveWorkout((s) => s.workout?.userId === userId);
   const styles = useStyles();
   const t = useTheme();
   const items = routines.data?.items;
@@ -32,9 +34,11 @@ export function WorkoutsScreen() {
         </Text>
 
         {/* The one primary action is building a routine; a workout without one is secondary.
-            The same two buttons, in the same order, with or without routines. */}
+            The same two, in the same order, with or without routines. A workout in progress
+            comes first: getting back to it matters more than anything else here. */}
+        {inProgress ? <StartOrResumeWorkout userId={userId} /> : null}
         <Button label="New routine" icon="plus" onPress={() => router.push("/routines/new")} />
-        <StartOrResumeWorkout userId={userId} label="Start empty workout" variant="secondary" />
+        {inProgress ? null : <StartOrResumeWorkout userId={userId} label="Start empty workout" variant="secondary" />}
 
         <View style={styles.sectionHeader}>
           <Text variant="labelStrong" tone="inkMuted">
