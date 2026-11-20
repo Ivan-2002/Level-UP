@@ -1,7 +1,20 @@
-import { xpForLevel } from "@levelup/shared";
+import { JUMP_CAP_TEXT } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
 import { addExercise, startWorkout, toggleSetDone, updateSet } from "./active-workout";
-import { compareCount, compareDuration, compareVolume, levelBar, pendingLevelBar, prHeading, prLine, previewSummary, volumeText } from "./summary-view";
+import {
+  compareCount,
+  compareDuration,
+  compareVolume,
+  exerciseXpRows,
+  heldBackText,
+  levelBar,
+  pendingLevelBar,
+  prHeading,
+  prLine,
+  previewSummary,
+  volumeText,
+  xpLines,
+} from "./summary-view";
 
 describe("comparisons with last time", () => {
   it("says how much faster or longer, within a minute counting as the same", () => {
@@ -25,20 +38,79 @@ describe("comparisons with last time", () => {
   });
 });
 
-describe("levelBar", () => {
+describe("levelBar (from the server's level status before and after)", () => {
   it("splits the bar into XP you had (purple) and XP this workout added (ice)", () => {
-    const start = xpForLevel(5); // 800
-    const bar = levelBar(start + 100, start + 300);
-    const span = xpForLevel(6) - start;
+    const bar = levelBar({ level: 5, xpIntoLevel: 100, xpForNextLevel: 4000 }, { level: 5, xpIntoLevel: 300, xpForNextLevel: 4000 });
 
-    expect(bar).toMatchObject({ level: 5, leveledUp: false, toNextText: `${(xpForLevel(6) - start - 300).toLocaleString("en-US")} XP to level 6` });
-    expect(bar.before).toBeCloseTo(100 / span);
-    expect(bar.gained).toBeCloseTo(200 / span);
+    expect(bar).toMatchObject({ level: 5, levelsGained: 0, levelText: "Level 5", levelUpText: null, progressText: "300 / 4,000 XP", toNextText: "3,700 XP to level 6" });
+    expect(bar.before).toBeCloseTo(100 / 4000);
+    expect(bar.gained).toBeCloseTo(200 / 4000);
   });
 
   it("counts everything in a new level as this workout's gain", () => {
-    const bar = levelBar(xpForLevel(2) - 10, xpForLevel(2) + 40);
-    expect(bar).toMatchObject({ level: 2, leveledUp: true, before: 0 });
+    const bar = levelBar({ level: 1, xpIntoLevel: 390, xpForNextLevel: 400 }, { level: 2, xpIntoLevel: 40, xpForNextLevel: 2200 });
+    expect(bar).toMatchObject({ level: 2, levelsGained: 1, levelText: "Level 2", levelUpText: "Level up! You reached level 2.", before: 0 });
+    expect(bar.gained).toBeCloseTo(40 / 2200);
+  });
+
+  it("shows only the new level's progress when more than one level was gained (Level 4 → 6)", () => {
+    // Level 4 nearly full, then a big workout plus a streak bonus: through level 5 into 6.
+    const bar = levelBar({ level: 4, xpIntoLevel: 3500, xpForNextLevel: 3600 }, { level: 6, xpIntoLevel: 900, xpForNextLevel: 6000 });
+
+    expect(bar).toMatchObject({ level: 6, levelsGained: 2, levelText: "Level 4 → 6", levelUpText: "Level up! You went from level 4 to 6." });
+    // Nothing of level 4 (or 5) is drawn: the bar is level 6's, and all of it is this workout's.
+    expect(bar.before).toBe(0);
+    expect(bar.gained).toBeCloseTo(900 / 6000);
+    expect(bar).toMatchObject({ progressText: "900 / 6,000 XP", toNextText: "5,100 XP to level 7" });
+  });
+});
+
+describe("xpLines and heldBackText", () => {
+  const xp = { sets: 1240, weeklyGoal: 0, streakMilestone: 0, total: 1240, heldBack: null };
+
+  it("labels set XP as the estimate is, with no total when there's no bonus", () => {
+    expect(xpLines({ xp, weeklyGoal: null })).toEqual({ sets: { label: "XP for sets", amount: 1240 }, bonuses: [], total: null });
+  });
+
+  it("puts each bonus on its own line, then the total", () => {
+    const lines = xpLines({ xp: { ...xp, weeklyGoal: 400, streakMilestone: 3000, total: 4640 }, weeklyGoal: { streak: 12 } as never });
+    expect(lines.bonuses).toEqual([
+      { label: "Weekly goal met", amount: 400 },
+      { label: "12-week streak bonus", amount: 3000 },
+    ]);
+    expect(lines.total).toEqual({ label: "Total XP earned", amount: 4640 });
+  });
+
+  it("says why set XP was held back", () => {
+    expect(heldBackText(null)).toBeNull();
+    expect(heldBackText({ amount: 1200, reason: "daily_cap" })).toBe("1,200 XP held back: daily limit reached.");
+    expect(heldBackText({ amount: 500, reason: "too_old" })).toBe("No XP for sets: it synced more than 14 days after it started.");
+  });
+});
+
+describe("exerciseXpRows", () => {
+  const exercise = (id: string, name: string, setIds: string[]) => ({ id, exercise: { name } as never, sets: setIds.map((sid) => ({ id: sid }) as never) }) as never;
+
+  it("sums each exercise's XP and lists only its tagged sets, numbered within the exercise", () => {
+    const rows = exerciseXpRows({ exercises: [exercise("e1", "Bench Press", ["a", "b", "c"]), exercise("e2", "Back Squat", ["d"])] }, [
+      { setId: "a", xp: 5, tag: "warm_up", flagReason: null },
+      { setId: "b", xp: 90, tag: null, flagReason: null },
+      { setId: "c", xp: 0, tag: "check_set", flagReason: "weight_above_range" },
+      { setId: "d", xp: 70, tag: "above_history", flagReason: "above_history" },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        key: "e1",
+        name: "Bench Press",
+        xp: 95,
+        tagged: [
+          { text: "Set 1 · Warm-up · +5 XP", tone: "inkMuted" },
+          { text: "Set 3 · Check this set · 0 XP", tone: "danger" },
+        ],
+      },
+      { key: "e2", name: "Back Squat", xp: 70, tagged: [{ text: "Set 1 · Above your best · +25% · +70 XP", tone: "inkMuted", detail: JUMP_CAP_TEXT }] },
+    ]);
   });
 });
 

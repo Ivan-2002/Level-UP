@@ -1,13 +1,15 @@
 import {
   formatWeight,
-  levelProgress,
+  JUMP_CAP_TEXT,
   liftedKg,
+  setTagText,
   toDisplayWeight,
   volumeKg,
   type Exercise,
   type FinishSummary,
   type LevelStatus,
   type WeightUnit,
+  type WorkoutDetail,
 } from "@levelup/shared";
 import { parseSet, type ActiveWorkout } from "./active-workout";
 import { formatSet } from "./format";
@@ -49,33 +51,94 @@ export function volumeText(volumeKg: number, unit: WeightUnit): string {
 
 export type LevelBar = {
   level: number;
-  leveledUp: boolean;
+  /** Levels this workout gained (0 = none). */
+  levelsGained: number;
+  /** "Level 6", or "Level 4 → 6" when more than one level was gained. */
+  levelText: string;
+  /** "Level up! You reached level 6." (or "went from level 4 to 6"); null without a level up. */
+  levelUpText: string | null;
   /** Share of this level done BEFORE the workout (purple), and what it added (ice). */
   before: number;
   gained: number;
-  /** "2,952 / 3,000 XP" and "48 XP to level 8". */
+  /** "1,240 / 3,000 XP" (this level's numbers) and "1,760 XP to level 6". */
   progressText: string;
   toNextText: string;
 };
 
+const n = (v: number) => v.toLocaleString("en-US");
+
 /**
- * The level bar after the workout. If the workout crossed into a new level, everything
- * shown in the new level is this workout's gain.
+ * The level bar after the workout, from the server's level status before and after it
+ * (the server owns the curve: the phone never works out a level itself). If the workout
+ * crossed into a new level, the bar shows only the new level: all of it is this workout's gain.
  */
-export function levelBar(totalBefore: number, totalAfter: number): LevelBar {
-  const after = levelProgress(totalAfter);
-  const leveledUp = after.level > levelProgress(totalBefore).level;
-  const span = after.nextLevelXp - after.levelStartXp;
-  const before = leveledUp ? 0 : (totalBefore - after.levelStartXp) / span;
-  const n = (v: number) => v.toLocaleString("en-US");
+export function levelBar(statusBefore: LevelStatus, statusAfter: LevelStatus): LevelBar {
+  const levelsGained = Math.max(0, statusAfter.level - statusBefore.level);
+  const before = levelsGained > 0 ? 0 : statusBefore.xpIntoLevel / statusAfter.xpForNextLevel;
   return {
-    level: after.level,
-    leveledUp,
+    level: statusAfter.level,
+    levelsGained,
+    levelText: levelsGained > 1 ? `Level ${statusBefore.level} → ${statusAfter.level}` : `Level ${statusAfter.level}`,
+    levelUpText:
+      levelsGained === 0
+        ? null
+        : levelsGained === 1
+          ? `Level up! You reached level ${statusAfter.level}.`
+          : `Level up! You went from level ${statusBefore.level} to ${statusAfter.level}.`,
     before,
-    gained: after.progress - before,
-    progressText: `${n(totalAfter)} / ${n(after.nextLevelXp)} XP`,
-    toNextText: `${n(after.nextLevelXp - totalAfter)} XP to level ${after.level + 1}`,
+    gained: statusAfter.xpIntoLevel / statusAfter.xpForNextLevel - before,
+    progressText: `${n(statusAfter.xpIntoLevel)} / ${n(statusAfter.xpForNextLevel)} XP`,
+    toNextText: `${n(statusAfter.xpForNextLevel - statusAfter.xpIntoLevel)} XP to level ${statusAfter.level + 1}`,
   };
+}
+
+export type XpLine = { label: string; amount: number };
+
+/**
+ * The XP card's lines. "XP for sets" first, labelled as the estimate is, so the two compare;
+ * the weekly and streak bonuses as their own lines (the estimate leaves them out), and the
+ * total only when there's a bonus to add.
+ */
+export function xpLines(summary: Pick<FinishSummary, "xp" | "weeklyGoal">): { sets: XpLine; bonuses: XpLine[]; total: XpLine | null } {
+  const bonuses: XpLine[] = [];
+  if (summary.xp.weeklyGoal > 0) bonuses.push({ label: "Weekly goal met", amount: summary.xp.weeklyGoal });
+  if (summary.xp.streakMilestone > 0) bonuses.push({ label: `${summary.weeklyGoal?.streak ?? ""}-week streak bonus`, amount: summary.xp.streakMilestone });
+  return {
+    sets: { label: "XP for sets", amount: summary.xp.sets },
+    bonuses,
+    total: bonuses.length > 0 ? { label: "Total XP earned", amount: summary.xp.total } : null,
+  };
+}
+
+/** The line for set XP the workout didn't get; null when it got everything. */
+export function heldBackText(heldBack: FinishSummary["xp"]["heldBack"]): string | null {
+  if (!heldBack) return null;
+  return heldBack.reason === "daily_cap"
+    ? `${n(heldBack.amount)} XP held back: daily limit reached.`
+    : "No XP for sets: it synced more than 14 days after it started.";
+}
+
+export type TaggedSet = { text: string; tone: "inkMuted" | "danger"; detail?: string };
+export type ExerciseXpRow = { key: string; name: string; xp: number; tagged: TaggedSet[] };
+
+/**
+ * XP per exercise from the server's answer, with only the sets that have a tag (warm-ups,
+ * easy sets, jump-capped, beyond 10 sets, flagged): a normal workout stays short. An
+ * exercise logged twice (a superset) is two rows, as in the workout.
+ */
+export function exerciseXpRows(workout: Pick<WorkoutDetail, "exercises">, sets: FinishSummary["sets"]): ExerciseXpRow[] {
+  const bySet = new Map(sets.map((s) => [s.setId, s]));
+  return workout.exercises.map((e) => {
+    const scored = e.sets.map((set) => bySet.get(set.id));
+    const tagged = scored.flatMap((s, i): TaggedSet[] => {
+      if (!s?.tag) return [];
+      const label = `Set ${i + 1} · ${setTagText(s.tag)}`;
+      if (s.tag === "check_set") return [{ text: `${label} · 0 XP`, tone: "danger" }];
+      const text = `${label} · +${s.xp} XP`;
+      return [s.tag === "above_history" ? { text, tone: "inkMuted", detail: JUMP_CAP_TEXT } : { text, tone: "inkMuted" }];
+    });
+    return { key: e.id, name: e.exercise.name, xp: scored.reduce((sum, s) => sum + (s?.xp ?? 0), 0), tagged };
+  });
 }
 
 type Pr = FinishSummary["prs"][number];
@@ -119,7 +182,6 @@ export type PendingLevelBar = {
 export function pendingLevelBar(status: LevelStatus, estimatedXp: number): PendingLevelBar {
   const room = status.xpForNextLevel - status.xpIntoLevel;
   const shown = Math.max(0, Math.min(estimatedXp, room));
-  const n = (v: number) => v.toLocaleString("en-US");
   return {
     level: status.level,
     before: status.xpIntoLevel / status.xpForNextLevel,

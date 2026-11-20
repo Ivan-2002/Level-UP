@@ -1,7 +1,7 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { BODYWEIGHT_FALLBACK_KG, goalProgressText, streakText, type FinishSummary, type LevelStatus, type WeightUnit } from "@levelup/shared";
+import { BODYWEIGHT_FALLBACK_KG, goalProgressText, streakText, type FinishSummary, type FinishWorkoutResponse, type LevelStatus, type WeightUnit } from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Icon } from "@/components/Icon";
@@ -14,7 +14,21 @@ import { useProfile } from "@/features/profile/use-profile";
 import type { ActiveWorkout } from "./active-workout";
 import { formatElapsed, plural } from "./format";
 import type { SavedPreview } from "./live-workout";
-import { compareCount, compareDuration, compareVolume, levelBar, pendingLevelBar, prHeading, prLine, previewSummary, volumeText } from "./summary-view";
+import {
+  compareCount,
+  compareDuration,
+  compareVolume,
+  exerciseXpRows,
+  heldBackText,
+  levelBar,
+  pendingLevelBar,
+  prHeading,
+  prLine,
+  previewSummary,
+  volumeText,
+  xpLines,
+  type XpLine,
+} from "./summary-view";
 
 function done() {
   if (router.canGoBack()) router.back();
@@ -91,6 +105,7 @@ export function WorkoutSummaryScreen() {
         </View>
 
         {summary && summary.prs.length > 0 ? <PrList prs={summary.prs} workout={last.workout} unit={unit} /> : null}
+        {last.response ? <ExerciseXp response={last.response} /> : null}
       </ScrollView>
       <View style={styles.footer}>
         <Button label="Done" onPress={done} />
@@ -101,38 +116,41 @@ export function WorkoutSummaryScreen() {
 
 function XpCard({ summary }: { summary: FinishSummary }) {
   const styles = useStyles();
-  const bar = levelBar(summary.level.totalXpBefore, summary.level.totalXpAfter);
+  const bar = levelBar(summary.level.statusBefore, summary.level.statusAfter);
+  const lines = xpLines(summary);
+  const heldBack = heldBackText(summary.xp.heldBack);
   const goal = summary.weeklyGoal;
-  const rows: [string, number][] = [
-    ["Sets and reps", summary.xp.sets],
-    ["Weekly goal met", summary.xp.weeklyGoal],
-    [`${goal?.streak ?? ""}-week streak bonus`, summary.xp.streakMilestone],
-  ];
 
   return (
     <View style={styles.xpCard}>
       <View style={styles.xpTop}>
         <View>
+          {/* Labelled as the estimate was, so the two compare: set XP, without the bonuses. */}
           <Text variant="caption" tone="inkMuted">
-            XP earned
+            {lines.sets.label}
           </Text>
           <Text variant="display" tone="purple" tabular>
-            +{summary.xp.total}
+            +{lines.sets.amount}
           </Text>
         </View>
         <View style={styles.levelPill}>
           <Text variant="labelStrong" tone="purple">
-            Level {bar.level}
+            {bar.levelText}
           </Text>
         </View>
       </View>
-      {bar.leveledUp ? (
+      {heldBack ? (
+        <Text variant="caption" tone="inkMuted">
+          {heldBack}
+        </Text>
+      ) : null}
+      {bar.levelUpText ? (
         <Text variant="bodyStrong" tone="purple" accessibilityLiveRegion="polite">
-          Level up! You reached level {bar.level}.
+          {bar.levelUpText}
         </Text>
       ) : null}
       <View style={styles.barWrap}>
-        <View style={styles.barTrack} accessible accessibilityRole="progressbar" accessibilityLabel={`${bar.progressText} toward level ${bar.level + 1}`}>
+        <View style={styles.barTrack} accessible accessibilityRole="progressbar" accessibilityLabel={`${bar.levelText}: ${bar.progressText}. ${bar.toNextText}.`}>
           <View style={[styles.barBefore, { width: `${bar.before * 100}%` }]} />
           <View style={[styles.barGained, { width: `${bar.gained * 100}%` }]} />
         </View>
@@ -145,25 +163,70 @@ function XpCard({ summary }: { summary: FinishSummary }) {
           </Text>
         </View>
       </View>
-      <View style={styles.breakdown}>
-        {rows
-          .filter(([, amount], i) => i === 0 || amount > 0)
-          .map(([label, amount]) => (
-            <View key={label} style={styles.breakdownRow}>
-              <Text variant="label" tone="inkMuted">
-                {label}
+      {lines.bonuses.length > 0 || goal ? (
+        <View style={styles.breakdown}>
+          {lines.bonuses.map((line) => (
+            <XpRow key={line.label} line={line} />
+          ))}
+          {lines.total ? <XpRow line={lines.total} strong /> : null}
+          {goal ? (
+            <Text variant="caption" tone="inkMuted">
+              {goalProgressText(goal)} · {streakText(goal)}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function XpRow({ line, strong = false }: { line: XpLine; strong?: boolean }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.breakdownRow}>
+      <Text variant={strong ? "labelStrong" : "label"} tone={strong ? "ink" : "inkMuted"}>
+        {line.label}
+      </Text>
+      <Text variant="labelStrong" tabular>
+        +{line.amount}
+      </Text>
+    </View>
+  );
+}
+
+/** XP per exercise, from the server's answer, with only the sets that have a tag. */
+function ExerciseXp({ response }: { response: FinishWorkoutResponse }) {
+  const styles = useStyles();
+  const rows = exerciseXpRows(response.workout, response.summary.sets);
+  return (
+    <View style={styles.prs}>
+      <Text variant="heading">XP by exercise</Text>
+      <Card style={styles.prCard}>
+        {rows.map((row, i) => (
+          <View key={row.key} style={[styles.exerciseRow, i > 0 && styles.prDivider]}>
+            <View style={styles.breakdownRow}>
+              <Text variant="bodyStrong" style={styles.flex} numberOfLines={1}>
+                {row.name}
               </Text>
-              <Text variant="labelStrong" tabular>
-                +{amount}
+              <Text variant="labelStrong" tone="purple" tabular>
+                +{row.xp} XP
               </Text>
             </View>
-          ))}
-        {goal ? (
-          <Text variant="caption" tone="inkMuted">
-            {goalProgressText(goal)} · {streakText(goal)}
-          </Text>
-        ) : null}
-      </View>
+            {row.tagged.map((set) => (
+              <View key={set.text}>
+                <Text variant="caption" tone={set.tone} tabular>
+                  {set.text}
+                </Text>
+                {set.detail ? (
+                  <Text variant="caption" tone="inkMuted">
+                    {set.detail}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ))}
+      </Card>
     </View>
   );
 }
@@ -305,6 +368,7 @@ const useStyles = createStyles((t) => ({
   prCard: { padding: 0, gap: 0 },
   prRow: { flexDirection: "row", alignItems: "center", gap: t.space[3], paddingVertical: t.space[3], paddingHorizontal: t.space[4] },
   prDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
+  exerciseRow: { gap: 2, paddingVertical: t.space[3], paddingHorizontal: t.space[4] },
   prIcon: { width: 36, height: 36, borderRadius: t.radius.pill, backgroundColor: t.colors.purpleSoft, alignItems: "center", justifyContent: "center" },
   prValue: { alignItems: "flex-end" },
   footer: { paddingHorizontal: t.space[4], paddingTop: t.space[3], paddingBottom: t.space[2] },
