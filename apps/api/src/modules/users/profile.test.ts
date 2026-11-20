@@ -51,6 +51,7 @@ describe("POST /profile", () => {
       timeZone: "Africa/Johannesburg",
       totalXp: 0,
       level: { level: 1, xpIntoLevel: 0, xpForNextLevel: 400 },
+      stage: { key: "rookie", name: "Rookie", levelRequired: 1 },
       xpBodyweightKg: 75.5,
       createdAt: expect.any(String),
     });

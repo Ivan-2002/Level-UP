@@ -24,6 +24,7 @@ import {
 import { now } from "../../lib/clock.js";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import * as avatarService from "../avatar/avatar.service.js";
 import * as exercisesService from "../exercises/exercises.service.js";
 import * as progressionService from "../progression/progression.service.js";
 import * as weeklyGoalService from "../progression/weekly-goal.service.js";
@@ -41,7 +42,7 @@ import { daysTrainedAsOf, daysTrainedFor } from "./weekly-goal.service.js";
 // - The summary is calculated from saved data on every read, so a repeat returns the
 //   same summary. Records only ever compare with workouts that started earlier.
 // - A user only ever sees their own workouts.
-// Dependencies: workouts -> exercises, routines, users, progression (never the reverse).
+// Dependencies: workouts -> exercises, routines, users, progression, avatar (never the reverse).
 
 export type FinishResult = FinishWorkoutResponse & { created: boolean };
 
@@ -233,6 +234,7 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
       statusBefore: levelStatus(totalBefore),
       statusAfter: levelStatus(totalBefore + total),
     },
+    stage: await avatarService.stagesAt(levelFromXp(totalBefore), levelFromXp(totalBefore + total)),
     // Codes as stored; one the contract doesn't know (written by a newer server) reads as null.
     sets: sets.map((s) => ({
       setId: s.id,

@@ -15,10 +15,11 @@ beforeEach(async () => {
   assertIsTestDatabase(env.DATABASE_URL);
 
   // Ask Postgres for the table list instead of hard-coding it, so tables added in later
-  // milestones are wiped too. Prisma's own migration history is kept.
+  // milestones are wiped too. Kept: Prisma's migration history, and reference data that
+  // its migration inserts (avatar_stage), as every real database has it.
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
-    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
+    WHERE schemaname = 'public' AND tablename NOT IN ('_prisma_migrations', 'avatar_stage')`;
   if (tables.length === 0) return;
 
   // TRUNCATE empties tables in one statement (much faster than DELETE).

@@ -437,3 +437,20 @@ model UserAchievement {
   @@id([userId, key])
   @@map("user_achievement")
 }
+
+// ---------------------------------------------------------------------------
+// Avatar stages: OWNED BY THE AVATAR MODULE.
+// Data, not code (CLAUDE.md rule 6): the rows are inserted by their migration and can be
+// tuned with a data change, no release. A player's stage is never stored: it's the stage
+// with the highest levelRequired at or below their level. Lower a threshold, never raise
+// one (raising would take a stage away from players who have it).
+// ---------------------------------------------------------------------------
+
+model AvatarStage {
+  // Stable id ("regular"); also the key the app draws the stage's extras from (Milestone 6).
+  key           String @id
+  name          String // shown to the player: "Regular"
+  levelRequired Int    @unique
+
+  @@map("avatar_stage")
+}

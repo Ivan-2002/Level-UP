@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { avatarStageSchema } from "./avatar.js";
 import { levelStatusSchema } from "./levels.js";
 import { weightUnitSchema } from "./units.js";
 import { timeZoneSchema } from "./weekly-goal.js";
@@ -69,6 +70,11 @@ export const profileSchema = z.object({
   totalXp: z.number().int(),
   /** The XP bar: worked out by the server, which owns the level curve (Milestone 5). */
   level: levelStatusSchema,
+  /**
+   * The avatar stage of that level (from the avatar_stage table). Defaults to null so a
+   * profile saved on the phone before the field existed still reads.
+   */
+  stage: avatarStageSchema.nullable().default(null),
   /**
    * The bodyweight XP uses today (xpBodyweightOnDate: limited at 2% a week, 40-200 kg), for
    * the app's offline XP preview. bodyweightKg above is what the player typed.

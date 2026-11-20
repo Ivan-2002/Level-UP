@@ -1,4 +1,5 @@
 import {
+  levelFromXp,
   levelStatus,
   localDate,
   xpBodyweightOnDate,
@@ -12,6 +13,7 @@ import {
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import { now } from "../../lib/clock.js";
+import * as avatarService from "../avatar/avatar.service.js";
 import * as repo from "./users.repository.js";
 
 // The service holds the business rules for a player's profile:
@@ -131,6 +133,7 @@ async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
     timeZone: row.timeZone,
     totalXp: row.totalXp,
     level: levelStatus(row.totalXp),
+    stage: await avatarService.stageAt(levelFromXp(row.totalXp)),
     // As of the player's local today, like a workout started now.
     xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone), { signedUpAt: row.createdAt.toISOString() }),
     createdAt: row.createdAt.toISOString(),

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { weeklyGoalStatusSchema } from "./weekly-goal.js";
 import { restSecSchema } from "./progression.js";
+import { avatarStageSchema } from "./avatar.js";
 import { levelStatusSchema } from "./levels.js";
 import { flagReasonSchema, setTagSchema } from "./xp-codes.js";
 
@@ -283,6 +284,11 @@ export const finishSummarySchema = z.object({
     statusBefore: levelStatusSchema,
     statusAfter: levelStatusSchema,
   }),
+  /**
+   * The avatar stage at the level before and after this workout; a new stage when they
+   * differ. Defaults to null for responses from before the field existed (saved on the phone).
+   */
+  stage: z.object({ before: avatarStageSchema.nullable(), after: avatarStageSchema.nullable() }).nullable().default(null),
   /**
    * Every set of the workout, in the order of `workout.exercises[].sets`: the XP the ledger
    * recorded for it (after the daily cap), its tag and why it was flagged or capped.
