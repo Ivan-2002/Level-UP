@@ -13,7 +13,8 @@ import { StartOrResumeWorkout } from "@/features/workouts/HomeWorkoutCards";
 import { formatLastDone, plural } from "@/features/workouts/format";
 import { useRoutines } from "./use-routines";
 
-// The Workouts tab: "New routine" (the main action), "Start empty workout", and your saved routines.
+// The Workouts tab: "New routine" (the main action), your saved routines, and a quieter
+// "Start empty workout" next to their heading.
 export function WorkoutsScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
@@ -33,17 +34,20 @@ export function WorkoutsScreen() {
           Workouts
         </Text>
 
-        {/* The one primary action is building a routine; a workout without one is secondary.
-            The same two, in the same order, with or without routines. A workout in progress
-            comes first: getting back to it matters more than anything else here. */}
+        {/* A workout in progress comes first: getting back to it matters most. Otherwise the
+            one primary action is building a routine. */}
         {inProgress ? <StartOrResumeWorkout userId={userId} /> : null}
         <Button label="New routine" icon="plus" onPress={() => router.push("/routines/new")} />
-        {inProgress ? null : <StartOrResumeWorkout userId={userId} label="Start empty workout" variant="secondary" />}
 
         <View style={styles.sectionHeader}>
           <Text variant="labelStrong" tone="inkMuted">
             Routines
           </Text>
+          {/* A workout without a routine: secondary, so a small link (hidden during a workout,
+              whose Resume card is above). Shown with or without routines. */}
+          {inProgress ? null : (
+            <StartOrResumeWorkout userId={userId} label="Start empty workout" look={{ variant: "plain", tone: "link", size: "md", icon: "play" }} />
+          )}
         </View>
 
         {items === undefined ? (

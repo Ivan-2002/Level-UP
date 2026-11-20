@@ -32,6 +32,9 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
+/** How a button looks, for components that render one on a caller's behalf. */
+export type ButtonLook = Pick<Props, "variant" | "size" | "tone" | "icon">;
+
 // The app's one button. Every screen uses it, so buttons look and behave the same
 // everywhere, and a design change happens here once.
 export function Button({
