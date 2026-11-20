@@ -278,8 +278,10 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: finishing a workout shows XP gained and, when earned, a level-up; two Finishes sent at the same moment can't exceed the cap; an offline workout synced days later counts against the day it was done.
 6. **Stickman avatar.** Stage extras driven by level, body shape driven only by body-part XP, slow shrinking of untrained parts, and the starting-shape decision.
    - Done when: the avatar gains its extras at each stage level, untrained body parts stay thin whatever the level, and a part untrained for months visibly shrinks.
+   - Home: the avatar and the level bar (added below the workout cards in Phase 4e) move together to the top of Home.
    - Leave room for endurance: the avatar design must allow an endurance look (a stamina stat, a lean athletic build) next to muscle size, so a runner's or triathlete's avatar looks different from a lifter's rather than just weaker. No endurance code in this milestone; the design and data shapes just mustn't rule it out.
 7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, minimum age at sign-up (13 or 16, to be decided) with an age check and the app store age rating, testers on TestFlight and Google Play internal testing. The XP and bodyweight rules are designed for adults and older teens. Review the daily cap against the testers' real days: in the simulation the biggest honest day with warm-ups logged is 3,086 against the 3,100 cap, a 14 XP margin.
+   - A settings screen: the System check card and Sign out move there from Home.
    - Admin view, built from ready-made tools (no app code):
      - a read-only Postgres user for reporting, with no write access to the main database;
      - a hosted chart tool (e.g. Metabase) on that read-only user, with saved queries for: sign-ups per day and week, active players (a workout in the last 7 / 30 days), first workout finished after sign-up, week-2 return, weekly goal met, XP per workout, daily cap hits, and level spread;
