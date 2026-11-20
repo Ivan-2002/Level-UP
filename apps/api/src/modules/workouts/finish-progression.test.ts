@@ -211,6 +211,8 @@ describe("routine link", () => {
       .post("/v1/routines")
       .set("Cookie", user.cookie)
       .send({ name: "Pull day", exercises: [{ exerciseId: ids["pull-up"], targetSets: 3, targetReps: 8 }] });
+    // Checked here, so a failure points at this step rather than at a later expectation.
+    expect(res.status, res.text).toBe(201);
     return res.body.id as string;
   }
 
@@ -242,7 +244,8 @@ describe("routine link", () => {
   it("drops a link to a routine deleted while you trained offline", async () => {
     const user = await signUpPlayer();
     const routineId = await createRoutine(user);
-    await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    const deleted = await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    expect(deleted.status, deleted.text).toBe(204);
 
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId }));
 
@@ -254,7 +257,8 @@ describe("routine link", () => {
     const routineId = await createRoutine(user);
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId }));
 
-    await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    const deleted = await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    expect(deleted.status, deleted.text).toBe(204);
 
     const res = await request(app).get(`/v1/workouts/${saved.workout.id}`).set("Cookie", user.cookie);
     expect(res.status).toBe(200);
