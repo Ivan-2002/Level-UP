@@ -1,7 +1,7 @@
 import type { AvatarStage, Profile } from "@levelup/shared";
 import { createCelebrationStore } from "@/stores/celebration-store";
 import { memoryStorage } from "@/test/fixtures";
-import { createCelebrationSync, pendingLevelUp } from "./level-up";
+import { createCelebrationSync, levelUpMotion, levelUpText, pendingLevelUp } from "./level-up";
 
 const REGULAR: AvatarStage = { key: "regular", name: "Regular", levelRequired: 4 };
 const ATHLETE: AvatarStage = { key: "athlete", name: "Athlete", levelRequired: 10 };
@@ -100,5 +100,31 @@ describe("celebration sync", () => {
 
     expect(send).not.toHaveBeenCalled();
     expect(store.getState().upTo).toEqual({ other: 9 });
+  });
+});
+
+describe("levelUpText", () => {
+  it("announces one level and the new stage", () => {
+    expect(levelUpText({ from: 3, to: 4, newStage: REGULAR })).toEqual({
+      levelText: "Level 4",
+      stageText: "New stage: Regular",
+      announcement: "Level up! Level 4. New stage: Regular.",
+    });
+  });
+
+  it("announces one level without a stage", () => {
+    expect(levelUpText({ from: 5, to: 6, newStage: null }).announcement).toBe("Level up! Level 6.");
+  });
+
+  it("shows several levels with an arrow, and says 'to' for screen readers", () => {
+    expect(levelUpText({ from: 4, to: 6, newStage: null })).toMatchObject({ levelText: "Level 4 → 6", announcement: "Level up! Level 4 to 6." });
+    expect(levelUpText({ from: 3, to: 10, newStage: ATHLETE }).announcement).toBe("Level up! Level 3 to 10. New stage: Athlete.");
+  });
+});
+
+describe("levelUpMotion", () => {
+  it("draws everything in its final state when reduce motion is on", () => {
+    expect(levelUpMotion(true)).toEqual({ level: "none", avatar: "none" });
+    expect(levelUpMotion(false)).toEqual({ level: "zoom", avatar: "grow" });
   });
 });

@@ -6,6 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { useHealth } from "@/features/health/use-health";
 import { useProfile } from "@/features/profile/use-profile";
 import { LevelCard } from "@/features/progress/LevelCard";
+import { useLevelUpPrompt } from "@/features/progress/use-celebration";
 import { WeeklyGoalCard } from "@/features/progress/WeeklyGoalCard";
 import { StartOrResumeWorkout, SyncStatus } from "@/features/workouts/HomeWorkoutCards";
 import { Button } from "@/components/Button";
@@ -24,6 +25,7 @@ export default function Home() {
   const styles = useStyles();
   const t = useTheme();
   const userId = session?.user.id;
+  useLevelUpPrompt(userId, profile); // e.g. a workout synced while the app was closed
 
   async function signOut() {
     await authClient.signOut();

@@ -74,6 +74,8 @@ export default function AppLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workout" />
         <Stack.Screen name="workout-summary" options={{ gestureEnabled: false }} />
+        {/* Closed with Continue only: a swipe could skip the moment by accident. */}
+        <Stack.Screen name="level-up" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
         <Stack.Screen name="exercises/[id]/history" />
         <Stack.Screen name="routines/new" />
         <Stack.Screen name="routines/[id]/index" />

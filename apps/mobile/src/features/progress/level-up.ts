@@ -64,3 +64,31 @@ export function createCelebrationSync(deps: { store: Store; send: (level: number
     },
   };
 }
+
+export type LevelUpText = {
+  /** "Level 6", or "Level 4 → 6" when more than one level was gained. */
+  levelText: string;
+  /** "New stage: Regular", or null. */
+  stageText: string | null;
+  /** What screen readers hear when the screen opens: "Level up! Level 6. New stage: Regular." */
+  announcement: string;
+};
+
+export function levelUpText(levelUp: LevelUp): LevelUpText {
+  const single = levelUp.to === levelUp.from + 1;
+  const stageText = levelUp.newStage ? `New stage: ${levelUp.newStage.name}` : null;
+  return {
+    levelText: single ? `Level ${levelUp.to}` : `Level ${levelUp.from} → ${levelUp.to}`,
+    stageText,
+    // "to", not an arrow: screen readers read "→" as "right arrow".
+    announcement: `Level up! ${single ? `Level ${levelUp.to}` : `Level ${levelUp.from} to ${levelUp.to}`}.${stageText ? ` ${stageText}.` : ""}`,
+  };
+}
+
+/**
+ * How the level-up screen moves. With "reduce motion" on, nothing scales, grows or slides:
+ * everything is drawn in its final state at once.
+ */
+export function levelUpMotion(reduceMotion: boolean): { level: "zoom" | "none"; avatar: "grow" | "none" } {
+  return reduceMotion ? { level: "none", avatar: "none" } : { level: "zoom", avatar: "grow" };
+}

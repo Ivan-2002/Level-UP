@@ -11,6 +11,7 @@ import { authClient } from "@/lib/auth-client";
 import { useFinishedWorkout, useOutbox } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { useProfile } from "@/features/profile/use-profile";
+import { useLevelUpPrompt } from "@/features/progress/use-celebration";
 import type { ActiveWorkout } from "./active-workout";
 import { formatElapsed, plural } from "./format";
 import type { SavedPreview } from "./live-workout";
@@ -44,6 +45,8 @@ export function WorkoutSummaryScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
   const { data: profile } = useProfile(userId);
+  // The server's answer refreshes the profile; a new level opens the level-up screen over this one.
+  useLevelUpPrompt(userId || undefined, profile);
   const last = useFinishedWorkout((s) => s.last);
   const outboxItem = useOutbox((s) => s.items.find((i) => i.clientId === last?.clientId));
   const styles = useStyles();

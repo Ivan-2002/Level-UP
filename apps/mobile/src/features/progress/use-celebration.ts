@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
+import { router, useFocusEffect } from "expo-router";
 import type { Profile } from "@levelup/shared";
 import { apiPost } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
@@ -23,6 +24,29 @@ export function useCelebrationSync(userId: string | undefined, profile: Profile 
   useEffect(() => {
     if (userId && profile && waiting !== undefined) void celebrationSync.flush(userId);
   }, [userId, profile, waiting]);
+}
+
+// One level-up screen at a time, even if two screens ask in the same moment.
+let levelUpOpen = false;
+/** Called by the level-up screen when it closes. */
+export function levelUpClosed(): void {
+  levelUpOpen = false;
+}
+
+/**
+ * Opens the level-up screen when there's a level-up to show and this screen is in front.
+ * Used only on Home and the workout summary, so a workout that syncs in the background
+ * never interrupts the active workout: the level-up waits for the next visit to either.
+ */
+export function useLevelUpPrompt(userId: string | undefined, profile: Profile | null | undefined): void {
+  const to = usePendingLevelUp(userId, profile)?.to;
+  useFocusEffect(
+    useCallback(() => {
+      if (to === undefined || levelUpOpen) return;
+      levelUpOpen = true;
+      router.push("/level-up");
+    }, [to]),
+  );
 }
 
 /** The level-up to show now for this player, or null. */
