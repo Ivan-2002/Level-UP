@@ -6,6 +6,7 @@ import {
   compareDuration,
   compareVolume,
   exerciseXpRows,
+  explainGap,
   heldBackText,
   levelBar,
   pendingLevelBar,
@@ -184,5 +185,78 @@ describe("pendingLevelBar (the estimate, before the server answers)", () => {
 
   it("treats exactly reaching the end the same way", () => {
     expect(pendingLevelBar(status, 3000).toNextText).toBe("Your level is confirmed when it syncs");
+  });
+});
+
+describe("explainGap (server set XP vs the estimate saved at Finish)", () => {
+  type Tag = Parameters<typeof explainGap>[1]["sets"][number]["tag"];
+  const est = (sets: [number, Tag][], heldBack = 0) => ({
+    setXp: sets.reduce((sum, [xp]) => sum + xp, 0),
+    heldBack,
+    sets: sets.map(([xp, tag]) => ({ xp, tag, isFlagged: tag === "check_set" })),
+  });
+  const server = (sets: [number, Tag][], extra: { heldBack?: { amount: number; reason: "daily_cap" | "too_old" }; weeklyGoal?: number } = {}) => {
+    const setXp = sets.reduce((sum, [xp]) => sum + xp, 0);
+    const bonus = extra.weeklyGoal ?? 0;
+    return {
+      xp: { sets: setXp, weeklyGoal: bonus, streakMilestone: 0, total: setXp + bonus, heldBack: extra.heldBack ?? null },
+      sets: sets.map(([xp, tag], i) => ({ setId: `s${i}`, xp, tag, flagReason: null })),
+    };
+  };
+  /** Every explanation must add up to the gap it explains. */
+  const explain = (...args: Parameters<typeof explainGap>) => {
+    const result = explainGap(...args);
+    if (result) expect(result.lines.reduce((sum, l) => sum + l.amount, 0)).toBe(result.gap);
+    return result;
+  };
+
+  it("compares set XP only: the weekly bonus is never a gap", () => {
+    expect(explain(est([[90, null], [90, null]]), server([[90, null], [90, null]], { weeklyGoal: 400 }))).toBeNull();
+  });
+
+  it("puts XP held back by another workout that day on the daily limit line", () => {
+    // Estimated with nothing held back; the server counted another phone's workout first.
+    const result = explain(est([[90, null], [90, null]]), server([[90, null], [60, null]], { heldBack: { amount: 30, reason: "daily_cap" } }));
+    expect(result).toEqual({
+      gap: -30,
+      estimateText: "Estimate: +180 XP for sets",
+      lines: [{ text: "Daily limit: another workout that day counted first", amount: -30, amountText: "−30 XP" }],
+    });
+  });
+
+  it("names sets the server tagged differently, with their XP change", () => {
+    const result = explain(
+      est([[90, null], [90, null], [90, null], [90, null]]),
+      server([[0, "check_set"], [70, "above_history"], [10, "warm_up"], [8, "easy_set"]]),
+    );
+    expect(result?.lines.map((l) => [l.text, l.amountText])).toEqual([
+      ["1 set to check: no XP", "−90 XP"],
+      ["1 set above your best: XP as if at +25%", "−20 XP"],
+      ["2 sets now warm-ups or easy sets, against your latest history", "−162 XP"],
+    ]);
+  });
+
+  it("signs the leftover line: up", () => {
+    // A heavier bodyweight on the server: every set a little higher, no tag changed.
+    expect(explain(est([[90, null], [90, null]]), server([[95, null], [95, null]]))?.lines).toEqual([
+      { text: "Re-scored on the server", amount: 10, amountText: "+10 XP" },
+    ]);
+  });
+
+  it("signs the leftover line: down, after the lines it can explain", () => {
+    const result = explain(est([[90, null], [90, null]]), server([[0, "check_set"], [85, null]]));
+    expect(result?.lines).toEqual([
+      { text: "1 set to check: no XP", amount: -90, amountText: "−90 XP" },
+      { text: "Re-scored on the server", amount: -5, amountText: "−5 XP" },
+    ]);
+  });
+
+  it("explains the 14-day rule with one line for the whole gap", () => {
+    const result = explain(est([[90, null]]), server([[0, null]], { heldBack: { amount: 90, reason: "too_old" } }));
+    expect(result?.lines).toEqual([{ text: "Synced more than 14 days after it started: no XP for sets", amount: -90, amountText: "−90 XP" }]);
+  });
+
+  it("puts the whole gap on the leftover line when the sets don't line up", () => {
+    expect(explain(est([[90, null]]), server([[90, null], [40, null]]))?.lines).toEqual([{ text: "Re-scored on the server", amount: 40, amountText: "+40 XP" }]);
   });
 });

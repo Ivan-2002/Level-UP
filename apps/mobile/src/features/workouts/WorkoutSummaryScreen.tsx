@@ -19,6 +19,7 @@ import {
   compareDuration,
   compareVolume,
   exerciseXpRows,
+  explainGap,
   heldBackText,
   levelBar,
   pendingLevelBar,
@@ -27,6 +28,7 @@ import {
   previewSummary,
   volumeText,
   xpLines,
+  type GapExplanation,
   type XpLine,
 } from "./summary-view";
 
@@ -88,7 +90,7 @@ export function WorkoutSummaryScreen() {
           ) : null}
         </View>
 
-        {summary ? <XpCard summary={summary} /> : <PreviewXp preview={last.preview} levelBefore={last.levelBefore} failed={failed} />}
+        {summary ? <XpCard summary={summary} preview={last.preview} /> : <PreviewXp preview={last.preview} levelBefore={last.levelBefore} failed={failed} />}
 
         <View style={styles.tiles}>
           <StatTile
@@ -114,8 +116,9 @@ export function WorkoutSummaryScreen() {
   );
 }
 
-function XpCard({ summary }: { summary: FinishSummary }) {
+function XpCard({ summary, preview }: { summary: FinishSummary; preview: SavedPreview | null }) {
   const styles = useStyles();
+  const gap = preview ? explainGap(preview, summary) : null;
   const bar = levelBar(summary.level.statusBefore, summary.level.statusAfter);
   const lines = xpLines(summary);
   const heldBack = heldBackText(summary.xp.heldBack);
@@ -168,11 +171,35 @@ function XpCard({ summary }: { summary: FinishSummary }) {
           <XpRow key={line.label} line={line} />
         ))}
         {goal ? (
-            <Text variant="caption" tone="inkMuted">
-              {goalProgressText(goal)} · {streakText(goal)}
-            </Text>
+          <Text variant="caption" tone="inkMuted">
+            {goalProgressText(goal)} · {streakText(goal)}
+          </Text>
         ) : null}
       </View>
+      {gap ? <GapNote gap={gap} /> : null}
+    </View>
+  );
+}
+
+/** Why "XP for sets" differs from the estimate shown before the server answered (set XP only). */
+function GapNote({ gap }: { gap: GapExplanation }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.breakdown} accessible accessibilityLabel={`Different from the estimate. ${gap.estimateText}. ${gap.lines.map((l) => `${l.text}: ${l.amountText}`).join(". ")}.`}>
+      <Text variant="labelStrong">Why it differs from the estimate</Text>
+      <Text variant="caption" tone="inkMuted" tabular>
+        {gap.estimateText}
+      </Text>
+      {gap.lines.map((line) => (
+        <View key={line.text} style={styles.breakdownRow}>
+          <Text variant="caption" tone="inkMuted" style={styles.flex}>
+            {line.text}
+          </Text>
+          <Text variant="captionStrong" tabular>
+            {line.amountText}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }

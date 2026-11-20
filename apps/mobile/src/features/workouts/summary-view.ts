@@ -12,6 +12,7 @@ import {
   type WorkoutDetail,
 } from "@levelup/shared";
 import { parseSet, type ActiveWorkout } from "./active-workout";
+import type { SavedPreview } from "./live-workout";
 import { formatSet } from "./format";
 
 // What the workout summary shows, worked out from the server's summary (or, before the
@@ -207,4 +208,74 @@ export function previewSummary(workout: ActiveWorkout, finishedAt: string, bodyw
       done.filter((d) => d.exercise.repsUnit === "reps").map((d) => ({ reps: d.reps, loadKg: liftedKg(d.weightKg, bodyweightKg, d.exercise.bodyweightRatio) })),
     ),
   };
+}
+
+// --- Why the server's set XP differs from the estimate --------------------------------
+
+export type GapLine = { text: string; amount: number; amountText: string };
+export type GapExplanation = { gap: number; estimateText: string; lines: GapLine[] };
+
+/** "+40 XP" / "−40 XP" (a real minus sign, as elsewhere). */
+export const signedXp = (amount: number) => `${amount < 0 ? "−" : "+"}${n(Math.abs(amount))} XP`;
+
+const sets = (count: number) => (count === 1 ? "1 set" : `${count} sets`);
+const LOW_EFFORT_TAGS = new Set(["warm_up", "easy_set"]);
+
+/**
+ * Why the server's SET XP differs from the estimate saved at Finish. Set XP only: the
+ * estimate leaves out the weekly and streak bonuses, so they're never a gap. Null when the
+ * two agree. The lines' amounts always add up to the gap:
+ * - too old (the 14-day rule): the whole gap;
+ * - the daily cap: exactly the change in XP held back (another workout that day counted first);
+ * - sets the server tagged differently, grouped by what they are now: their XP change;
+ * - the rest, signed ("Re-scored on the server"): e.g. a changed bodyweight, or the cap and a
+ *   new tag on the same set. If the server's sets don't line up with the estimate's, all of it.
+ */
+export function explainGap(preview: SavedPreview, summary: Pick<FinishSummary, "xp" | "sets">): GapExplanation | null {
+  const gap = summary.xp.sets - preview.setXp;
+  if (gap === 0) return null;
+  const line = (text: string, amount: number): GapLine => ({ text, amount, amountText: signedXp(amount) });
+  const result = (lines: GapLine[]): GapExplanation => {
+    const leftover = gap - lines.reduce((sum, l) => sum + l.amount, 0);
+    return {
+      gap,
+      estimateText: `Estimate: ${signedXp(preview.setXp)} for sets`,
+      lines: leftover === 0 ? lines : [...lines, line("Re-scored on the server", leftover)],
+    };
+  };
+
+  if (summary.xp.heldBack?.reason === "too_old") return result([line("Synced more than 14 days after it started: no XP for sets", gap)]);
+
+  const lines: GapLine[] = [];
+  const capChange = preview.heldBack - (summary.xp.heldBack?.amount ?? 0);
+  if (capChange < 0) lines.push(line("Daily limit: another workout that day counted first", capChange));
+  if (capChange > 0) lines.push(line("Daily limit: less held back than estimated", capChange));
+
+  if (summary.sets.length !== preview.sets.length) return result(lines);
+  const groups = new Map<string, { count: number; amount: number }>();
+  summary.sets.forEach((server, i) => {
+    const before = preview.sets[i]!;
+    if (server.tag === before.tag) return;
+    const key =
+      server.tag === "check_set"
+        ? "check"
+        : server.tag === "above_history"
+          ? "above"
+          : server.tag !== null && LOW_EFFORT_TAGS.has(server.tag) && !(before.tag !== null && LOW_EFFORT_TAGS.has(before.tag))
+            ? "low"
+            : "other";
+    const group = groups.get(key) ?? { count: 0, amount: 0 };
+    groups.set(key, { count: group.count + 1, amount: group.amount + server.xp - before.xp });
+  });
+  const texts: Record<string, (count: number) => string> = {
+    check: (c) => `${sets(c)} to check: no XP`,
+    above: (c) => `${sets(c)} above your best: XP as if at +25%`,
+    low: (c) => `${sets(c)} now warm-ups or easy sets, against your latest history`,
+    other: (c) => `${sets(c)} re-scored against your latest history`,
+  };
+  for (const key of ["check", "above", "low", "other"]) {
+    const group = groups.get(key);
+    if (group && group.amount !== 0) lines.push(line(texts[key]!(group.count), group.amount));
+  }
+  return result(lines);
 }
