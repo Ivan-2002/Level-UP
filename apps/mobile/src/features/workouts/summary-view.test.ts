@@ -68,17 +68,23 @@ describe("levelBar (from the server's level status before and after)", () => {
 describe("xpLines and heldBackText", () => {
   const xp = { sets: 1240, weeklyGoal: 0, streakMilestone: 0, total: 1240, heldBack: null };
 
-  it("labels set XP as the estimate is, with no total when there's no bonus", () => {
-    expect(xpLines({ xp, weeklyGoal: null })).toEqual({ sets: { label: "XP for sets", amount: 1240 }, bonuses: [], total: null });
+  it("leads with the total, and breaks it down starting with set XP, labelled as the estimate is", () => {
+    expect(xpLines({ xp, weeklyGoal: null })).toEqual({
+      headline: { label: "Total XP earned", amount: 1240 },
+      breakdown: [{ label: "XP for sets", amount: 1240 }],
+    });
   });
 
-  it("puts each bonus on its own line, then the total", () => {
+  it("puts each bonus on its own line of the breakdown", () => {
     const lines = xpLines({ xp: { ...xp, weeklyGoal: 400, streakMilestone: 3000, total: 4640 }, weeklyGoal: { streak: 12 } as never });
-    expect(lines.bonuses).toEqual([
-      { label: "Weekly goal met", amount: 400 },
-      { label: "12-week streak bonus", amount: 3000 },
-    ]);
-    expect(lines.total).toEqual({ label: "Total XP earned", amount: 4640 });
+    expect(lines).toEqual({
+      headline: { label: "Total XP earned", amount: 4640 },
+      breakdown: [
+        { label: "XP for sets", amount: 1240 },
+        { label: "Weekly goal met", amount: 400 },
+        { label: "12-week streak bonus", amount: 3000 },
+      ],
+    });
   });
 
   it("says why set XP was held back", () => {

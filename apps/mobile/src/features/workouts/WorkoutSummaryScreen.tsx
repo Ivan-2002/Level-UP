@@ -125,12 +125,11 @@ function XpCard({ summary }: { summary: FinishSummary }) {
     <View style={styles.xpCard}>
       <View style={styles.xpTop}>
         <View>
-          {/* Labelled as the estimate was, so the two compare: set XP, without the bonuses. */}
           <Text variant="caption" tone="inkMuted">
-            {lines.sets.label}
+            {lines.headline.label}
           </Text>
           <Text variant="display" tone="purple" tabular>
-            +{lines.sets.amount}
+            +{lines.headline.amount}
           </Text>
         </View>
         <View style={styles.levelPill}>
@@ -163,28 +162,26 @@ function XpCard({ summary }: { summary: FinishSummary }) {
           </Text>
         </View>
       </View>
-      {lines.bonuses.length > 0 || goal ? (
-        <View style={styles.breakdown}>
-          {lines.bonuses.map((line) => (
-            <XpRow key={line.label} line={line} />
-          ))}
-          {lines.total ? <XpRow line={lines.total} strong /> : null}
-          {goal ? (
+      {/* "XP for sets" first, labelled as the estimate's headline was, so the two compare. */}
+      <View style={styles.breakdown}>
+        {lines.breakdown.map((line) => (
+          <XpRow key={line.label} line={line} />
+        ))}
+        {goal ? (
             <Text variant="caption" tone="inkMuted">
               {goalProgressText(goal)} · {streakText(goal)}
             </Text>
-          ) : null}
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 }
 
-function XpRow({ line, strong = false }: { line: XpLine; strong?: boolean }) {
+function XpRow({ line }: { line: XpLine }) {
   const styles = useStyles();
   return (
     <View style={styles.breakdownRow}>
-      <Text variant={strong ? "labelStrong" : "label"} tone={strong ? "ink" : "inkMuted"}>
+      <Text variant="label" tone="inkMuted">
         {line.label}
       </Text>
       <Text variant="labelStrong" tabular>

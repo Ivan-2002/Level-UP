@@ -95,19 +95,15 @@ export function levelBar(statusBefore: LevelStatus, statusAfter: LevelStatus): L
 export type XpLine = { label: string; amount: number };
 
 /**
- * The XP card's lines. "XP for sets" first, labelled as the estimate is, so the two compare;
- * the weekly and streak bonuses as their own lines (the estimate leaves them out), and the
- * total only when there's a bonus to add.
+ * The XP card once the server has answered: the total as the headline, then the breakdown.
+ * "XP for sets" is always the first line, labelled as the estimate's headline is, so the
+ * two compare; each bonus (weekly goal, streak), which the estimate leaves out, follows.
  */
-export function xpLines(summary: Pick<FinishSummary, "xp" | "weeklyGoal">): { sets: XpLine; bonuses: XpLine[]; total: XpLine | null } {
-  const bonuses: XpLine[] = [];
-  if (summary.xp.weeklyGoal > 0) bonuses.push({ label: "Weekly goal met", amount: summary.xp.weeklyGoal });
-  if (summary.xp.streakMilestone > 0) bonuses.push({ label: `${summary.weeklyGoal?.streak ?? ""}-week streak bonus`, amount: summary.xp.streakMilestone });
-  return {
-    sets: { label: "XP for sets", amount: summary.xp.sets },
-    bonuses,
-    total: bonuses.length > 0 ? { label: "Total XP earned", amount: summary.xp.total } : null,
-  };
+export function xpLines(summary: Pick<FinishSummary, "xp" | "weeklyGoal">): { headline: XpLine; breakdown: XpLine[] } {
+  const breakdown: XpLine[] = [{ label: "XP for sets", amount: summary.xp.sets }];
+  if (summary.xp.weeklyGoal > 0) breakdown.push({ label: "Weekly goal met", amount: summary.xp.weeklyGoal });
+  if (summary.xp.streakMilestone > 0) breakdown.push({ label: `${summary.weeklyGoal?.streak ?? ""}-week streak bonus`, amount: summary.xp.streakMilestone });
+  return { headline: { label: "Total XP earned", amount: summary.xp.total }, breakdown };
 }
 
 /** The line for set XP the workout didn't get; null when it got everything. */
