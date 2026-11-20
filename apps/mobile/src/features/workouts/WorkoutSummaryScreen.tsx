@@ -1,7 +1,7 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { BODYWEIGHT_FALLBACK_KG, goalProgressText, streakText, type FinishSummary, type WeightUnit } from "@levelup/shared";
+import { BODYWEIGHT_FALLBACK_KG, goalProgressText, streakText, type FinishSummary, type LevelStatus, type WeightUnit } from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Icon } from "@/components/Icon";
@@ -13,7 +13,8 @@ import { createStyles, useTheme } from "@/theme/use-theme";
 import { useProfile } from "@/features/profile/use-profile";
 import type { ActiveWorkout } from "./active-workout";
 import { formatElapsed, plural } from "./format";
-import { compareCount, compareDuration, compareVolume, levelBar, prHeading, prLine, previewSummary, volumeText } from "./summary-view";
+import type { SavedPreview } from "./live-workout";
+import { compareCount, compareDuration, compareVolume, levelBar, pendingLevelBar, prHeading, prLine, previewSummary, volumeText } from "./summary-view";
 
 function done() {
   if (router.canGoBack()) router.back();
@@ -73,7 +74,7 @@ export function WorkoutSummaryScreen() {
           ) : null}
         </View>
 
-        {summary ? <XpCard summary={summary} /> : <PreviewXp xp={preview.xpSets} />}
+        {summary ? <XpCard summary={summary} /> : <PreviewXp preview={last.preview} levelBefore={last.levelBefore} failed={failed} />}
 
         <View style={styles.tiles}>
           <StatTile
@@ -167,16 +168,69 @@ function XpCard({ summary }: { summary: FinishSummary }) {
   );
 }
 
-function PreviewXp({ xp }: { xp: number }) {
+/**
+ * Before the server answers: the live score saved at Finish, labelled as an estimate, with
+ * the level bar's pending segment. Never "Level up!": only the server's answer says that.
+ */
+function PreviewXp({ preview, levelBefore, failed }: { preview: SavedPreview | null; levelBefore: LevelStatus | null; failed: boolean }) {
   const styles = useStyles();
+  if (!preview) {
+    // Saved by an older app version, or no history was ever pinned: no estimate to show.
+    return (
+      <View style={styles.xpCard}>
+        <Text variant="caption" tone="inkMuted">
+          {failed ? "No XP: the server didn't accept this workout." : "XP is confirmed when it syncs."}
+        </Text>
+      </View>
+    );
+  }
+  // A rejected workout earns nothing, so it gets no bar; its estimate says it wasn't awarded.
+  const bar = levelBefore && !failed ? pendingLevelBar(levelBefore, preview.setXp) : null;
   return (
     <View style={styles.xpCard}>
-      <Text variant="caption" tone="inkMuted">
-        XP for sets (estimate)
-      </Text>
-      <Text variant="display" tone="purple" tabular>
-        +{xp}
-      </Text>
+      <View style={styles.xpTop}>
+        <View>
+          <Text variant="caption" tone="inkMuted">
+            {failed ? "XP for sets · estimate, not awarded" : "XP for sets · estimate"}
+          </Text>
+          <Text variant="display" tone="purple" tabular>
+            +{preview.setXp}
+          </Text>
+        </View>
+        {bar ? (
+          <View style={styles.levelPill}>
+            <Text variant="labelStrong" tone="purple">
+              Level {bar.level}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      {bar ? (
+        <View style={styles.barWrap}>
+          <View
+            style={styles.barTrack}
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel={`Estimate: ${bar.progressText} toward level ${bar.level + 1}. ${bar.toNextText}.`}
+          >
+            <View style={[styles.barBefore, { width: `${bar.before * 100}%` }]} />
+            <View style={[styles.barPending, { width: `${bar.pending * 100}%` }]} />
+          </View>
+          <View style={styles.barText}>
+            <Text variant="captionStrong" tabular>
+              {bar.progressText}
+            </Text>
+            <Text variant="caption" tone="inkMuted" tabular>
+              {bar.toNextText}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+      {preview.heldBack > 0 ? (
+        <Text variant="caption" tone="inkMuted">
+          About {preview.heldBack.toLocaleString("en-US")} XP held back: daily limit reached.
+        </Text>
+      ) : null}
       <Text variant="caption" tone="inkMuted">
         Weekly goal and streak bonuses are added when it syncs.
       </Text>
@@ -241,6 +295,8 @@ const useStyles = createStyles((t) => ({
   barTrack: { height: 10, borderRadius: t.radius.pill, backgroundColor: t.colors.purpleSoft, overflow: "hidden", flexDirection: "row" },
   barBefore: { height: 10, backgroundColor: t.colors.purple },
   barGained: { height: 10, backgroundColor: t.colors.ice },
+  // The estimate: the gained colour, lighter, so it reads as not yet confirmed.
+  barPending: { height: 10, backgroundColor: t.colors.ice, opacity: 0.45 },
   barText: { flexDirection: "row", justifyContent: "space-between" },
   breakdown: { gap: t.space[2], borderTopWidth: 1, borderTopColor: t.colors.border, paddingTop: t.space[3] },
   breakdownRow: { flexDirection: "row", justifyContent: "space-between" },

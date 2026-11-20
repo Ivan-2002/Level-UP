@@ -11,10 +11,13 @@ import {
   type Exercise,
   type ExerciseSession,
   type ExerciseXpHistory,
+  type FinishWorkoutInput,
   type LoggedSet,
   type Mechanic,
   type ScoredSet,
   type SessionScore,
+  type SessionSet,
+  type SetTag,
   type WeightUnit,
 } from "@levelup/shared";
 import type { Segment } from "@/components/progress-segments";
@@ -77,23 +80,58 @@ export type LiveScore = {
  */
 export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringContext): LiveScore {
   const done = workout.exercises.flatMap((draft) => doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })));
-  const score = scoreSessionSets({
-    sets: done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg, completedAt: d.set.doneAt })),
-    exercises: new Map(workout.exercises.map((draft) => [draft.exercise.id, draft.exercise])),
-    history: context.history,
-    bodyweight: context.bodyweight,
-  });
+  const scored = scoreWithCap(
+    done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg, completedAt: d.set.doneAt })),
+    exercisesOf(workout),
+    context,
+  );
+  const cap = context.dailyCap;
+  return {
+    total: scored.total,
+    bySet: new Map(done.map((d, i) => [d.set.id, scored.sets[i]!])),
+    heldBack: scored.heldBack,
+    dailyCapNote: cap && scored.heldBack > 0 ? dailyCapNote(cap.config, cap.xpBefore + scored.total) : null,
+    exercises: scored.exercises,
+  };
+}
+
+/** The shared pipeline, then the daily cap in the order given (the order the server applies it: the order sent). */
+function scoreWithCap(sets: SessionSet[], exercises: Map<string, Exercise>, context: LiveScoringContext) {
+  const score = scoreSessionSets({ sets, exercises, history: context.history, bodyweight: context.bodyweight });
   const cap = context.dailyCap;
   const capped = cap ? applyDailyCap(cap.xpBefore, score.sets.map((s) => s.xp), cap.config) : null;
-  const sets = capped ? score.sets.map((s, i) => ({ ...s, xp: capped.awarded[i]! })) : score.sets;
-  const total = sets.reduce((sum, s) => sum + s.xp, 0);
-  return {
-    total,
-    bySet: new Map(done.map((d, i) => [d.set.id, sets[i]!])),
-    heldBack: capped?.heldBack ?? 0,
-    dailyCapNote: cap && capped && capped.heldBack > 0 ? dailyCapNote(cap.config, cap.xpBefore + total) : null,
-    exercises: score.exercises,
-  };
+  const scoredSets = capped ? score.sets.map((s, i) => ({ ...s, xp: capped.awarded[i]! })) : score.sets;
+  return { sets: scoredSets, total: scoredSets.reduce((sum, s) => sum + s.xp, 0), heldBack: capped?.heldBack ?? 0, exercises: score.exercises };
+}
+
+/** Each exercise of the workout by id, as scoring takes them. */
+export function exercisesOf(workout: Pick<ActiveWorkout, "exercises">): Map<string, Exercise> {
+  return new Map(workout.exercises.map((draft) => [draft.exercise.id, draft.exercise]));
+}
+
+/**
+ * The summary's XP before the server answers: the live score, saved at Finish. Set XP
+ * only, after the daily cap; the weekly and streak bonuses are the server's to decide.
+ */
+export type SavedPreview = {
+  setXp: number;
+  heldBack: number;
+  /** One per set SENT, in the payload's order, which is the order of the server's summary.sets: set n is set n. */
+  sets: { xp: number; tag: SetTag | null; isFlagged: boolean }[];
+};
+
+/**
+ * Scores exactly the sets Finish sends (`payload`, built after editing ended: ticked sets
+ * only, as last scored), with the workout's pinned context. The same pipeline and daily cap
+ * as the live view, on the same values, so the total is the one the player last saw;
+ * built from the payload so its sets line up with the server's one for one.
+ */
+export function previewFromPayload(payload: FinishWorkoutInput, exercises: Map<string, Exercise>, context: LiveScoringContext): SavedPreview {
+  const sent = payload.exercises.flatMap((e) =>
+    e.sets.map((s) => ({ exerciseId: e.exerciseId, reps: s.reps, weightKg: s.weightKg, completedAt: s.completedAt ?? null })),
+  );
+  const scored = scoreWithCap(sent, exercises, context);
+  return { setXp: scored.total, heldBack: scored.heldBack, sets: scored.sets.map((s) => ({ xp: s.xp, tag: s.tag, isFlagged: s.isFlagged })) };
 }
 
 /** The line under the tiles once the daily cap holds XP back. */

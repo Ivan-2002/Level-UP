@@ -1,7 +1,7 @@
 import { xpForLevel } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
 import { addExercise, startWorkout, toggleSetDone, updateSet } from "./active-workout";
-import { compareCount, compareDuration, compareVolume, levelBar, prHeading, prLine, previewSummary, volumeText } from "./summary-view";
+import { compareCount, compareDuration, compareVolume, levelBar, pendingLevelBar, prHeading, prLine, previewSummary, volumeText } from "./summary-view";
 
 describe("comparisons with last time", () => {
   it("says how much faster or longer, within a minute counting as the same", () => {
@@ -68,7 +68,7 @@ describe("PR lines", () => {
 });
 
 describe("previewSummary (before the workout syncs)", () => {
-  it("works out XP for sets, duration, sets and volume on the phone", () => {
+  it("works out duration, sets and volume on the phone (its XP is the live score saved at Finish)", () => {
     const START = new Date("2026-11-10T06:00:00.000Z");
     let w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), benchPress, sequentialIds());
     const e = w.exercises[0]!;
@@ -77,10 +77,34 @@ describe("previewSummary (before the workout syncs)", () => {
     if (!ticked.ok) throw new Error(ticked.message);
 
     expect(previewSummary(ticked.value, new Date(START.getTime() + 3_600_000).toISOString(), 80)).toEqual({
-      xpSets: 67, // 8 x 60 kg bench: load 75 kg x sqrt(75/80), estimated 1RM x 0.73
       durationSec: 3600,
       setCount: 1,
       volumeKg: 480, // volume stays in real kilograms
     });
+  });
+});
+
+describe("pendingLevelBar (the estimate, before the server answers)", () => {
+  const status = { level: 5, xpIntoLevel: 1000, xpForNextLevel: 4000 };
+
+  it("adds the estimate as its own segment after the XP you had", () => {
+    expect(pendingLevelBar(status, 600)).toEqual({
+      level: 5,
+      before: 0.25,
+      pending: 0.15,
+      progressText: "1,600 / 4,000 XP",
+      toNextText: "About 2,400 XP to level 6",
+    });
+  });
+
+  it("stops at the end of the level and never claims a level up", () => {
+    const bar = pendingLevelBar(status, 5000);
+    expect(bar).toMatchObject({ level: 5, before: 0.25, pending: 0.75, progressText: "4,000 / 4,000 XP", toNextText: "Your level is confirmed when it syncs" });
+    expect(bar.before + bar.pending).toBe(1);
+    expect(JSON.stringify(bar)).not.toMatch(/level up/i);
+  });
+
+  it("treats exactly reaching the end the same way", () => {
+    expect(pendingLevelBar(status, 3000).toNextText).toBe("Your level is confirmed when it syncs");
   });
 });

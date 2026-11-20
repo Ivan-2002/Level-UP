@@ -13,6 +13,7 @@ import { activeWorkoutStore, finishedWorkoutStore, outboxStore, restTimerStore, 
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { useExercises } from "@/features/exercises/use-exercises";
 import { useRoutine, useSaveRoutine } from "@/features/routines/use-routines";
+import { useProfile } from "@/features/profile/use-profile";
 import { buildFinishPayload, setCounts } from "./active-workout";
 import { finishActiveWorkout } from "./finish-workout";
 import { formatElapsed, plural } from "./format";
@@ -29,6 +30,7 @@ export function FinishWorkoutScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
   const workout = useActiveWorkout((s) => s.workout);
+  const { data: profile } = useProfile(userId); // cached by the (app) layout: the level for the pending bar
   const library = useExercises(userId);
   const routine = useRoutine(userId, workout?.routineId ?? null);
   const save = useSaveRoutine(userId);
@@ -60,12 +62,12 @@ export function FinishWorkoutScreen() {
   const askSave = workout.routineId === null;
   const askUpdate = !askSave && changes.length > 0;
 
-  /** Queue the workout, remember it for the summary, and show the summary. */
+  /** Queue the workout, remember it (as sent, with its live score) for the summary, and show the summary. */
   function complete() {
-    const snapshot = activeWorkoutStore.getState().workout;
     const result = finishActiveWorkout({ activeWorkout: activeWorkoutStore, outbox: outboxStore, now: new Date() });
-    if (!result.ok || !snapshot) return setError(result.ok ? "No workout in progress." : result.message);
-    finishedWorkoutStore.getState().record(snapshot, new Date());
+    if (!result.ok) return setError(result.message);
+    const { workout: sent, payload, preview } = result.value;
+    finishedWorkoutStore.getState().record({ workout: sent, finishedAt: payload.finishedAt, preview, levelBefore: profile?.level ?? null });
     restTimerStore.getState().skip(); // no rest alert after the workout is over
     syncOutboxNow(); // try right away; the outbox keeps retrying if offline
     router.dismissAll();

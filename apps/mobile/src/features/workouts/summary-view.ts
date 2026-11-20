@@ -2,11 +2,11 @@ import {
   formatWeight,
   levelProgress,
   liftedKg,
-  setXp,
   toDisplayWeight,
   volumeKg,
   type Exercise,
   type FinishSummary,
+  type LevelStatus,
   type WeightUnit,
 } from "@levelup/shared";
 import { parseSet, type ActiveWorkout } from "./active-workout";
@@ -100,10 +100,39 @@ export function prLine(pr: Pr, exercise: Pick<Exercise, "equipment" | "repsUnit"
 /** "2 new personal records" / "1 new personal record". */
 export const prHeading = (count: number) => `${count} new personal ${count === 1 ? "record" : "records"}`;
 
+export type PendingLevelBar = {
+  level: number;
+  /** Share of the level done before the workout (purple), and the estimate's share (lighter), never past the end. */
+  before: number;
+  pending: number;
+  /** "1,240 / 3,000 XP": this level's numbers, as the server's status gives them. */
+  progressText: string;
+  /** "About 1,760 XP to level 6", or, when the estimate reaches the end, that the server confirms it. */
+  toNextText: string;
+};
+
 /**
- * Before the workout reaches the server: what the phone can work out itself, with the
- * same shared formulas (XP for sets, duration, sets, volume). Level, PRs, bonuses and
- * "vs last time" wait for the server.
+ * The level bar before the server answers: the level status cached at Finish plus the
+ * estimated set XP. The estimate stops at the end of the level: whether it levels up is
+ * the server's to say (it adds bonuses, and owns the curve), so there's never a "Level up!" here.
+ */
+export function pendingLevelBar(status: LevelStatus, estimatedXp: number): PendingLevelBar {
+  const room = status.xpForNextLevel - status.xpIntoLevel;
+  const shown = Math.max(0, Math.min(estimatedXp, room));
+  const n = (v: number) => v.toLocaleString("en-US");
+  return {
+    level: status.level,
+    before: status.xpIntoLevel / status.xpForNextLevel,
+    pending: shown / status.xpForNextLevel,
+    progressText: `${n(status.xpIntoLevel + shown)} / ${n(status.xpForNextLevel)} XP`,
+    toNextText: estimatedXp >= room ? "Your level is confirmed when it syncs" : `About ${n(room - shown)} XP to level ${status.level + 1}`,
+  };
+}
+
+/**
+ * Before the workout reaches the server: what the phone can work out itself from the
+ * workout as sent (duration, sets, volume). Its XP is the live score saved at Finish
+ * (FinishedWorkout.preview); level, PRs, bonuses and "vs last time" wait for the server.
  */
 export function previewSummary(workout: ActiveWorkout, finishedAt: string, bodyweightKg: number) {
   const done = workout.exercises.flatMap((draft) =>
@@ -114,7 +143,6 @@ export function previewSummary(workout: ActiveWorkout, finishedAt: string, bodyw
     }),
   );
   return {
-    xpSets: done.reduce((sum, d) => sum + setXp(d, bodyweightKg, d.exercise), 0),
     durationSec: Math.max(0, Math.round((Date.parse(finishedAt) - Date.parse(workout.startedAt)) / 1000)),
     setCount: done.length,
     volumeKg: volumeKg(

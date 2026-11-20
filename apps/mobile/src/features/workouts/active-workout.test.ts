@@ -19,7 +19,7 @@ import {
   type ActiveWorkout,
 } from "./active-workout";
 import { finishActiveWorkout } from "./finish-workout";
-import { snapshotToPin } from "./live-workout";
+import { scoreLiveWorkout, scoringContext, snapshotToPin } from "./live-workout";
 import { loggingConvention } from "./logging-conventions";
 
 const START = new Date("2026-11-10T06:00:00.000Z");
@@ -31,6 +31,13 @@ function setup(storage = memoryStorage()) {
   const store = createActiveWorkoutStore({ storage, newId: sequentialIds(), now: () => now });
   return { store, storage, setNow: (date: Date) => (now = date) };
 }
+
+/** A pinned context: best bench 100 x 8, and the day already at 3,090 XP, so the daily cap holds some back. */
+const PINNED_NEAR_CAP = {
+  history: [{ exerciseId: benchPress.id, recentBest: 126.7, jumpBaseline: 126.7 }],
+  bodyweight: { xp: 80, typed: 80 },
+  dailyCap: { config: { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 }, xpBefore: 3090 },
+};
 
 function onlySet(workout: ActiveWorkout, exerciseIndex = 0) {
   const exercise = workout.exercises[exerciseIndex]!;
@@ -230,11 +237,45 @@ describe("finishActiveWorkout", () => {
 
     const result = finishActiveWorkout({ activeWorkout: store, outbox, now: minutesLater(40) });
 
-    expect(result).toEqual({ ok: true, value: { clientId: testUuid(1) } });
+    expect(result).toMatchObject({ ok: true, value: { clientId: testUuid(1), preview: null } }); // nothing pinned: no estimate
     expect(store.getState().workout).toBeNull();
     expect(outbox.getState().items).toEqual([
       expect.objectContaining({ clientId: testUuid(1), userId: "user-1", status: "pending", attempts: 0 }),
     ]);
+  });
+
+  describe("the preview saved for the summary", () => {
+    const scoring = PINNED_NEAR_CAP;
+
+    it("scores exactly the sets sent, so set n is the server's set n (an unticked set in between is left out)", () => {
+      const { store } = setup();
+      store.getState().start("user-1", "kg");
+      store.getState().addExercises([benchPress]);
+      store.getState().pinScoring(scoring);
+      const e = store.getState().workout!.exercises[0]!.id;
+      store.getState().addSet(e);
+      store.getState().addSet(e);
+      const [first, between, last] = store.getState().workout!.exercises[0]!.sets.map((x) => x.id);
+      store.getState().updateSet(e, first!, { weight: "60", reps: "8" }); // a warm-up
+      store.getState().updateSet(e, between!, { weight: "100", reps: "8" }); // never ticked
+      store.getState().updateSet(e, last!, { weight: "100", reps: "8" });
+      store.getState().toggleSetDone(e, first!);
+      store.getState().toggleSetDone(e, last!);
+      const live = scoreLiveWorkout(store.getState().workout!, scoringContext(scoring));
+
+      const result = finishActiveWorkout({ activeWorkout: store, outbox: createOutboxStore(memoryStorage()), now: minutesLater(40) });
+      if (!result.ok) throw new Error(result.message);
+      const { payload, preview } = result.value;
+
+      expect(payload.exercises[0]!.sets.map((x) => x.weightKg)).toEqual([60, 100]);
+      expect(preview!.sets).toEqual(
+        [live.bySet.get(first!)!, live.bySet.get(last!)!].map((x) => ({ xp: x.xp, tag: x.tag, isFlagged: x.isFlagged })),
+      );
+      expect(preview!.sets.map((x) => x.tag)).toEqual(["warm_up", null]);
+      // The number the player last saw on the active workout, after the daily cap.
+      expect(preview).toMatchObject({ setXp: live.total, heldBack: live.heldBack });
+      expect(preview!.heldBack).toBeGreaterThan(0);
+    });
   });
 
   it("leaves everything as it was when Finish is blocked", () => {
@@ -486,6 +527,17 @@ describe("the app killed while a done set is being edited", () => {
     const result = finishActiveWorkout({ activeWorkout: reopened, outbox, now: minutesLater(30) });
     expect(result.ok).toBe(true);
     expect(outbox.getState().items[0]!.payload.exercises[0]!.sets[0]).toMatchObject({ weightKg: 105, reps: 8 });
+  });
+
+  it("includes the edit in the summary's preview too: the workout as sent, scored after editing ended", () => {
+    const reopened = killedMidEdit({ weight: "105" });
+    reopened.getState().pinScoring(PINNED_NEAR_CAP);
+
+    const result = finishActiveWorkout({ activeWorkout: reopened, outbox: createOutboxStore(memoryStorage()), now: minutesLater(30) });
+    if (!result.ok) throw new Error(result.message);
+
+    expect(result.value.workout.exercises[0]!.sets[0]!.scored).toEqual({ weight: "105", reps: "8" });
+    expect(result.value.preview!.setXp).toBe(scoreLiveWorkout(result.value.workout, scoringContext(PINNED_NEAR_CAP)).total);
   });
 });
 
