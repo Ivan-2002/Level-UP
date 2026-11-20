@@ -36,6 +36,17 @@ export async function updateProfile(userId: string, data: { weightUnit?: "kg" | 
   return count === 0 ? null : findProfileByUserId(userId);
 }
 
+/**
+ * Raises celebratedLevel to `level` unless it's already higher, in ONE statement: two
+ * phones (or a retry racing the first request) can't lower it. null = no profile.
+ */
+export async function raiseCelebratedLevel(userId: string, level: number): Promise<ProfileRecord | null> {
+  const count = await prisma.$executeRaw`
+    UPDATE "profile" SET "celebratedLevel" = GREATEST("celebratedLevel", ${level}), "updatedAt" = now()
+    WHERE "userId" = ${userId}`;
+  return count === 0 ? null : findProfileByUserId(userId);
+}
+
 /** Case-insensitive, because the column is citext (see schema.prisma). */
 export function findProfileByUsername(username: string): Promise<ProfileRow | null> {
   return prisma.profile.findUnique({ where: { username } });

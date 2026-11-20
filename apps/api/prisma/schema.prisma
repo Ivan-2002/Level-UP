@@ -108,6 +108,10 @@ model Profile {
   // training days count in this zone. The app updates it when the phone's zone changes.
   timeZone   String     @default("UTC")
   totalXp    Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
+  // The highest level the player has seen celebrated (the level-up screen), on any phone.
+  // Only ever goes up, and never past the real level: a level lowered by a correction
+  // (Milestone 7) isn't celebrated again on the way back up.
+  celebratedLevel Int @default(1)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 

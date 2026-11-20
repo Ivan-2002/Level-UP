@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { profileSchema, type BodyweightEntry, type CreateProfileInput, type Profile, type RecordBodyweightInput } from "@levelup/shared";
 import { fetchWithDeviceCache, readCached, writeCached } from "@/lib/device-cache";
 import { ApiError, apiGet, apiPost } from "@/lib/api";
@@ -35,6 +35,15 @@ export function useProfile(userId: string | undefined) {
   });
 }
 
+/**
+ * A profile the server just answered with (e.g. POST /profile/celebrated): into the query
+ * cache AND the copy saved on the phone, so an offline restart doesn't read an older one.
+ */
+export function saveProfile(queryClient: QueryClient, userId: string, profile: Profile): void {
+  queryClient.setQueryData(profileQueryKey(userId), profile);
+  writeCached(cacheKey(userId), profile);
+}
+
 /** POST /profile. On success the new profile goes straight into the cache. */
 export function useCreateProfile(userId: string) {
   const queryClient = useQueryClient();
@@ -43,8 +52,7 @@ export function useCreateProfile(userId: string) {
     onSuccess: (profile) => {
       // Writing the cache (instead of refetching) flips the route guard in
       // (app)/_layout.tsx right away, which moves the player to the home screen.
-      queryClient.setQueryData(profileQueryKey(userId), profile);
-      writeCached(cacheKey(userId), profile);
+      saveProfile(queryClient, userId, profile);
     },
     onError: (error) => {
       // An earlier attempt already succeeded (e.g. the response was lost on bad signal):

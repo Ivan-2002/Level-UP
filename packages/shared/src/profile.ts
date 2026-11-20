@@ -45,6 +45,14 @@ export const updateProfileSchema = z
   .refine((body) => Object.values(body).some((v) => v !== undefined), "Send at least one field to change.");
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
+/**
+ * Body of POST /profile/celebrated: the level-up screen for `level` was shown. The server
+ * keeps the highest level sent, never above the player's real level, so a repeat or a
+ * late, out-of-order request changes nothing.
+ */
+export const celebrateLevelSchema = z.object({ level: z.number().int().min(1) });
+export type CelebrateLevelInput = z.infer<typeof celebrateLevelSchema>;
+
 /** Body of POST /bodyweight. `measuredOn` is the player's LOCAL date; defaults to today. */
 export const recordBodyweightSchema = z.object({
   kg: z
@@ -75,6 +83,12 @@ export const profileSchema = z.object({
    * profile saved on the phone before the field existed still reads.
    */
   stage: avatarStageSchema.nullable().default(null),
+  /**
+   * The highest level already celebrated (the level-up screen), on any phone: the app shows
+   * a level-up when level.level is above it. Null only in a copy saved on the phone before
+   * the field existed; the app then celebrates nothing until the server answers.
+   */
+  celebratedLevel: z.number().int().min(1).nullable().default(null),
   /**
    * The bodyweight XP uses today (xpBodyweightOnDate: limited at 2% a week, 40-200 kg), for
    * the app's offline XP preview. bodyweightKg above is what the player typed.

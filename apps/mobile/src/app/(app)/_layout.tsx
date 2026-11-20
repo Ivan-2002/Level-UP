@@ -5,6 +5,7 @@ import { Stack } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
 import { useSyncTimeZone } from "@/features/profile/use-sync-time-zone";
+import { useCelebrationSync } from "@/features/progress/use-celebration";
 import { exercisesQuery } from "@/features/exercises/use-exercises";
 import { useOutboxSync } from "@/features/workouts/outbox-sync";
 import { xpHistoryQuery } from "@/features/workouts/use-xp-history";
@@ -28,6 +29,7 @@ export default function AppLayout() {
   // before any early return below: React needs the same hooks in the same order every render.
   useOutboxSync(session?.user.id);
   useSyncTimeZone(session?.user.id, profile);
+  useCelebrationSync(session?.user.id, profile); // a level-up shown offline reaches the server
 
   // Load the exercise library and the XP history (for the live XP preview) as soon as
   // we're signed in, so they're saved on the phone before the player is at the gym with no signal.

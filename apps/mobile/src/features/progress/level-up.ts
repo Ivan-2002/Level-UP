@@ -1,0 +1,66 @@
+import type { AvatarStage, Profile } from "@levelup/shared";
+import type { createCelebrationStore } from "@/stores/celebration-store";
+
+// When to show the level-up screen, and remembering that it was shown.
+// Plain TypeScript (no React), so the rules are unit-tested.
+
+export type LevelUp = {
+  /** The last level celebrated: "Level 4 → 6" when more than one level was gained. */
+  from: number;
+  to: number;
+  /** The stage reached by this level-up, or null when it stays in the same stage. */
+  newStage: AvatarStage | null;
+};
+
+/**
+ * The level-up to show, or null. Shown when the level is above BOTH the server's
+ * celebratedLevel (any phone) and what this phone showed but hasn't confirmed yet.
+ * A profile without celebratedLevel (a copy saved before the field existed) shows nothing:
+ * better to miss one celebration than to replay old ones.
+ */
+export function pendingLevelUp(profile: Profile, shownHere: number | undefined): LevelUp | null {
+  if (profile.celebratedLevel === null) return null;
+  const seen = Math.max(profile.celebratedLevel, shownHere ?? 0);
+  const level = profile.level.level;
+  if (level <= seen) return null;
+  // Only the current stage is known, and that's enough: it's new if it starts after the
+  // last level celebrated.
+  const stage = profile.stage;
+  return { from: seen, to: level, newStage: stage && stage.levelRequired > seen ? stage : null };
+}
+
+type Store = ReturnType<typeof createCelebrationStore>;
+
+/**
+ * Records a shown level-up and tells the server, retrying later if that fails.
+ * - markShown: remember it on the phone first (so it's never shown twice), then send.
+ * - flush: send what this phone showed and the server doesn't have yet. Called again
+ *   whenever the profile reloads (reconnecting, a synced workout), until it succeeds.
+ * One request at a time per player; the server keeps the highest level, so a repeat is harmless.
+ */
+export function createCelebrationSync(deps: { store: Store; send: (level: number) => Promise<Profile>; onSaved: (userId: string, profile: Profile) => void }) {
+  const inFlight = new Set<string>();
+
+  async function flush(userId: string): Promise<void> {
+    const level = deps.store.getState().upTo[userId];
+    if (level === undefined || inFlight.has(userId)) return;
+    inFlight.add(userId);
+    try {
+      const profile = await deps.send(level);
+      deps.store.getState().confirm(userId, level);
+      deps.onSaved(userId, profile);
+    } catch {
+      // Offline or a server error: the level stays on the phone until the next flush.
+    } finally {
+      inFlight.delete(userId);
+    }
+  }
+
+  return {
+    flush,
+    markShown: async (userId: string, level: number) => {
+      deps.store.getState().markShown(userId, level);
+      await flush(userId);
+    },
+  };
+}
