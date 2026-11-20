@@ -178,7 +178,8 @@ describe("POST /workouts validation", () => {
     ["an exercise with no sets", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [] }] }), "exercises.0.sets"],
     ["no exercises", () => validWorkout({ exercises: [] }), "exercises"],
     ["finishedAt before startedAt", () => validWorkout({ startedAt: iso(now() - HOUR), finishedAt: iso(now() - 2 * HOUR) }), "finishedAt"],
-    ["finishedAt equal to startedAt", () => validWorkout({ startedAt: iso(now() - HOUR), finishedAt: iso(now() - HOUR) }), "finishedAt"],
+    // One clock reading: two now() calls a millisecond apart made this valid now and then (a flaky test).
+    ["finishedAt equal to startedAt", () => { const at = iso(now() - HOUR); return validWorkout({ startedAt: at, finishedAt: at }); }, "finishedAt"],
     ["finishedAt in the future", () => validWorkout({ startedAt: iso(now()), finishedAt: iso(now() + HOUR) }), "finishedAt"],
     ["longer than 6 hours", () => validWorkout({ startedAt: iso(now() - 7 * HOUR), finishedAt: iso(now() - MINUTE) }), "finishedAt"],
     ["a date that isn't ISO 8601", () => validWorkout({ startedAt: "yesterday at 6" }), "startedAt"],
