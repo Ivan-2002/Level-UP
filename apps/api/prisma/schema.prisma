@@ -364,6 +364,7 @@ enum XpSource {
   workout_set // sourceId = workout_set.id
   weekly_goal // sourceId = weekly_goal.id: the goal of that week was met
   streak_milestone // sourceId = weekly_goal.id: the week the streak reached 12, 26 or 52
+  dev_grant // sourceId = a new UUID per grant: test XP from `pnpm --filter api dev:grant-xp`, never in production
 
   @@map("xp_source")
 }

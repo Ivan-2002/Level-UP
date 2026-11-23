@@ -26,6 +26,12 @@ export async function findProfileByUserId(userId: string): Promise<ProfileRecord
   return row ? withLatestBodyweight(row) : null;
 }
 
+/** The user id for a sign-in email, ignoring case (Better Auth's user table). Dev tools only. */
+export async function findUserIdByEmail(email: string): Promise<string | null> {
+  const row = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } });
+  return row?.id ?? null;
+}
+
 export async function profileExists(userId: string): Promise<boolean> {
   return (await prisma.profile.count({ where: { userId } })) > 0;
 }

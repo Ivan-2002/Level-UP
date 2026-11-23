@@ -126,6 +126,11 @@ async function bodyweightReceipts(userId: string, db?: Db): Promise<BodyweightRe
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
+/** The user id for a sign-in email (ignoring case), or null. Used by dev scripts, not by routes. */
+export function userIdByEmail(email: string): Promise<string | null> {
+  return repo.findUserIdByEmail(email);
+}
+
 /** Adds to the cached total XP; returns the new total. The ledger stays the source of truth. */
 export function addTotalXp(db: Db, userId: string, amount: number): Promise<number> {
   return repo.incrementTotalXp(db, userId, amount);
