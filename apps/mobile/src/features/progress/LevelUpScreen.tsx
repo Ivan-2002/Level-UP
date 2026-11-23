@@ -3,6 +3,7 @@ import { AccessibilityInfo, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInUp, ZoomIn, useReducedMotion } from "react-native-reanimated";
 import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
 import { Avatar } from "@/components/Avatar";
@@ -39,6 +40,9 @@ export function LevelUpScreen() {
     }
     // Remembered on the phone at once (never shown twice), then sent to the server.
     void celebrationSync.markShown(userId, levelUp.to);
+    // One success tap as the level appears. Not motion, so it plays with reduce motion on too;
+    // the phone's own haptics setting can still turn it off. Failing (web, no engine) is fine.
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     // After the screen's transition, or iOS may drop the announcement.
     const timer = setTimeout(() => AccessibilityInfo.announceForAccessibility(text.announcement), 600);
     return () => {
