@@ -18,6 +18,9 @@ import { celebrationSync, levelUpClosed, usePendingLevelUp } from "./use-celebra
  * - Reduce motion: no zoom or growth; everything is drawn in its final state.
  * - Screen readers hear "Level up! Level 6. New stage: Regular." when it opens; the
  *   headline carries the same words, and the stickman is decoration, hidden from them.
+ * - Marked shown ON OPEN (the effect below), not on Continue, so a killed app never shows
+ *   it again. Closing is then only navigation: Continue and Android's back button both pop
+ *   the screen, and the cleanup runs either way. No swipe (gestureEnabled: false).
  */
 export function LevelUpScreen() {
   const { data: session } = authClient.useSession();
