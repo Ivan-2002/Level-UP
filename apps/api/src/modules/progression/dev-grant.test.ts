@@ -37,14 +37,18 @@ describe("grantDevXp", () => {
     expect(await setXpOnDay(user.userId, "2026-11-23")).toBe(0);
   });
 
-  it("refuses in production, and refuses an amount that isn't a positive whole number", async () => {
+  it("refuses in production or against a hosted database, and an amount that isn't a positive whole number", async () => {
     const user = await signUpPlayer();
-    const nodeEnv = env.NODE_ENV;
-    env.NODE_ENV = "production";
+    const saved = { ...env };
     try {
-      await expect(grantDevXp(user.userId, 100)).rejects.toThrow(/disabled in production/);
+      env.NODE_ENV = "production";
+      await expect(grantDevXp(user.userId, 100)).rejects.toThrow(/NODE_ENV is production/);
+      env.NODE_ENV = saved.NODE_ENV;
+      // Only the check reads this copy; the Prisma client keeps its local connection.
+      env.DATABASE_URL = "postgresql://levelup:secret@db.example-host.com:5432/levelup_test";
+      await expect(grantDevXp(user.userId, 100)).rejects.toThrow(/"db\.example-host\.com", not a local database/);
     } finally {
-      env.NODE_ENV = nodeEnv;
+      Object.assign(env, saved);
     }
     await expect(grantDevXp(user.userId, 0)).rejects.toThrow(/positive whole number/);
     await expect(grantDevXp(user.userId, 1.5)).rejects.toThrow(/positive whole number/);

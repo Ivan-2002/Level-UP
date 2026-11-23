@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { levelFromXp } from "@levelup/shared";
 import { env } from "../config/env.js";
+import { devToolRefusal } from "../lib/dev-only.js";
 import { prisma } from "../lib/prisma.js";
 import * as progressionService from "../modules/progression/progression.service.js";
 import * as usersService from "../modules/users/users.service.js";
@@ -9,10 +10,12 @@ import * as usersService from "../modules/users/users.service.js";
 // level-ups without logging weeks of workouts:
 //   pnpm --filter api dev:grant-xp <email> <amount>
 // It writes to the database in DATABASE_URL (the repo-root .env), and refuses to run when
-// NODE_ENV is production. The app shows the new level the next time it loads the profile.
+// NODE_ENV is production or DATABASE_URL isn't local (localhost, 127.0.0.1 or the Compose
+// service "db"). The app shows the new level the next time it loads the profile.
 
-if (env.NODE_ENV === "production") {
-  console.error("dev:grant-xp refuses to run when NODE_ENV is production.");
+const refusal = devToolRefusal(env);
+if (refusal) {
+  console.error(`dev:grant-xp: ${refusal}`);
   process.exit(1);
 }
 

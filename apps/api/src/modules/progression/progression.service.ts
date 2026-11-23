@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import type { XpHeldBackReason } from "../../generated/prisma/client.js";
 import { env } from "../../config/env.js";
 import { now } from "../../lib/clock.js";
+import { devToolRefusal } from "../../lib/dev-only.js";
 import { prisma, type Db } from "../../lib/prisma.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./progression.repository.js";
@@ -173,10 +174,12 @@ export async function workoutXp(
  * tested without weeks of workouts (`pnpm --filter api dev:grant-xp`). One `dev_grant` row
  * (a new UUID as its sourceId, no body part, today's local date) and the cached total, in one
  * transaction. dev_grant is outside the daily cap, so it doesn't eat into the day's set XP.
- * Refuses in production even if something other than the script calls it. Returns the new total.
+ * Refuses in production or against a non-local database (devToolRefusal), even if something
+ * other than the script calls it. Returns the new total.
  */
 export async function grantDevXp(userId: string, amount: number): Promise<number> {
-  if (env.NODE_ENV === "production") throw new Error("grantDevXp is disabled in production.");
+  const refusal = devToolRefusal(env);
+  if (refusal) throw new Error(refusal);
   if (!Number.isInteger(amount) || amount <= 0) throw new Error("amount must be a positive whole number.");
   const earnedOn = localDate(now(), await usersService.timeZoneOf(userId));
   return prisma.$transaction(async (tx) => {
