@@ -65,11 +65,9 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
+            {/* One colour: purple means progress only (theme/tokens.ts). */}
             <Text variant="heading" style={styles.brand}>
-              LEVEL
-              <Text variant="heading" tone="purple">
-                UP
-              </Text>
+              LEVEL UP
             </Text>
             <Text variant="display" accessibilityRole="header" style={styles.title}>
               {isSignUp ? "Create your account" : "Welcome back"}
