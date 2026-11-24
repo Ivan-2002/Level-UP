@@ -25,6 +25,7 @@ import { settingsStore, useSettings } from "@/stores/device-stores";
 import type { ThemePreference } from "@/stores/settings-store";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import type { Palette, TypeVariant } from "@/theme/tokens";
+import { AvatarPreview } from "./AvatarPreview";
 
 // Development only (the route redirects in release builds): every shared UI piece, live,
 // so a design change can be checked by eye in both themes without clicking through the app.
@@ -166,6 +167,10 @@ export function UiPreviewScreen() {
             />
           ))}
         </View>
+
+        <Section title="Avatar">
+          <AvatarPreview />
+        </Section>
 
         <Section title="Live XP: earlier sets are re-scored">
           <LiveXpMoment title="After 60 × 5" workout={demoWorkout(false)} />
