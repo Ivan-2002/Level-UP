@@ -54,8 +54,12 @@ export type FaceShape = {
   eyes: ({ kind: "dot"; eye: Circle } | { kind: "ring"; eye: Circle; pupil: Circle })[];
   brows: { from: Point; to: Point }[];
   mouth: { kind: "smile"; curve: Curve } | { kind: "grin"; curve: Curve; top: { from: Point; to: Point } };
-  /** A cap following the top of the head, with a curved lower edge; null for "none". */
-  hair: { arcFrom: Point; arcTo: Point; edge: Curve } | null;
+  /**
+   * Hair over the top of the head with a ragged fringe: the outline runs along the head
+   * from `arcFrom` to `arcTo`, then back through the `fringe` points (alternating roots and
+   * tuft tips). Null for "none".
+   */
+  hair: { arcFrom: Point; arcTo: Point; fringe: Point[] } | null;
   /** The skin tone's key, or null for the outline look. */
   skinTone: Exclude<Face["skinTone"], "none"> | null;
 };
@@ -63,6 +67,26 @@ export type FaceShape = {
 const { cx: CX, cy: CY, r: R } = HEAD;
 const EYE_Y = CY - 1;
 const EYE_DX = 8.5;
+
+/**
+ * The short hair's fringe, right to left: roots alternating with five tuft tips, each a
+ * depth below the head's outline at its x, so the fringe follows the head and stays inside
+ * it (tested). Uneven tufts read as hair, not a cap or a helmet.
+ */
+const FRINGE: Point[] = (() => {
+  const outlineY = (x: number) => CY - Math.sqrt(R ** 2 - (x - CX) ** 2);
+  const right = CX + R * Math.cos((342 * Math.PI) / 180);
+  const left = CX + R * Math.cos((198 * Math.PI) / 180);
+  const tufts = [6.5, 8, 6, 8.5, 6.5]; // how far each tip hangs below the outline
+  const steps = 2 * tufts.length;
+  const points: Point[] = [];
+  for (let i = 1; i < steps; i++) {
+    const x = right + ((left - right) * i) / steps;
+    const depth = i % 2 === 1 ? tufts[(i - 1) / 2]! : 3;
+    points.push({ x: Math.round(x * 100) / 100, y: Math.round((outlineY(x) + depth) * 100) / 100 });
+  }
+  return points;
+})();
 
 /** The face for a chosen preset set and the system's expression. */
 export function faceShape(face: Face, expression: Expression = "neutral"): FaceShape {
@@ -101,13 +125,7 @@ export function faceShape(face: Face, expression: Expression = "neutral"): FaceS
     face.mouth === "grin" ? { kind: "grin", curve, top: { from: curve.from, to: curve.to } } : { kind: "smile", curve };
 
   const hair: FaceShape["hair"] =
-    face.hair === "short"
-      ? {
-          arcFrom: onHead(200),
-          arcTo: onHead(340),
-          edge: { from: onHead(340), control: { x: CX, y: CY - 22 }, to: onHead(200) },
-        }
-      : null;
+    face.hair === "short" ? { arcFrom: onHead(198), arcTo: onHead(342), fringe: FRINGE } : null;
 
   return { eyes, brows, mouth, hair, skinTone: face.skinTone === "none" ? null : face.skinTone };
 }
@@ -131,14 +149,15 @@ export function facePoints(shape: FaceShape): Point[] {
     ...shape.eyes.flatMap((e) => (e.kind === "ring" ? [...circle(e.eye), ...circle(e.pupil)] : circle(e.eye))),
     ...shape.brows.flatMap((b) => [b.from, b.to]),
     ...curve(shape.mouth.curve),
-    ...(shape.hair ? [shape.hair.arcFrom, shape.hair.arcTo, ...curve(shape.hair.edge)] : []),
+    ...(shape.hair ? [shape.hair.arcFrom, shape.hair.arcTo, ...shape.hair.fringe] : []),
   ];
 }
 
-/** The hair's outline: along the top of the head, then back along the curved edge. */
+/** The hair's outline: along the top of the head, then back through the fringe's tufts. */
 export function hairPath(hair: NonNullable<FaceShape["hair"]>): string {
-  const { arcFrom, arcTo, edge } = hair;
-  return `M ${arcFrom.x} ${arcFrom.y} A ${R} ${R} 0 0 1 ${arcTo.x} ${arcTo.y} Q ${edge.control.x} ${edge.control.y} ${edge.to.x} ${edge.to.y} Z`;
+  const { arcFrom, arcTo, fringe } = hair;
+  const tufts = fringe.map((p) => `L ${p.x} ${p.y}`).join(" ");
+  return `M ${arcFrom.x} ${arcFrom.y} A ${R} ${R} 0 0 1 ${arcTo.x} ${arcTo.y} ${tufts} Z`;
 }
 
 export const curvePath = (c: Curve) => `M ${c.from.x} ${c.from.y} Q ${c.control.x} ${c.control.y} ${c.to.x} ${c.to.y}`;

@@ -6,7 +6,10 @@ import { curvePath, DEFAULT_FACE, faceShape, hairPath, type Expression, type Fac
 import {
   avatarShape,
   BUST_VIEWBOX,
-  musclePath,
+  cropFor,
+  deltoidPath,
+  limbPath,
+  PEC_STROKE,
   pecPath,
   strokeFor,
   torsoPath,
@@ -47,7 +50,10 @@ type Props = {
   look?: AvatarLook;
   /** Height in px; the width follows the drawing's proportions. */
   height?: number;
-  /** "bust": head and shoulders only, for small sizes like leaderboard rows. */
+  /**
+   * "bust": head and shoulders only. The default (cropFor) is "bust" at SMALL_AVATAR_HEIGHT or less
+   * (leaderboard rows, about 40 px), where a full body is too small to read, and "full" above.
+   */
   crop?: "full" | "bust";
   /** The stage's name, for screen readers ("Your avatar, Regular stage"). */
   stageName?: string;
@@ -55,7 +61,8 @@ type Props = {
   scheme?: ColorScheme;
 };
 
-export function Avatar({ look = ROOKIE_LOOK, height = 140, crop = "full", stageName, scheme }: Props) {
+export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, scheme }: Props) {
+  const view = cropFor(height, crop);
   const current = useTheme().colors;
   const c = scheme ? palettes[scheme] : current;
 
@@ -64,8 +71,8 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop = "full", stageN
   const face = faceShape(look.face, look.expression);
   const skin = face.skinTone ? SKIN_TONES[face.skinTone] : null;
 
-  const vbY = crop === "bust" ? BUST_VIEWBOX.y : 0;
-  const vbHeight = crop === "bust" ? BUST_VIEWBOX.height : VIEWBOX.height;
+  const vbY = view === "bust" ? BUST_VIEWBOX.y : 0;
+  const vbHeight = view === "bust" ? BUST_VIEWBOX.height : VIEWBOX.height;
   const width = (height * VIEWBOX.width) / vbHeight;
   const sw = strokeFor(height, vbHeight);
   const line = { stroke: c.ink, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" } as const;
@@ -73,14 +80,15 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop = "full", stageN
   const featureColor = skin ? skin.feature : c.ink;
   const featureLine = { ...line, stroke: featureColor, strokeWidth: sw * 0.75 };
 
-  const limb = (l: Limb, key: string) => (
-    <G key={key}>
-      <Polyline points={l.joints.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" {...line} />
-      {l.muscles.map((m, i) => (
-        <Path key={i} d={musclePath(m)} {...outlined} />
-      ))}
-    </G>
-  );
+  // A bare limb is its bone; a muscled one is one continuous outline (no seams at the joints).
+  const limb = (l: Limb, key: string) => {
+    const outline = limbPath(l);
+    return outline ? (
+      <Path key={key} d={outline} {...outlined} />
+    ) : (
+      <Polyline key={key} points={l.joints.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" {...line} />
+    );
+  };
 
   return (
     <Svg
@@ -102,7 +110,9 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop = "full", stageN
       ) : (
         <G>
           <Path d={torsoPath(shape.torso)} {...outlined} />
-          {pecPath(shape.torso) ? <Path d={pecPath(shape.torso)!} fill="none" {...line} /> : null}
+          {pecPath(shape.torso) ? (
+            <Path d={pecPath(shape.torso)!} fill="none" {...line} strokeWidth={sw * PEC_STROKE} />
+          ) : null}
         </G>
       )}
 
@@ -125,7 +135,7 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop = "full", stageN
       ) : null}
       {shape.arms.map((l, i) => limb(l, `arm${i}`))}
       {shape.deltoids.map((d, i) => (
-        <Circle key={i} cx={d.cx} cy={d.cy} r={d.r} {...outlined} />
+        <Path key={i} d={deltoidPath(d)} {...outlined} />
       ))}
       {shape.hands.map((h, i) => (
         <Circle key={i} cx={h.cx} cy={h.cy} r={h.r} {...outlined} fill={skin ? skin.fill : c.bg} />

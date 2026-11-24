@@ -1,13 +1,23 @@
 import { BODY_PARTS, type BodyPart } from "@levelup/shared";
 import {
   avatarShape,
+  bulgeWidth,
+  cropFor,
+  deltoidPath,
   FRONT_LOAD,
   growth,
   HEAD,
+  limbPath,
+  muscleEdges,
+  MUSCLE_SAMPLES,
+  pecPath,
   ZERO_DEVELOPMENT,
   type AvatarShape,
   type Development,
+  type Muscle,
 } from "./avatar-shape";
+
+const widths = (m: Muscle) => [m.halfWidth, m.startWidth, m.endWidth, m.flatWidth];
 
 /** Every size a part owns (its muscles' widths and radii), so tests can tell which part changed. */
 function sizes(shape: AvatarShape): Record<BodyPart, number[]> {
@@ -17,8 +27,8 @@ function sizes(shape: AvatarShape): Record<BodyPart, number[]> {
     back: [torso?.shoulderHalf ?? 0],
     core: [torso?.waistHalf ?? 0],
     shoulders: shape.deltoids.map((d) => d.r),
-    arms: shape.arms.flatMap((a) => a.muscles.map((m) => m.halfWidth)),
-    legs: shape.legs.flatMap((l) => l.muscles.map((m) => m.halfWidth)),
+    arms: shape.arms.flatMap((a) => a.muscles.flatMap(widths)),
+    legs: shape.legs.flatMap((l) => l.muscles.flatMap(widths)),
   };
 }
 
@@ -139,5 +149,106 @@ describe("growth: the front-loaded size mapping", () => {
   it("keeps 0 as lines only: any development above 0 draws a muscle, 0 draws none", () => {
     expect(avatarShape(withPart("arms", 0)).arms[0].muscles).toEqual([]);
     expect(avatarShape(withPart("arms", 0.001)).arms[0].muscles).toHaveLength(2);
+  });
+});
+
+describe("muscles bulge on one side (a cartoon muscle, not a symmetric spindle)", () => {
+  const strong = avatarShape({ chest: 0.7, back: 0.7, shoulders: 0.7, arms: 0.7, core: 0.5, legs: 0.7 });
+  const all = [...strong.arms, ...strong.legs].flatMap((l, i) =>
+    l.muscles.map((m) => ({ m, bodySide: i % 2 === 0 ? -1 : 1 })),
+  );
+
+  /** Signed distance of `p` from the muscle's bone, positive on its bulge side. */
+  const offset = (m: Muscle, p: { x: number; y: number }) => {
+    const dx = m.to.x - m.from.x;
+    const dy = m.to.y - m.from.y;
+    const length = Math.hypot(dx, dy);
+    return (((p.x - m.from.x) * -dy + (p.y - m.from.y) * dx) / length) * m.bulge;
+  };
+
+  it("the bulging edge is all on its side, the flat edge all on the other, at flatWidth", () => {
+    for (const { m } of all) {
+      const { bulging, flat } = muscleEdges(m);
+      for (const p of bulging) expect(offset(m, p)).toBeGreaterThan(0);
+      for (const p of flat) expect(offset(m, p)).toBeCloseTo(-m.flatWidth, 6);
+      // Asymmetric: the bulge reaches much further from the bone than the flat side.
+      expect(m.halfWidth).toBeGreaterThan(1.5 * m.flatWidth);
+    }
+  });
+
+  it("bulges away from the body (outward)", () => {
+    for (const { m, bodySide } of all) {
+      const { bulging } = muscleEdges(m);
+      const i = Math.round(m.peak * MUSCLE_SAMPLES);
+      const boneX = m.from.x + (m.to.x - m.from.x) * (i / MUSCLE_SAMPLES);
+      expect(Math.sign(bulging[i]!.x - boneX)).toBe(bodySide);
+    }
+  });
+
+  it("peaks where each muscle should: bicep 40% up from the elbow, forearm near the elbow, thigh in the upper half, calf in the upper third", () => {
+    const [upper, fore] = strong.arms[0].muscles;
+    const [thigh, calf] = strong.legs[0].muscles;
+    expect(upper!.peak).toBeCloseTo(0.6); // from the shoulder: 40% from the elbow
+    expect(fore!.peak).toBeLessThan(0.35);
+    expect(thigh!.peak).toBeLessThan(0.5);
+    expect(calf!.peak).toBeLessThanOrEqual(1 / 3);
+    for (const { m } of all) {
+      let best = 0;
+      for (let i = 0; i <= 100; i++) if (bulgeWidth(m, i / 100) > bulgeWidth(m, best / 100)) best = i;
+      expect(Math.abs(best / 100 - m.peak)).toBeLessThanOrEqual(0.01);
+      expect(bulgeWidth(m, m.peak)).toBeCloseTo(m.halfWidth, 6);
+    }
+  });
+
+  it("limbs have no gaps at the elbow or knee: segments share the joint's widths, and the outline is one path", () => {
+    for (const limb of [...strong.arms, ...strong.legs]) {
+      const [a, b] = limb.muscles;
+      expect(a!.endWidth).toBe(b!.startWidth);
+      expect(a!.flatWidth).toBe(b!.flatWidth);
+      expect(a!.bulge).toBe(b!.bulge);
+      expect(limbPath(limb)!.match(/M /g)).toHaveLength(1);
+    }
+    expect(limbPath(avatarShape(ZERO_DEVELOPMENT).arms[0])).toBeNull(); // a bare limb: draw the bone
+  });
+
+  it("the bulge grows with development at every point along the muscle", () => {
+    for (const part of ["arms", "legs"] as const) {
+      let previous: Muscle[] = avatarShape(withPart(part, 0.01)).arms[0].muscles;
+      if (part === "legs") previous = avatarShape(withPart(part, 0.01)).legs[0].muscles;
+      for (let d = 0.05; d <= 1.0001; d += 0.05) {
+        const shape = avatarShape(withPart(part, d));
+        const current = part === "arms" ? shape.arms[0].muscles : shape.legs[0].muscles;
+        current.forEach((m, i) => {
+          for (let t = 0; t <= 1; t += 0.1)
+            expect(bulgeWidth(m, t)).toBeGreaterThanOrEqual(bulgeWidth(previous[i]!, t));
+        });
+        previous = current;
+      }
+    }
+  });
+});
+
+describe("deltoids, torso and pecs", () => {
+  it("a deltoid is a dome (an arc over the top), not a full circle", () => {
+    const shape = avatarShape(withPart("shoulders", 0.6));
+    for (const d of shape.deltoids) expect(deltoidPath(d)).toMatch(/^M [\d.]+ [\d.]+ A /);
+    expect(shape.deltoids.map((d) => d.side)).toEqual([-1, 1]);
+  });
+
+  it("the pec line is drawn only when chest is above 0", () => {
+    const noChest = avatarShape(withPart("back", 0.5)).torso;
+    const chest = avatarShape(withPart("chest", 0.5)).torso;
+    expect(noChest.kind === "shape" && pecPath(noChest)).toBeNull();
+    expect(chest.kind === "shape" && pecPath(chest)).toEqual(expect.any(String));
+  });
+});
+
+describe("cropFor", () => {
+  it("draws the head-and-shoulders crop at small sizes (40 px leaderboard rows) and the full body above", () => {
+    expect(cropFor(40)).toBe("bust");
+    expect(cropFor(64)).toBe("bust");
+    expect(cropFor(65)).toBe("full");
+    expect(cropFor(220)).toBe("full");
+    expect(cropFor(40, "full")).toBe("full"); // the caller can still ask (the UI preview does)
   });
 });

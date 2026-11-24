@@ -1,4 +1,4 @@
-import { HEAD, type AvatarShape, type Muscle, type Point } from "./avatar-shape";
+import { HEAD, type AvatarShape, type Point } from "./avatar-shape";
 
 // The stage extras (docs/ARCHITECTURE.md, "Avatar prototype"): a layer on top of the body,
 // built FROM the body's numbers so the outfit and the wristbands fit any development.
@@ -125,7 +125,7 @@ export function extrasShape(shape: AvatarShape, extras: readonly string[]): Extr
 }
 
 /** A band across a bone: a rectangle `halfWidth` either side of it. */
-function band({ from, to, halfWidth }: Muscle): string {
+function band({ from, to, halfWidth }: { from: Point; to: Point; halfWidth: number }): string {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.hypot(dx, dy);

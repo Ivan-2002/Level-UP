@@ -21,8 +21,8 @@ import { createStyles, useTheme } from "@/theme/use-theme";
 
 // The UI preview's Avatar section (development only): judge the stickman's shapes without
 // logging workouts. A slider per body part, a stage picker, the face's default and one
-// alternative per slot, the expression, both themes side by side, both sizes (40 px as a
-// full body and as a head-and-shoulders crop), and the first 12 weeks of a real player.
+// alternative per slot, the expression, both themes side by side, both sizes (40 px is the
+// head-and-shoulders crop), and the first 12 weeks of a real player.
 
 /**
  * The stages and their cumulative extras, as Milestone 6a's migration will insert them into
@@ -85,11 +85,11 @@ export function AvatarPreview() {
           >
             <Avatar look={look} height={220} scheme={scheme} stageName={stageName} />
             <View style={styles.smallRow}>
+              {/* 40 px is drawn as the head-and-shoulders crop by default (cropFor). */}
               <Avatar look={look} height={40} scheme={scheme} stageName={stageName} />
-              <Avatar look={look} height={40} crop="bust" scheme={scheme} stageName={stageName} />
             </View>
             <Text variant="caption" style={{ color: palettes[scheme].inkMuted }}>
-              {scheme} · 220 px · 40 px full and crop
+              {scheme} · 220 px · 40 px
             </Text>
           </View>
         ))}
