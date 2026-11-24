@@ -1,6 +1,6 @@
 # Level Up — Project Context & Architecture
 
-_Last updated: 2026-11-16 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
+_Last updated: 2026-11-24 · Source of truth for architecture decisions. Keep this file in sync when decisions change._
 
 ## Vision & MVP scope
 
@@ -125,7 +125,7 @@ These tables cover the MVP. Better Auth creates and owns its own user, session a
 
 | Table | Key fields | Purpose |
 | --- | --- | --- |
-| profile | user_id, username (citext: unique ignoring case), total_xp (cached), weight_unit (kg or lb), time_zone (IANA, from the phone), celebrated_level (the highest level-up shown, on any phone; only goes up), created_at (sign-up: decides the warm-up week) | Game identity for each user |
+| profile | user_id, username (citext: unique ignoring case), total_xp (cached), weight_unit (kg or lb), time_zone (IANA, from the phone), celebrated_level (the highest level-up shown, on any phone; only goes up), created_at (sign-up: decides the warm-up week), face (JSONB slot → preset key, validated by the shared `faceSchema`; Milestone 6e) | Game identity for each user |
 | bodyweight_entry | id, user_id, kg (3 decimals), measured_on (date), received_at (server time of the last write, Milestone 5) | Bodyweight history. XP uses the entry in effect on the workout's date (75 kg fallback when there is none), limited by the XP bodyweight rule. The current weight per day (one row per date): what the player sees, and what PRs and volume use |
 | bodyweight_receipt | id, user_id, kg, measured_on, received_at | Every bodyweight write the server received, append-only (never updated or deleted), like `xp_event`. The XP bodyweight rule walks these, ordered and timed by `received_at`; each date's latest receipt is that date's entry |
 | exercise | id, slug, name, muscle_group, body_part, equipment, mechanic (compound or isolation), reps_unit (reps or seconds), suggested_rest_sec, load_factor, bodyweight_ratio, max_plausible_weight_kg, max_plausible_reps (both nullable: null = the equipment × mechanic default), is_custom, owner_id | Predefined library (seeded from `exercise-catalog.ts`, upserted by slug); custom exercises via owner_id. Tuning values are sent to the app for display; the server recomputes |
@@ -135,11 +135,12 @@ These tables cover the MVP. Better Auth creates and owns its own user, session a
 | workout | id, user_id, client_id (unique per user), routine_id (optional link; cleared if the routine is deleted), name, started_at, finished_at, xp_held_back, xp_held_back_reason (daily_cap or too_old) | One gym session; client_id makes "Finish" safe to retry. History is ordered by started_at. The held-back pair records the set XP the workout didn't get and why (stored, because the cap's result depends on what else arrived that day); a CHECK constraint keeps it consistent (0 ⇔ no reason, never negative) |
 | workout_exercise | id, workout_id, exercise_id, order, rest_sec | Which exercises were done, in order (exercises in history can't be deleted) |
 | workout_set | id, workout_exercise_id, reps, weight_kg (3 decimals), set_order, completed_at, is_flagged, flag_reason, xp_tag | Each set performed. weight_kg is per dumbbell for dumbbell lifts and added weight for bodyweight exercises; timed exercises (plank) log seconds in reps, up to 600 (`HOLD_MAX_SEC`; reps exercises up to 100, `REPS_MAX`). Finish writes is_flagged (implausible: 0 XP, not a PR), flag_reason (a `FLAG_REASONS` code, including above_history) and xp_tag (a `SET_TAGS` code: the label next to the set's XP) from the shared scoring; codes, not database enums, so a new one needs no migration. Stored rather than recomputed so the summary always explains the XP the ledger recorded, even after an earlier workout syncs late or a bodyweight entry changes |
-| xp_event | id, user_id, amount, source, source_id, body_part, earned_on (local date), created_at | The XP ledger: one row per XP gain (one per completed set for workout XP). Sources: `workout_set`, `weekly_goal`, `streak_milestone`, and `dev_grant` (test XP added by hand in development; never in production). Unique on (source, source_id), so a repeated request can never award XP twice. `earned_on` is the local calendar day the workout STARTED (set XP; the daily cap's day), or for a bonus the local start day of the workout that met the goal (`weekly_goal.met_by_workout_id`), else the week's Monday; `created_at` is only when the server received it. Indexed on (user_id, earned_on). Added in Milestone 5 with a backfill from each row's workout or week, tested against the shared `localDate` |
+| xp_event | id, user_id, amount, source, source_id, body_part, earned_on (local date), stimulus (0 to 1 for `workout_set` rows: the set's growth stimulus, its effort; Milestone 6), created_at | The XP ledger: one row per XP gain (one per completed set for workout XP). Sources: `workout_set`, `weekly_goal`, `streak_milestone`, and `dev_grant` (test XP added by hand in development; never in production). Unique on (source, source_id), so a repeated request can never award XP twice. `earned_on` is the local calendar day the workout STARTED (set XP; the daily cap's day), or for a bonus the local start day of the workout that met the goal (`weekly_goal.met_by_workout_id`), else the week's Monday; `created_at` is only when the server received it. Indexed on (user_id, earned_on). Added in Milestone 5 with a backfill from each row's workout or week, tested against the shared `localDate`. `stimulus` drives body-part development (see "Avatar prototype") |
 | weekly_goal | id, user_id, week_start (local Monday), kind (goal or warm_up), target, days_trained, met, streak_after, met_by_workout_id, closed_at | One row per player per week, created lazily (no cron job). Unique on (user_id, week_start). Bonuses use its id as the ledger source_id |
 | user_achievement | user_id, key (e.g. streak_12), source_id, awarded_at | Badges, awarded once each (primary key user_id + key) |
-| avatar_stage | key, name, level_required | Stages of the avatar (the extras each level unlocks), stored as data and inserted by their migration. `key` ("regular") is also the key the app draws the stage's extras from. A player's stage is derived from their level on every read, never stored on the profile; the profile and the Finish summary carry it |
-| cosmetic | id, slot, name, unlock_rule | Later: unlockable items (hair, outfit, pose) |
+| avatar_stage | key, name, level_required, extras (text array, cumulative: Legend has all four; Milestone 6) | Stages of the avatar (the extras each level unlocks), stored as data and inserted by their migration. The app draws the `extras` it knows and ignores unknown ones; `key` is a stable id, not what the app draws from. A player's stage is derived from their level on every read, never stored on the profile; the profile and the Finish summary carry it |
+| body_part_start | user_id, body_part, start (0 to 0.5), window_ends_on | The starting shape per part, calibrated from the lifts in that part's first 14 days and frozen after (Milestone 6d) |
+| cosmetic | id, slot, name, unlock_rule | Later: unlockable items (hair, outfit, pose). Same slot + key shape as `profile.face`, so free face presets can become cosmetic rows with an always-unlocked rule without a data migration. Basic hairstyles are free face presets; special hairstyles can be unlockable cosmetics later, in the same `hair` slot, shown on the Customize screen next to the free ones |
 
 **XP source:** effort. Until Milestone 5 workout XP was volume (sets × reps × weight); from Milestone 5 each set earns XP for how strong an effort it was: its estimated 1RM, weighted by how close to failure it was (see "XP per completed set"), plus a flat bonus for meeting the weekly goal and bigger ones at streak milestones. So no exercise is penalised for its natural load, each set uses an effective load: weight + (bodyweight × the exercise's bodyweight_ratio), multiplied by the exercise's load_factor. A push-up counts part of your bodyweight, a pull-up counts all of it, and a light isolation lift like a lateral raise gets a higher load_factor so a hard set earns about as much as a hard squat set. Both values are tuned per exercise in the database. The load is also relative to bodyweight (softened with a square root). Later, training several muscle groups earns more than repeating one.
 
@@ -205,34 +206,126 @@ Level 2 at 400 XP, level 5 at about 7,900, level 10 at about 45,000, level 20 at
 
 ## Avatar prototype: a stickman that grows
 
-The first avatar is a stickman drawn in code with `react-native-svg`. No art assets are needed, and growth is just numbers: limb thickness, shoulder width and head size change with the stage. Later we can swap the renderer for layered 2D art (and possibly 3D after that) without changing the data model.
+The Milestone 6 avatar is a cartoon stickman drawn in code with `react-native-svg` (decided 2026-11-24). No art assets are needed, and growth is just numbers. Rive is the likely long-term renderer (poses and animation for leaderboards and avatar events; Ivan builds a Rive character in parallel), but it needs hand-rigging in the Rive editor and a development build instead of Expo Go, so it isn't used yet. Swapping later changes only the inside of `Avatar`: the contract below is the same set of inputs a Rive state machine will take.
 
-**Each body part grows on its own.** Every exercise belongs to a body part (chest, back, shoulders, arms, core, legs), and its XP also counts toward that part. Skip leg day and the stickman's legs stay thin while the arms grow.
+**The look:**
 
-**Level unlocks, body-part XP shapes** (decided 2026-11-16). The two never mix:
+- A big round head with a simple face. The head is the **same size at every stage, development and face**; only the body changes.
+- Outline style: lines in `ink` at every stage. Muscle shapes are filled with the background colour, so a bulging arm covers the line behind it. Works in both themes.
+- **A body part at development 0 is a single line.** As development rises it gains outlined muscle shapes: shoulders (deltoid caps), arms (upper arm and forearm), chest and back (torso width and V-taper, front view), core (waist), legs (thigh and calf). A player who skips legs keeps stick legs under a big upper body; that contrast is intended. **Core at 0 is drawn as a normal narrow waist**, not a line: almost nobody logs core work (7 of the 8 honest simulated players), so a line there would read as missing rather than untrained.
+- **Size is front-loaded:** `avatarShape` maps development to size as development^0.6 (the exponent tuned with the UI preview), so 0 to 0.25 already covers 44% of a muscle's growth. A beginner needs about 14 weeks to reach 0.25 (below); the drawing, not the rule, makes that early change visible. A test pins that the mapping is monotonic and that 0 is still lines only.
+- Stage extras are a separate layer drawn on top: Regular wristbands, Athlete sports outfit, Champion headband, Legend cape (filled `purpleSoft`, outlined `purple`: a stage is progress). **No glow** (tokens forbid it).
+- It must read at about 40 px tall (future leaderboard rows, where the head and face carry it) and about 220 px (Home). Whether 40 px is the full body or a head-and-shoulders crop is decided in 6b with the preview.
 
-- **Overall level** (from total XP) unlocks things: stages, titles, cosmetics, the headband, the cape, the glow. It never makes a limb bigger.
-- **Body shape** comes only from body-part XP. A player who only trains upper body has a high level, a cape and thin legs.
-- **Untrained parts shrink slowly.** After a two-week grace period, a body part's development declines slowly, so a few weeks off cost a little and only about a year without training brings it back to the starting shape. XP and level are never lost; only the shape changes. Calculated on read from the ledger's dates (no scheduled job), like the weekly goal. The exact decay curve is set in Milestone 6 with the simulation.
-- **Starting shape (open, decided in Milestone 6):** an experienced lifter shouldn't start as a thin stickman. Proposal: calibrate the starting shape from the first two weeks of logged lifts relative to bodyweight, rather than a self-reported baseline, which anyone could exaggerate. Either way it sets the starting shape only; everyone starts at level 1.
+**The avatar contract** (what `Avatar` takes, today and with Rive later):
 
-- Body-part XP is tracked in the ledger (`xp_event.body_part`, with `earned_on` as its date), so it can be rebalanced like overall XP. Shrinking needs to know WHEN each part was trained, so a plain total per part isn't enough: development is calculated from the dated rows, and any cache holds the value plus the date it was last trained (Milestone 6).
-- The avatar takes one development value per body part (for example 0 to 1) and draws each limb from it. The same values will drive the layered 2D or 3D art later.
+- `development`: one value from 0 to 1 for each body part (chest, back, shoulders, arms, core, legs).
+- `extras`: a list of extra keys (`["wristbands", "outfit"]`), cumulative, from the player's stage (`avatar_stage.extras`). The app draws the extras it knows and **ignores unknown ones**, so a new extra or stage needs no release to be safe.
+- `face`: `{ eyes, brows, mouth, hair, skinTone }`, each a preset key (below).
+- `lean`: reserved for the endurance look (a leaner, stamina build). Always 0 in Milestone 6: nothing draws from it yet, but the shape function accepts it, and a test pins that 0 draws today's figure.
+- `expression` (optional, system-driven): neutral, proud on the level-up screen, later others. It modifies the chosen face (brow angle, mouth); it isn't a player choice.
+- **Never a level, and not the stage key.** The stage name is used only for the screen-reader label ("Your avatar, Regular stage").
+
+**The face is identity, not progress** (decided 2026-11-24):
+
+- Chosen by the player, free, editable any time; it never comes from level or stage (stage extras stay earned).
+- Each slot has a default, and an unknown key falls back to it, so an older app never breaks on a newer preset.
+- Every preset is drawn inside the head circle (a test checks it), so no preset changes the head or overflows it at 40 px.
+- `skinTone` is an optional fill for the head and hands; the default is the outline look (filled with the background). A few tones, no gendered preset sets. The tones are colour tokens in `theme/tokens.ts`. On a filled head the eyes, brows and mouth use a feature colour picked per tone (at least 3:1 against it, in `contrast.test.ts`), because `ink` is near-white in the dark theme; the outline stays `ink`.
+- Stored on the profile as slot + key (`profile.face`, e.g. `{ "hair": "short", "brows": "flat" }`), the same shape `cosmetic` rows will have, so a free preset can later become a cosmetic with an always-unlocked rule without a data migration.
+- Proposed presets (default first; finalised in 6e): eyes dot, round, sleepy, narrow; brows none, flat, arched, thick; mouth smile, line, grin, smirk; hair none (the classic bald stickman), short, side part, curly, buzz; skinTone none, tone 1 to 5 (light to dark).
+- Chosen on the **Customize screen**: its first section is "Face"; it opens from the avatar on Home and is embedded in Create character. When cosmetics arrive, the same screen gains earned items next to the free ones.
+
+**Drawing is pure functions:** `avatarShape(development, lean)` returns plain numbers (widths, positions, radii); the face and the extras are drawn from their own pure functions, the extras from the body's numbers so the outfit fits any shape. Unit-tested: at 0 every part is lines only (core: the narrow waist), each part grows independently of the others and is monotonic in its own value, the head never changes. The component only renders those numbers. The UI preview has an "Avatar" section to judge the shapes without logging workouts.
+
+**Level unlocks, the ledger's body-part rows shape** (decided 2026-11-16, reworded 2026-11-24). The two never mix:
+
+- **Overall level** (from total XP) unlocks things: stages, titles, cosmetics, the wristbands, the outfit, the headband, the cape. It never makes a limb bigger.
+- **Body shape comes only from the body-part rows of the ledger.** A player who only trains upper body has a high level, a cape and thin legs.
 - To encourage balanced training, the home screen points out the weakest body part, and the later variety bonus gives extra XP for training neglected parts.
 
-| Stage | Unlocks at | Look |
+**Development: growth from hard sets** (Milestone 6). Every exercise belongs to one body part. A part grows from its **training dose**, the hard sets it got, not from the XP of those sets: XP is effort × strength, so on XP a strong lifter's set would count three times a beginner's, and beginners would grow slowest (legs to 0.25: 25 weeks on XP, 14 on hard sets).
+
+- **Each set's stimulus is its effort** (0 to 1, from `scoreSessionSets`): a hard set 1, an easy set its effort, warm-ups, flagged sets and sets beyond the 10-set limit 0, timed sets 1. Finish stores it on the ledger row (`xp_event.stimulus`) next to `amount` and `body_part`. Milestone 7's correction rows carry a signed stimulus like their signed XP.
+- **The curve** (`DEVELOPMENT` in `packages/shared/src/development.ts`), walked per part week by week (Monday to Sunday, local weeks; the current week counts as it fills up):
+
+```
+dose D      = the part's summed stimulus that week
+p_next      = p + (1 − p) × 0.04 × (1 − e^(−D / 8))   // per week: 6 sets 0.53, 10 sets 0.71, 20 sets 0.92 of the maximum step
+development = start + (1 − start) × p                   // start: the starting shape, 0 for most players
+```
+
+- It saturates twice: per week (beyond about 20 hard sets adds almost nothing) and over time. The fastest possible growth (unlimited hard sets every week) reaches 0.5 in 17 weeks, against 18-21 for the advanced players, so fake sets barely speed it up. Logging warm-ups changes nothing. Untrained parts stay at their start whatever the level.
+- Simulated weeks to 0.25 / 0.5 / 0.9, and the value after a year (6a's `sim` reproduces this table):
+
+| Player | Part (hard sets a week) | 0.25 | 0.5 | 0.9 | 1 yr |
+| --- | --- | --- | --- | --- | --- |
+| Beginner 75 kg, 2×/wk full body | chest, back, legs (6) | 14 wk | 33 wk | 108 wk | 0.67 |
+| | arms (4) | 19 | 44 | 146 | 0.56 |
+| | shoulders, core (0) | stay at the start | | | 0 |
+| Intermediate 80 kg, 3×/wk PPL (Light 60 kg identical) | legs (20) | 8 | 19 | 62 | 0.86 |
+| | back (13) | 9 | 22 | 71 | 0.82 |
+| | shoulders (10) | 10 | 24 | 80 | 0.78 |
+| | chest (9) | 11 | 26 | 85 | 0.76 |
+| | arms (6) | 14 | 33 | 108 | 0.67 |
+| Advanced 90 / 100 kg, 4×/wk | legs (39) | 8 | 18 | 58 | 0.88 |
+| | back (21) | 8 | 19 | 63 | 0.85 |
+| | chest, shoulders (16) | 9 | 21 | 68 | 0.83 |
+| | arms (11) | 10 | 24 | 78 | 0.79 |
+| Bodyweight-only, 3×/wk | core (18) | 8 | 20 | 64 | 0.85 |
+| | chest, back (12) | 10 | 22 | 73 | 0.81 |
+| | arms, legs (9) | 11 | 26 | 85 | 0.76 |
+| Rep-range switcher, 3×/wk | chest, back, legs (12) | 10 | 22 | 73 | 0.81 |
+| Heavy beginner 110 kg, 2×/wk | legs (12) / chest, back (6) / arms (4) | 10 / 14 / 19 | 22 / 33 / 44 | 73 / 108 / 146 | 0.81 / 0.67 / 0.56 |
+
+  One workout changes little (an intermediate's legs session: week 1 0 → 0.037, week 12 0.337 → 0.362, week 52 0.852 → 0.857); the first session that trains a part turns its line into a thin muscle.
+
+**Untrained parts shrink slowly.** For 14 days after the part's last trained day (a day with at least 1 stimulus for it) nothing happens; then `p` falls in a straight line by its value at the start of the decline ÷ 351 per day, back to the starting shape exactly a year after the last training. Training again stops the decline, and growth continues from there. XP and level are never lost; only the shape changes. An intermediate's legs (0.857 after a year): 2 weeks off −0.6%, 3 −2.6%, 4 −4.6%, 8 −12.5%, 12 −20.5%, 26 −48%, 52 back to the start (6a's `sim` reproduces this too). The returning player is back at 0.47 after 17 weeks of training and 0.86 after a year.
+
+- Calculated on read from the dated rows (`earned_on`, `stimulus`, `body_part`) up to the player's local today: no scheduled job, like the weekly goal. A plain total per part isn't enough, because shrinking needs to know WHEN each part was trained.
+- If the 400 ms budget of the two-year performance test is exceeded, the next step is a stored row per player and part (`progress`, `as_of_week`, `last_trained_on`, `progress_at_break`) updated at Finish, decayed on read; a workout synced late into an older week recomputes from the rows.
+
+**Starting shape for experienced lifters** (Milestone 6, 6d). Calibrated from logged lifts, not a self-reported baseline (free to exaggerate); it sets the starting shape only, and everyone starts at level 1.
+
+```
+ratio = best effective estimated 1RM ÷ bodyweight among the part's sets in its 14-day window
+        (effective = (kg + bodyweight × bodyweight_ratio) × load_factor, Epley; the XP bodyweight on the set's date)
+r     = ratio ÷ the part's benchmark (STARTING_SHAPE.benchmarks: the simulated intermediate's ratio; core from the catalog's hanging leg raise)
+start = 0.5 × clamp((r − 0.6) / 0.8, 0, 1)    // r 0.6 → 0, 1.0 → 0.25, 1.4+ → 0.5
+```
+
+- **Per part:** each part's window is the 14 days from its first trained day. **Per-part benchmarks**, because the load factors don't equalise XP exactly (a deadlift set earns about 1.5 times a bench set, so one benchmark would start every back at the maximum). **Fully relative to bodyweight**, so a 60 kg lifter as strong for their size as an 80 kg one starts the same.
+- Flagged and jump-capped sets are left out. Calculated at Finish by progression while the window is open, stored in `body_part_start`, only rising, then frozen (a snapshot by nature; recomputing later would let a retune move old starts). The cap of 0.5 is what an honest intermediate reaches after about 5 months.
+- Prototype: beginners and the heavy beginner start at 0, the intermediate at 0.25 per trained part, the advanced players at about 0.5, the bodyweight-only player at 0 to 0.3.
+- **What could be gamed:** inflated weights in each exercise's first session (no history to jump-cap against: up to 0.5, bounded by the plausibility limits and the cap; cosmetic, so the starting shape must not count as a strength stat without the trust rules); a low bodyweight at sign-up (the known first-entry gap, bounded by the 40 kg clamp and the cap); an exercise with a too-generous `load_factor` (a tuning bug, fixed in the catalog); lifting light on purpose (only hurts the player); new accounts (level 1 every time).
+- While a window is open, Home says so in one line: "Setting your starting shape from your lifts: 9 days left".
+
+**Where the avatar comes from (API):**
+
+- `GET /v1/avatar` (progression module: it owns the ledger and the growth rule): `{ stage, stages, development, lean, parts: { <part>: { lastTrainedOn } } }`, evaluated at the player's local today. `stages` lets the level-up screen draw the old stage from Home. Cached on the phone per player, refetched when a workout syncs. Not on the profile: `users → avatar` and `progression → users` already exist, so a ledger rule in the profile would be a dependency cycle, and development changes on every Finish and with the calendar.
+- The Finish summary and `GET /v1/workouts/:id/summary` carry `avatar: { before, after }` (`default(null)`), evaluated at the workout's local day in ledger order, so a repeated Finish returns the same numbers. The summary shows a part only when it grew by at least 1 point (0.01), under "Your avatar grew": the part's name and a small `purple` bar filling from before to after, no percentages (it isn't a body measurement); nothing when no part grew.
+- The profile keeps `stage` (with its `extras`) and gains `face`.
+
+| Stage | Unlocks at | Extras (cumulative, `avatar_stage.extras`) |
 | --- | --- | --- |
-| Rookie | Level 1 | Plain stickman |
-| Regular | Level 4 | Wristbands and a title |
-| Athlete | Level 10 | Sports outfit |
-| Champion | Level 15 | Headband |
-| Legend | Level 20 | Cape and a glow |
+| Rookie | Level 1 | none (plain stickman) |
+| Regular | Level 4 | wristbands (and a title) |
+| Athlete | Level 10 | wristbands, outfit |
+| Champion | Level 15 | wristbands, outfit, headband |
+| Legend | Level 20 | wristbands, outfit, headband, cape |
 
 Stages add extras only; limb size, shoulder width and chest come from body-part development. Stage levels were rechecked against the level curve in Milestone 5 (decision log, 2026-11-20).
 
-- The `Avatar` component takes a stage config (extras) and one development value per body part, never a level, so the art and the rules stay separate.
-- Stage thresholds live in the `avatar_stage` table and can be tuned without a release. Tune them **down, never up**: a stage is derived from the level, so raising a threshold takes the stage away from players who have it.
-- A small growth animation plays on the level-up screen when the stage changes.
+- Stage thresholds and extras live in the `avatar_stage` table and can be tuned without a release. Tune thresholds **down, never up**: a stage is derived from the level, so raising a threshold takes the stage away from players who have it.
+- **Level-up screen:** when the stage changes, it animates from the old look to the new one (the new extras appearing, the proud expression) instead of fading in the same figure. With reduce motion on, it draws the final state.
+- **Home:** the avatar and the level bar move to the top together as ONE hero element, not a Card (Home was a stack of identical cards with nothing leading). The username sits with the level; the "Welcome back," line goes. The rest of Home stays below.
+
+**Follow-ups for the beta** (decided 2026-11-24 to wait for real data):
+
+- **Muscle memory:** faster regrowth while below a part's previous peak (today regrowth is as fast as the first time).
+- **Token maintenance:** one hard set every 14 days keeps a part's shape (it resets the grace period). Revisit before development becomes an avatar-event stat (e.g. needing 2 or more hard sets a week).
+- **Sex and strength standards:** one benchmark per part calibrates most women's starting shape lower. Options: an optional "compare me with" setting, or lower benchmarks for everyone.
+- **Secondary stimulus:** squats and deadlifts could give core a small share (e.g. 0.3) through a new exercise field. Not in Milestone 6.
 
 ## Production readiness plan
 
@@ -278,10 +371,16 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: finishing a workout shows XP gained and, when earned, a level-up; two Finishes sent at the same moment can't exceed the cap; an offline workout synced days later counts against the day it was done.
 6. **Stickman avatar.** Stage extras driven by level, body shape driven only by body-part XP, slow shrinking of untrained parts, and the starting-shape decision.
    - Done when: the avatar gains its extras at each stage level, untrained body parts stay thin whatever the level, and a part untrained for months visibly shrinks.
-   - Home: the avatar and the level bar (added below the workout cards in Phase 4e) move together to the top of Home.
+   - Home: the avatar and the level bar (added below the workout cards in Phase 4e) move together to the top of Home as one hero element (not a Card), with the username next to the level.
+   - Rules: "Avatar prototype" above (planned and reviewed 2026-11-24). Five PRs, in this order:
+     - **6b, drawing and preview:** `avatarShape` (front-loaded sizes), the face and extras functions, `Avatar` on the contract, and the UI preview's Avatar section (a slider per part, a stage picker, the default face and one alternative per slot with toggles, an expression toggle, 220 px and 40 px as full body and head-and-shoulders crop side by side, a "first 12 weeks" strip, both themes). Done when: the shape tests pass and Ivan approves the look on a phone at both sizes in both themes and picks the 40 px variant.
+     - **6a, rules, API and simulation:** `development.ts`, the `stimulus` and `extras` migrations, Finish writing stimulus, `GET /v1/avatar`, the summaries' `avatar.before/after`, the performance test, `dev:grant-xp --part --sets --on` (backdated rows), and a property test: over random histories, adding a set with stimulus > 0 never lowers any part's development on any day, across week boundaries and the end of the grace period. `sim` reproduces the development and decay tables in "Avatar prototype" (any difference reported). Done when: a trained part grows, untrained parts stay at 0 after a `dev_grant` to level 20, a part with only rows from 8 months ago is below half its value, the summary is identical on a repeated Finish.
+     - **6c, Home, level-up and summary:** the hero, `useAvatar` (works offline), the level-up's extras animation, the summary's "Your avatar grew" rows. Done when, on a phone: extras appear at each stage level (`dev:grant-xp`), a level-20 grant with no training keeps stick limbs, and a part trained only 8 months ago looks visibly thinner.
+     - **6d, starting shape:** `body_part_start`, the rule, and the Home line while a window is open. Done when: the simulated intermediate starts at about 0.25 per trained part, the advanced players at about 0.5, beginners at 0; flagged and jump-capped sets can't raise it; the Home line appears for a new account and disappears after 14 days.
+     - **6e, the face picker (after 6c):** the Customize screen ("Face" first), from the avatar on Home and embedded in Create character, storing `profile.face`. Done when: a player picks a face at sign-up and changes it later; an unknown key from a newer app falls back to the default on an older one; no preset overflows the head at 40 px.
    - Leave room for endurance: the avatar design must allow an endurance look (a stamina stat, a lean athletic build) next to muscle size, so a runner's or triathlete's avatar looks different from a lifter's rather than just weaker. No endurance code in this milestone; the design and data shapes just mustn't rule it out.
 7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, minimum age at sign-up (13 or 16, to be decided) with an age check and the app store age rating, testers on TestFlight and Google Play internal testing. The XP and bodyweight rules are designed for adults and older teens. Review the daily cap against the testers' real days: in the simulation the biggest honest day with warm-ups logged is 3,086 against the 3,100 cap, a 14 XP margin.
-   - A settings screen: the System check card and Sign out move there from Home.
+   - A settings screen: Sign out moves there from Home (the system check is already development-only since 2026-11-24).
    - Admin view, built from ready-made tools (no app code):
      - a read-only Postgres user for reporting, with no write access to the main database;
      - a hosted chart tool (e.g. Metabase) on that read-only user, with saved queries for: sign-ups per day and week, active players (a workout in the last 7 / 30 days), first workout finished after sign-up, week-2 return, weekly goal met, XP per workout, daily cap hits, and level spread;
@@ -293,6 +392,7 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
      - **The open week is recounted:** an edit or delete in the week that's still open recounts its training days. If the goal is no longer met, the weekly bonus is reversed with a correction row (otherwise logging a fake workout and deleting it after the bonus farms +400 a week); if an edit makes the goal met, the bonus is paid as at Finish. Closed weeks are final, their bonuses and streaks included. "days_trained only ever goes up" stays the rule for time-zone changes, not for edits or deletes.
      - **A correction that lowers XP is always shown**, never a silent drop: "Workout corrected: −120 XP" on the screen where the edit was made, and kept as a line in that workout's details. If it lowers the level or the avatar stage, the notice says so ("Level 6 → 5"). The level can go down: clamping it would break "level is derived from total XP", and the last celebrated level means no second celebration on the way back up.
      - **Limits:** sets can be edited within the 14-day XP window; a workout can be deleted any time (that only ever removes XP).
+     - **Avatar:** correction rows carry a signed `stimulus` per body part, like their signed XP. Editing or deleting a set recalculates that part's starting shape only while its 14-day window is open; a closed window stays frozen.
      - **Not re-scored:** later workouts scored against the mistake keep their XP. If the beta shows it matters, re-scoring the exercise's later workouts in the 12-week window can follow, as upward corrections only.
    - Done when: five real people use it at the gym for two weeks, and I can open the dashboard and see sign-ups, active players and daily cap hits from the beta.
 
@@ -328,6 +428,7 @@ Then: variety bonus, quests, achievements, the rules-based coach, cosmetics, the
 - **Avatar-stat events, for everyday play:** a powerlifting meet, a race or a Hyrox-style event played out between avatars from their stats, with some luck or strategy so the strongest player doesn't always win. Everyone can take part, beginners included.
 - **Real-performance rankings, for bragging rights:** actual best lifts (adjusted for bodyweight with a score such as DOTS, as real powerlifting does) and real race times.
 - **Stats:** strength per body part (Milestone 6 development values), endurance (stamina, endurance milestone) and consistency (streak and weekly goal history). Level is not part of event scoring, so long-time players don't automatically beat stronger newer ones.
+- **Development is not the strength stat:** it measures consistent training (a beginner who trains steadily matches an advanced lifter's development). Strength rankings use relative estimated 1RM instead.
 - **Fairness:** divisions by bodyweight class or a bodyweight-adjusted score, and level brackets so beginners meet beginners. Results are calculated asynchronously at first; real-time head-to-head later, if ever.
 
 **Trust and verification** (decided 2026-11-17). Typed numbers, and numbers typed into a phone's health app, can't be fully verified. The goal is to make cheating not worth it everywhere, and to require proof only where it matters:
@@ -349,6 +450,14 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-24 | The avatar's face is a contract slot now: `face: { eyes, brows, mouth, hair, skinTone }`, each a preset key with a default, unknown keys falling back to it. It is identity, not progress: chosen by the player, free, editable any time, never from level or stage (stage extras stay earned). `expression` stays system-driven and modifies the chosen face. No preset changes the head or leaves it (tested). `skinTone` is an optional head-and-hands fill from colour tokens, with a per-tone feature colour for contrast; no gendered preset sets. Stored on the profile as slot + key (`profile.face`, JSONB, shared `faceSchema`), the shape `cosmetic` rows will use. Chosen on a Customize screen ("Face" first) that opens from the avatar on Home, is embedded in Create character, and later gains earned cosmetics. 6b draws the default and one alternative per slot in the preview; the picker is 6e, after 6c | One more contract input and a profile column before cosmetics exist; in exchange free presets can become always-unlocked cosmetic rows without a data migration, and the Rive file gets the same inputs |
+| 2026-11-24 | Milestone 6 plan reviewed and moved into "Avatar prototype". Development grows from hard sets: each set's effort is stored as `xp_event.stimulus`, and a part's weekly dose drives a saturating curve (rate 0.04, half-dose 8 sets), so a beginner's hard set counts as much as an advanced lifter's (legs to 0.25: 14 weeks instead of 25 on raw XP). The rule now reads "shape comes only from the body-part rows of the ledger". Shrinking: 14 days' grace, then a straight line back to the starting shape a year after the last training. Starting shape: per part, from the best effective estimated 1RM ÷ bodyweight in the part's first 14 days against a per-part benchmark, capped at 0.5, stored and frozen. `GET /v1/avatar` is its own endpoint (a ledger rule on the profile would make users depend on progression, a cycle). The summary shows "Your avatar grew" rows (a part, a small bar, no percentages) only for parts up at least 1 point. Phase order: 6b (drawing) first, then 6a, 6c, 6d, 6e. 6a adds a property test (adding a set never lowers any part on any day) and reproduces the plan's tables in `sim`. Deferred to the beta: muscle memory, token maintenance, sex-specific benchmarks, secondary stimulus | A new ledger column and a stored starting shape instead of pure XP; development measures consistent training, not strength, so strength rankings will use relative estimated 1RM. The prototype that produced the numbers isn't kept; `sim` must reproduce them |
+| 2026-11-24 | Avatar contract changed (supersedes the stage key in the row below): `Avatar` takes `extras: string[]`, cumulative, from a new `avatar_stage.extras` column, and draws the extras it knows, ignoring unknown ones; the stage name is only the screen-reader label. Legend's cape is filled `purpleSoft` and outlined `purple`, with no glow; the figure's outline stays `ink` at every stage. Core at 0 is drawn as a normal narrow waist. Sizes are front-loaded (development^0.6, tuned in the preview) so the first 0.25 is visibly large; the rule itself isn't sped up | Extras are data (CLAUDE.md rule 6), so a new stage or extra ships without a release; one more column. Core is the one part that doesn't start as a line |
+| 2026-11-24 | Prettier skips `apps/mobile/expo-env.d.ts`, which Expo generates on start and lint: `apps/mobile/.gitignore` ignores it, but Prettier reads only the root `.gitignore`, so `pnpm check` failed locally whenever the file existed (CI never has it) | One more line in `.prettierignore` |
+| 2026-11-24 | Milestone 6 avatar look and screens: a cartoon stickman with a big round head and a simple face, the head the same size at every stage and development (replaces "head size changes with the stage"); outline style, lines in `ink` and muscle shapes filled with the background so a bulging limb covers the line behind it; a body part at development 0 is a single line and gains outlined muscle shapes as it develops; stage extras (wristbands, outfit, headband, cape) are a separate layer on top; it must read at about 40 px and 220 px. `avatarShape(development, lean)` is a pure, unit-tested function returning numbers; the component only renders them. The UI preview gets an Avatar section (a slider per part, a stage picker, both themes and sizes). Home: the avatar and level bar become one hero element at the top (not a Card), the username with the level, no "Welcome back,". Level-up: a stage change animates the new extras in; reduce motion draws the final state | Stick legs under a big upper body look odd on purpose. Legend's glow needs a replacement (tokens: no glow). The outline style uses no new colours, so it carries no meaning beyond shape |
+| 2026-11-24 | The avatar contract, the same inputs a Rive file will take later: `development` (0 to 1 for each of the six body parts), `stage` (the `avatar_stage` key, which picks the extras), `lean` (reserved for the endurance look, always 0 in Milestone 6; the shape function accepts it) and an optional `expression` (neutral, proud). Never a level; the screen-reader label comes from the stage name | One more input (`lean`) with nothing behind it yet, so the endurance milestone doesn't change the contract |
+| 2026-11-24 | Milestone 6 art: the avatar stays code-drawn with `react-native-svg`. Rive was considered and is the likely long-term renderer (poses and animation for leaderboards and avatar events; Ivan builds a Rive character in parallel), but it needs hand-rigging in the Rive editor and a development build instead of Expo Go. Swapping later changes only the inside of `Avatar` | Simpler shapes and animation than Rive for now; in exchange no art pipeline, Expo Go keeps working, and the shapes stay plain numbers that unit tests can check |
+| 2026-11-24 | Design review: removed the one-word highlight in the wordmark and the all-caps eyebrow; the system check is dev-only. The sign-in/sign-up wordmark is one colour (ink), written "LEVEL UP" with a space now that colour no longer separates the words: purple means progress only. "NEW PLAYER" above "Create your character" repeated the heading, so it and its `eyebrow` style are gone. The "API ok · Database ok" card is its own component (`SystemCheckCard`) rendered only when `__DEV__`, so release builds neither show it nor call `/health` from Home. Audit of the rest of the app: no other all-caps letter-spaced labels or one-word colour highlights in headings | The wordmark keeps its letter spacing (it is the brand, not a label). A release build has no on-screen way to see whether the API is reachable; failures still show on the screens that need the API |
 | 2026-11-24 | Prettier is enforced, with `printWidth` 120 and every other option at Prettier's default (the code already used double quotes, semicolons and 2 spaces). Not formatted (`.prettierignore`): `pnpm-lock.yaml` (pnpm rewrites it), the Expo icon JSON (Icon Composer writes it) and Markdown (Prettier pads table columns, which turns each decision-log row into one very wide line). `EXERCISE_CATALOG` keeps one exercise per line (`// prettier-ignore`), so its values stay easy to compare. Measured before choosing, with those files excluded: width 100 changes 167 files (+7.3k lines), 120 changes 135 (+3.8k), 140 changes 114 (+2.1k), 160 changes 95 (+1.3k). The old note of "36 files" matched no setting | 120 wraps some of the long one-line test calls once; the format commit is hidden from `git blame`. The docs stay hand-formatted, so nothing checks their formatting |
 | 2026-11-23 | Milestone 5 closed (PR #7, after #5 and #6). Its "Done when" is met: finishing shows the XP the server awarded and, when earned, the level-up screen (checked on a phone in 4f); two Finishes sent at the same moment can't exceed the daily cap (the profile lock, tested with two concurrent requests against Postgres); a workout synced days later counts against the local day it started (tested, with both sides of the 14-day line). 781 tests (mobile 332, shared 214, API 235). Next: the format-only Prettier PR, then Milestone 6, starting with the avatar art decision (the code-drawn `react-native-svg` stickman planned under "Avatar prototype", or Rive) | Carried open: the baseline training-day gap (2026-11-18, before leaderboards), editing finished workouts (Milestone 7), and an unexplained routine-link test flake in `finish-progression.test.ts` (its create and delete steps now check their responses, 47d4191, so a repeat names the failing step) |
 | 2026-11-23 | Before 4f: a dev-only script, `pnpm --filter api dev:grant-xp <email> <amount>`, adds XP through the ledger with its own source (`dev_grant`): one row per grant (a new UUID as `source_id`, no body part, today's local date), plus the cached total, in one transaction. Outside the daily cap. It refuses unless `NODE_ENV` isn't production AND `DATABASE_URL`'s host is local (`localhost`, `127.0.0.1` or the Compose service `db`): `NODE_ENV` alone trusts the shell, and a local `.env` pointed at a hosted database still says development. One pure rule (`devToolRefusal`, unit-tested), checked by the script before it touches the database and by `grantDevXp` itself | One more enum value in the ledger. Running the API in Docker under another service name, or against a database on another machine on the LAN, needs `LOCAL_DATABASE_HOSTS` extended; an IPv6 `::1` URL is refused too. A hosted database reached through a local tunnel (`localhost:5433` → cloud) would pass, so don't tunnel production on a dev machine |

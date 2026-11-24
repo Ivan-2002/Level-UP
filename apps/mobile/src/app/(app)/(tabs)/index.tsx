@@ -1,29 +1,27 @@
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
-import { useHealth } from "@/features/health/use-health";
+import { SystemCheckCard } from "@/features/health/SystemCheckCard";
 import { useProfile } from "@/features/profile/use-profile";
 import { LevelCard } from "@/features/progress/LevelCard";
 import { useLevelUpPrompt } from "@/features/progress/use-celebration";
 import { WeeklyGoalCard } from "@/features/progress/WeeklyGoalCard";
 import { StartOrResumeWorkout, SyncStatus } from "@/features/workouts/HomeWorkoutCards";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
 import { Text } from "@/components/Text";
-import { createStyles, useTheme } from "@/theme/use-theme";
+import { createStyles } from "@/theme/use-theme";
 
-// Temporary home: start/resume a workout, sync status, the level bar and the system check.
-// Milestone 6 adds the avatar (with the level bar, at the top); before the beta the system
-// check and Sign out move to a settings screen (docs/ARCHITECTURE.md, roadmap).
+// Temporary home: start/resume a workout, sync status and the level bar; in development
+// builds also the system check and the UI preview. Milestone 6 adds the avatar (with the
+// level bar, at the top); before the beta Sign out moves to a settings screen
+// (docs/ARCHITECTURE.md, roadmap).
 export default function Home() {
   const { data: session } = authClient.useSession();
   const { data: profile } = useProfile(session?.user.id); // already cached by the layout
-  const { data, error, isPending } = useHealth();
   const queryClient = useQueryClient();
   const styles = useStyles();
-  const t = useTheme();
   const userId = session?.user.id;
   useLevelUpPrompt(userId, profile); // e.g. a workout synced while the app was closed
 
@@ -60,21 +58,12 @@ export default function Home() {
           </>
         ) : null}
 
-        <Card>
-          {isPending ? (
-            <ActivityIndicator color={t.colors.purple} />
-          ) : error ? (
-            <Text tone="danger">API unreachable: {error.message}</Text>
-          ) : (
-            <Text tone="success">
-              API {data.status} · Database {data.database}
-            </Text>
-          )}
-        </Card>
-
-        {/* Development builds only: a page showing every shared UI piece in both themes. */}
+        {/* Development builds only: the system check, and a page showing every shared UI piece in both themes. */}
         {__DEV__ ? (
-          <Button label="UI preview" variant="outline" tone="link" onPress={() => router.push("/ui-preview")} />
+          <>
+            <SystemCheckCard />
+            <Button label="UI preview" variant="outline" tone="link" onPress={() => router.push("/ui-preview")} />
+          </>
         ) : null}
         <Button label="Sign out" variant="outline" onPress={signOut} />
       </ScrollView>
