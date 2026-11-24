@@ -37,8 +37,21 @@ export function RestBar({ next, restSec }: { next: string | null; restSec: numbe
           accessibilityLabel={view.paused ? "Resume rest timer" : "Pause rest timer"}
           style={styles.ring}
         >
-          <Svg width={RING} height={RING} style={styles.ringSvg} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <Circle cx={RING / 2} cy={RING / 2} r={RADIUS} stroke={t.colors.surfaceRaised} strokeWidth={STROKE} fill="none" />
+          <Svg
+            width={RING}
+            height={RING}
+            style={styles.ringSvg}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Circle
+              cx={RING / 2}
+              cy={RING / 2}
+              r={RADIUS}
+              stroke={t.colors.surfaceRaised}
+              strokeWidth={STROKE}
+              fill="none"
+            />
             <Circle
               cx={RING / 2}
               cy={RING / 2}
@@ -55,7 +68,11 @@ export function RestBar({ next, restSec }: { next: string | null; restSec: numbe
           </Svg>
           <Icon name={view.paused ? "play" : "pause"} size={18} fill={t.colors.ink} />
         </Pressable>
-        <View style={styles.texts} accessible accessibilityLabel={`${view.paused ? "Rest paused" : "Resting"}, ${remainingText(view.remainingMs)} left. ${nextLine}`}>
+        <View
+          style={styles.texts}
+          accessible
+          accessibilityLabel={`${view.paused ? "Rest paused" : "Resting"}, ${remainingText(view.remainingMs)} left. ${nextLine}`}
+        >
           <Text variant="caption" tone="inkMuted">
             {view.paused ? "Rest paused" : "Resting"}
           </Text>
@@ -66,7 +83,13 @@ export function RestBar({ next, restSec }: { next: string | null; restSec: numbe
             {nextLine}
           </Text>
         </View>
-        <Button label="+30s" variant="secondary" size="md" onPress={() => actions.addTime(30)} accessibilityLabel="30 seconds more rest" />
+        <Button
+          label="+30s"
+          variant="secondary"
+          size="md"
+          onPress={() => actions.addTime(30)}
+          accessibilityLabel="30 seconds more rest"
+        />
         <Button label="Skip" variant="outline" size="md" onPress={actions.skip} accessibilityLabel="Skip rest" />
       </View>
     );
@@ -105,5 +128,12 @@ const useStyles = createStyles((t) => ({
   ring: { width: RING, height: RING, alignItems: "center", justifyContent: "center" },
   ringSvg: { position: "absolute", left: 0, top: 0 },
   texts: { flex: 1, minWidth: 0 },
-  idleIcon: { width: RING, height: RING, borderRadius: t.radius.pill, backgroundColor: t.colors.surfaceRaised, alignItems: "center", justifyContent: "center" },
+  idleIcon: {
+    width: RING,
+    height: RING,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 }));

@@ -113,7 +113,10 @@ export async function bodyweightHistory(userId: string, db?: Db): Promise<Bodywe
  * What the XP bodyweight (xpBodyweightOnDate) needs: every bodyweight write ever received,
  * in order, and when the player created their character (the start of the grace week).
  */
-export async function xpBodyweightInput(userId: string, db?: Db): Promise<{ receipts: BodyweightReceipt[]; signedUpAt?: string }> {
+export async function xpBodyweightInput(
+  userId: string,
+  db?: Db,
+): Promise<{ receipts: BodyweightReceipt[]; signedUpAt?: string }> {
   const receipts = await bodyweightReceipts(userId, db);
   const createdAt = await repo.findProfileCreatedAt(userId, db);
   return createdAt ? { receipts, signedUpAt: createdAt.toISOString() } : { receipts };
@@ -121,7 +124,11 @@ export async function xpBodyweightInput(userId: string, db?: Db): Promise<{ rece
 
 async function bodyweightReceipts(userId: string, db?: Db): Promise<BodyweightReceipt[]> {
   const rows = await repo.findBodyweightReceipts(userId, db);
-  return rows.map((r) => ({ kg: r.kg.toNumber(), measuredOn: isoDay(r.measuredOn), receivedAt: r.receivedAt.toISOString() }));
+  return rows.map((r) => ({
+    kg: r.kg.toNumber(),
+    measuredOn: isoDay(r.measuredOn),
+    receivedAt: r.receivedAt.toISOString(),
+  }));
 }
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -136,10 +143,8 @@ export function addTotalXp(db: Db, userId: string, amount: number): Promise<numb
   return repo.incrementTotalXp(db, userId, amount);
 }
 
-const profileExists = () =>
-  new AppError("conflict", "ProfileExists", "You already have a character.");
-const usernameTaken = () =>
-  new AppError("conflict", "UsernameTaken", "That username is taken. Try another one.");
+const profileExists = () => new AppError("conflict", "ProfileExists", "You already have a character.");
+const usernameTaken = () => new AppError("conflict", "UsernameTaken", "That username is taken. Try another one.");
 
 // Turns a database row into the shared API contract. This is where storage details
 // stop: Postgres DECIMAL becomes a plain number, dates become ISO strings, and
@@ -156,7 +161,9 @@ async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
     stage: await avatarService.stageAt(levelFromXp(row.totalXp)),
     celebratedLevel: row.celebratedLevel,
     // As of the player's local today, like a workout started now.
-    xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone), { signedUpAt: row.createdAt.toISOString() }),
+    xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone), {
+      signedUpAt: row.createdAt.toISOString(),
+    }),
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -9,7 +9,13 @@ import { Icon } from "@/components/Icon";
 import { Text } from "@/components/Text";
 import { TextField } from "@/components/TextField";
 import { authClient } from "@/lib/auth-client";
-import { activeWorkoutStore, finishedWorkoutStore, outboxStore, restTimerStore, useActiveWorkout } from "@/stores/device-stores";
+import {
+  activeWorkoutStore,
+  finishedWorkoutStore,
+  outboxStore,
+  restTimerStore,
+  useActiveWorkout,
+} from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { useExercises } from "@/features/exercises/use-exercises";
 import { useRoutine, useSaveRoutine } from "@/features/routines/use-routines";
@@ -67,7 +73,9 @@ export function FinishWorkoutScreen() {
     const result = finishActiveWorkout({ activeWorkout: activeWorkoutStore, outbox: outboxStore, now: new Date() });
     if (!result.ok) return setError(result.message);
     const { workout: sent, payload, preview } = result.value;
-    finishedWorkoutStore.getState().record({ workout: sent, finishedAt: payload.finishedAt, preview, levelBefore: profile?.level ?? null });
+    finishedWorkoutStore
+      .getState()
+      .record({ workout: sent, finishedAt: payload.finishedAt, preview, levelBefore: profile?.level ?? null });
     restTimerStore.getState().skip(); // no rest alert after the workout is over
     syncOutboxNow(); // try right away; the outbox keeps retrying if offline
     router.dismissAll();
@@ -122,7 +130,15 @@ export function FinishWorkoutScreen() {
                 <Chip label="Not now" role="radio" selected={!saveAs} onPress={() => setSaveAs(false)} />
                 <Chip label="Save routine" role="radio" selected={saveAs} onPress={() => setSaveAs(true)} />
               </View>
-              {saveAs ? <TextField label="Routine name" value={name} onChangeText={setName} placeholder="e.g. Push day" maxLength={60} /> : null}
+              {saveAs ? (
+                <TextField
+                  label="Routine name"
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Push day"
+                  maxLength={60}
+                />
+              ) : null}
             </Card>
           ) : null}
 
@@ -157,7 +173,15 @@ export function FinishWorkoutScreen() {
         </ScrollView>
         <View style={styles.footer}>
           <Button label="Finish workout" onPress={finish} disabled={!ready.ok} loading={save.isPending} />
-          {routineFailed ? <Button label="Finish without saving the routine" variant="plain" tone="link" size="md" onPress={complete} /> : null}
+          {routineFailed ? (
+            <Button
+              label="Finish without saving the routine"
+              variant="plain"
+              tone="link"
+              size="md"
+              onPress={complete}
+            />
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -168,7 +192,13 @@ const useStyles = createStyles((t) => ({
   sheet: { flex: 1, backgroundColor: t.colors.surface },
   flex: { flex: 1 },
   centered: { textAlign: "center", padding: t.space[4] },
-  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: t.space[4], paddingTop: t.space[4] },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: t.space[4],
+    paddingTop: t.space[4],
+  },
   content: { padding: t.space[4], gap: t.space[4] },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: t.space[2] },
   changes: { gap: t.space[1] },

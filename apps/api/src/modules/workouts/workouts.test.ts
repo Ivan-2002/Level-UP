@@ -41,14 +41,20 @@ function validWorkout(overrides: Partial<FinishWorkoutInput> = {}): FinishWorkou
 }
 
 function finish(as: TestUser, body: unknown) {
-  return request(app).post("/v1/workouts").set("Cookie", as.cookie).send(body as object);
+  return request(app)
+    .post("/v1/workouts")
+    .set("Cookie", as.cookie)
+    .send(body as object);
 }
 
 /** n sets of the same exercise, for the set-limit tests. */
 function workoutWithSets(n: number) {
   return validWorkout({
     exercises: [
-      { exerciseId: exerciseIds["barbell-back-squat"]!, sets: Array.from({ length: n }, () => ({ reps: 5, weightKg: 100 })) },
+      {
+        exerciseId: exerciseIds["barbell-back-squat"]!,
+        sets: Array.from({ length: n }, () => ({ reps: 5, weightKg: 100 })),
+      },
     ],
   });
 }
@@ -169,22 +175,69 @@ describe("POST /workouts validation", () => {
   const now = () => Date.now();
 
   it.each<[string, () => unknown, string]>([
-    ["reps of 0", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 0, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
-    ["reps of 601 (above every unit's limit)", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["plank"]!, sets: [{ reps: 601, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
-    ["fractional reps", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 7.5, weightKg: 0 }] }] }), "exercises.0.sets.0.reps"],
-    ["negative weight", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["deadlift"]!, sets: [{ reps: 5, weightKg: -1 }] }] }), "exercises.0.sets.0.weightKg"],
-    ["weight over 500 kg", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["deadlift"]!, sets: [{ reps: 5, weightKg: 501 }] }] }), "exercises.0.sets.0.weightKg"],
+    [
+      "reps of 0",
+      () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 0, weightKg: 0 }] }] }),
+      "exercises.0.sets.0.reps",
+    ],
+    [
+      "reps of 601 (above every unit's limit)",
+      () => validWorkout({ exercises: [{ exerciseId: exerciseIds["plank"]!, sets: [{ reps: 601, weightKg: 0 }] }] }),
+      "exercises.0.sets.0.reps",
+    ],
+    [
+      "fractional reps",
+      () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [{ reps: 7.5, weightKg: 0 }] }] }),
+      "exercises.0.sets.0.reps",
+    ],
+    [
+      "negative weight",
+      () => validWorkout({ exercises: [{ exerciseId: exerciseIds["deadlift"]!, sets: [{ reps: 5, weightKg: -1 }] }] }),
+      "exercises.0.sets.0.weightKg",
+    ],
+    [
+      "weight over 500 kg",
+      () => validWorkout({ exercises: [{ exerciseId: exerciseIds["deadlift"]!, sets: [{ reps: 5, weightKg: 501 }] }] }),
+      "exercises.0.sets.0.weightKg",
+    ],
     ["101 sets", () => workoutWithSets(101), "exercises"],
-    ["an exercise with no sets", () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [] }] }), "exercises.0.sets"],
+    [
+      "an exercise with no sets",
+      () => validWorkout({ exercises: [{ exerciseId: exerciseIds["pull-up"]!, sets: [] }] }),
+      "exercises.0.sets",
+    ],
     ["no exercises", () => validWorkout({ exercises: [] }), "exercises"],
-    ["finishedAt before startedAt", () => validWorkout({ startedAt: iso(now() - HOUR), finishedAt: iso(now() - 2 * HOUR) }), "finishedAt"],
+    [
+      "finishedAt before startedAt",
+      () => validWorkout({ startedAt: iso(now() - HOUR), finishedAt: iso(now() - 2 * HOUR) }),
+      "finishedAt",
+    ],
     // One clock reading: two now() calls a millisecond apart made this valid now and then (a flaky test).
-    ["finishedAt equal to startedAt", () => { const at = iso(now() - HOUR); return validWorkout({ startedAt: at, finishedAt: at }); }, "finishedAt"],
-    ["finishedAt in the future", () => validWorkout({ startedAt: iso(now()), finishedAt: iso(now() + HOUR) }), "finishedAt"],
-    ["longer than 6 hours", () => validWorkout({ startedAt: iso(now() - 7 * HOUR), finishedAt: iso(now() - MINUTE) }), "finishedAt"],
+    [
+      "finishedAt equal to startedAt",
+      () => {
+        const at = iso(now() - HOUR);
+        return validWorkout({ startedAt: at, finishedAt: at });
+      },
+      "finishedAt",
+    ],
+    [
+      "finishedAt in the future",
+      () => validWorkout({ startedAt: iso(now()), finishedAt: iso(now() + HOUR) }),
+      "finishedAt",
+    ],
+    [
+      "longer than 6 hours",
+      () => validWorkout({ startedAt: iso(now() - 7 * HOUR), finishedAt: iso(now() - MINUTE) }),
+      "finishedAt",
+    ],
     ["a date that isn't ISO 8601", () => validWorkout({ startedAt: "yesterday at 6" }), "startedAt"],
     ["a clientId that isn't a UUID", () => validWorkout({ clientId: "workout-1" }), "clientId"],
-    ["an exerciseId that isn't a UUID", () => validWorkout({ exercises: [{ exerciseId: "bench", sets: [{ reps: 5, weightKg: 60 }] }] }), "exercises.0.exerciseId"],
+    [
+      "an exerciseId that isn't a UUID",
+      () => validWorkout({ exercises: [{ exerciseId: "bench", sets: [{ reps: 5, weightKg: 60 }] }] }),
+      "exercises.0.exerciseId",
+    ],
   ])("rejects %s with 400 ValidationError naming the field", async (_rule, makeBody, path) => {
     const res = await finish(user, makeBody());
 
@@ -202,7 +255,11 @@ describe("POST /workouts validation", () => {
       exercises: [
         {
           exerciseId: exerciseIds["deadlift"]!,
-          sets: [{ reps: 1, weightKg: 500 }, { reps: 100, weightKg: 0 }, ...Array.from({ length: 98 }, () => ({ reps: 5, weightKg: 100 }))],
+          sets: [
+            { reps: 1, weightKg: 500 },
+            { reps: 100, weightKg: 0 },
+            ...Array.from({ length: 98 }, () => ({ reps: 5, weightKg: 100 })),
+          ],
         },
       ],
     });
@@ -228,7 +285,18 @@ describe("POST /workouts validation", () => {
 });
 
 describe("POST /workouts reps limits by unit", () => {
-  const oneSet = (slug: string, reps: number) => validWorkout({ exercises: [{ exerciseId: exerciseIds[slug]!, sets: [{ reps: 8, weightKg: 0 }, { reps, weightKg: 0 }] }] });
+  const oneSet = (slug: string, reps: number) =>
+    validWorkout({
+      exercises: [
+        {
+          exerciseId: exerciseIds[slug]!,
+          sets: [
+            { reps: 8, weightKg: 0 },
+            { reps, weightKg: 0 },
+          ],
+        },
+      ],
+    });
 
   it("rejects more than 100 reps on a reps exercise, naming the exercise and set", async () => {
     const res = await finish(user, oneSet("pull-up", 101));
@@ -330,7 +398,10 @@ describe("GET /workouts (history)", () => {
     const seen: string[] = [];
     let cursor: string | null = null;
     do {
-      const page: Awaited<ReturnType<typeof getPage>> = await getPage(user, `?limit=1${cursor ? `&cursor=${cursor}` : ""}`);
+      const page: Awaited<ReturnType<typeof getPage>> = await getPage(
+        user,
+        `?limit=1${cursor ? `&cursor=${cursor}` : ""}`,
+      );
       seen.push(...page.items.map((w) => w.name!));
       cursor = page.nextCursor;
     } while (cursor);

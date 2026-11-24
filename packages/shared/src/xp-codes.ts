@@ -19,6 +19,13 @@ export const flagReasonSchema = z.enum(FLAG_REASONS);
 export type FlagReason = z.infer<typeof flagReasonSchema>;
 
 /** The label shown after a set's XP (setTagText). */
-export const SET_TAGS = ["check_set", "beyond_set_limit", "above_history", "warm_up", "easy_set", "timed_limit"] as const;
+export const SET_TAGS = [
+  "check_set",
+  "beyond_set_limit",
+  "above_history",
+  "warm_up",
+  "easy_set",
+  "timed_limit",
+] as const;
 export const setTagSchema = z.enum(SET_TAGS);
 export type SetTag = z.infer<typeof setTagSchema>;

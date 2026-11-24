@@ -18,7 +18,9 @@ export function exerciseSummaryQuery(userId: string, exerciseId: string, session
   return queryOptions({
     queryKey: ["exercise-summary", userId, exerciseId, sessions],
     queryFn: () =>
-      fetchWithDeviceCache(key, exerciseSummarySchema, () => apiGet<ExerciseSummary>(`/exercises/${exerciseId}/summary?sessions=${sessions}`)),
+      fetchWithDeviceCache(key, exerciseSummarySchema, () =>
+        apiGet<ExerciseSummary>(`/exercises/${exerciseId}/summary?sessions=${sessions}`),
+      ),
     initialData: () => readCached(key, exerciseSummarySchema),
     initialDataUpdatedAt: 0,
     staleTime: 5 * 60_000, // history only changes when a workout syncs (which refreshes it)

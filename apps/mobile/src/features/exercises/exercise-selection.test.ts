@@ -27,7 +27,10 @@ describe("groupExercises", () => {
   });
 
   it("applies the search and muscle-group filter to both", () => {
-    expect(groupExercises({ library, recent, search: "bench", bodyPart: null })).toEqual({ recent: [], all: [benchPress] });
+    expect(groupExercises({ library, recent, search: "bench", bodyPart: null })).toEqual({
+      recent: [],
+      all: [benchPress],
+    });
     expect(groupExercises({ library, recent, search: "", bodyPart: "back" }).recent).toHaveLength(1);
   });
 });

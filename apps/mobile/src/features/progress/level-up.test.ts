@@ -117,8 +117,13 @@ describe("levelUpText", () => {
   });
 
   it("shows several levels with an arrow, and says 'to' for screen readers", () => {
-    expect(levelUpText({ from: 4, to: 6, newStage: null })).toMatchObject({ levelText: "Level 4 → 6", announcement: "Level up! Level 4 to 6." });
-    expect(levelUpText({ from: 3, to: 10, newStage: ATHLETE }).announcement).toBe("Level up! Level 3 to 10. New stage: Athlete.");
+    expect(levelUpText({ from: 4, to: 6, newStage: null })).toMatchObject({
+      levelText: "Level 4 → 6",
+      announcement: "Level up! Level 4 to 6.",
+    });
+    expect(levelUpText({ from: 3, to: 10, newStage: ATHLETE }).announcement).toBe(
+      "Level up! Level 3 to 10. New stage: Athlete.",
+    );
   });
 });
 

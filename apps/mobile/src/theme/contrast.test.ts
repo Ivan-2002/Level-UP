@@ -6,7 +6,9 @@ type Key = keyof Palette;
 // Every pairing the screens use. Adding a new pairing to a component? Add it here.
 const TEXT_PAIRS: [fg: Key, bg: Key][] = [
   // Body and secondary text on every surface.
-  ...(["ink", "inkMuted"] as const).flatMap((fg) => (["bg", "surface", "surfaceRaised"] as const).map((bg) => [fg, bg] as [Key, Key])),
+  ...(["ink", "inkMuted"] as const).flatMap((fg) =>
+    (["bg", "surface", "surfaceRaised"] as const).map((bg) => [fg, bg] as [Key, Key]),
+  ),
   // Coloured text: XP numbers, links, statuses.
   ...(["purple", "ice", "success", "warning", "danger"] as const).flatMap((fg) =>
     (["bg", "surface", "surfaceRaised"] as const).map((bg) => [fg, bg] as [Key, Key]),

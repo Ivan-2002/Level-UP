@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { celebrateLevelSchema, createProfileSchema, recordBodyweightSchema, updateProfileSchema } from "@levelup/shared";
+import {
+  celebrateLevelSchema,
+  createProfileSchema,
+  recordBodyweightSchema,
+  updateProfileSchema,
+} from "@levelup/shared";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import * as controller from "./users.controller.js";
@@ -16,7 +21,12 @@ usersRouter.post("/profile", requireAuth, validateBody(createProfileSchema), con
 // Partial update: only the fields sent change (the kg/lb setting, for now).
 usersRouter.patch("/profile", requireAuth, validateBody(updateProfileSchema), controller.updateProfile);
 // The level-up screen was shown: remembered on the account, so no phone celebrates it again.
-usersRouter.post("/profile/celebrated", requireAuth, validateBody(celebrateLevelSchema), controller.markLevelCelebrated);
+usersRouter.post(
+  "/profile/celebrated",
+  requireAuth,
+  validateBody(celebrateLevelSchema),
+  controller.markLevelCelebrated,
+);
 
 // Bodyweight is a dated history: XP uses the value in effect on each workout's date.
 usersRouter.post("/bodyweight", requireAuth, validateBody(recordBodyweightSchema), controller.recordBodyweight);

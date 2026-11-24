@@ -35,7 +35,8 @@ describe("POST /bodyweight", () => {
     const user = await signUpUser();
     const record = (kg: number) =>
       request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg, measuredOn: "2026-11-01" });
-    const receivedAt = async () => (await prisma.bodyweightEntry.findFirstOrThrow({ where: { userId: user.userId } })).receivedAt.toISOString();
+    const receivedAt = async () =>
+      (await prisma.bodyweightEntry.findFirstOrThrow({ where: { userId: user.userId } })).receivedAt.toISOString();
 
     setNow("2026-11-02T08:00:00Z");
     await record(80);
@@ -59,8 +60,13 @@ describe("POST /bodyweight", () => {
     await record(70);
     setNow(null);
 
-    const receipts = await prisma.bodyweightReceipt.findMany({ where: { userId: user.userId }, orderBy: { receivedAt: "asc" } });
-    expect(receipts.map((r) => [r.kg.toNumber(), r.measuredOn.toISOString().slice(0, 10), r.receivedAt.toISOString()])).toEqual([
+    const receipts = await prisma.bodyweightReceipt.findMany({
+      where: { userId: user.userId },
+      orderBy: { receivedAt: "asc" },
+    });
+    expect(
+      receipts.map((r) => [r.kg.toNumber(), r.measuredOn.toISOString().slice(0, 10), r.receivedAt.toISOString()]),
+    ).toEqual([
       [80, "2026-11-01", "2026-11-02T08:00:00.000Z"],
       [70, "2026-11-01", "2026-11-03T08:00:00.000Z"],
     ]);
@@ -82,7 +88,10 @@ describe("POST /bodyweight", () => {
     const user = await signUpUser();
 
     const tooLight = await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 10 });
-    const badDate = await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 80, measuredOn: "11/11/2026" });
+    const badDate = await request(app)
+      .post("/v1/bodyweight")
+      .set("Cookie", user.cookie)
+      .send({ kg: 80, measuredOn: "11/11/2026" });
     const anonymous = await request(app).post("/v1/bodyweight").send({ kg: 80 });
 
     expect([tooLight.status, badDate.status, anonymous.status]).toEqual([400, 400, 401]);

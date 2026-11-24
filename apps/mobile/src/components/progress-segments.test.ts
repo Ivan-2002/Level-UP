@@ -33,6 +33,12 @@ describe("layoutSegments", () => {
 
 describe("segmentTotals", () => {
   it("adds up done and planned sets for the screen-reader label", () => {
-    expect(segmentTotals([{ total: 4, done: 2 }, { total: 3, done: 3 }, { total: 2, done: 9 }])).toEqual({ done: 7, total: 9 });
+    expect(
+      segmentTotals([
+        { total: 4, done: 2 },
+        { total: 3, done: 3 },
+        { total: 2, done: 9 },
+      ]),
+    ).toEqual({ done: 7, total: 9 });
   });
 });

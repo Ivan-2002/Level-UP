@@ -85,11 +85,21 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
   const scored = setXp.reduce((a, b) => a + b, 0);
 
   if (isTooOldForXp(workout.startedAt, workout.receivedAt)) {
-    return { sets: score.sets, awardedXp: setXp.map(() => 0), heldBack: heldBack(scored, "too_old"), bodyweightKg: typed };
+    return {
+      sets: score.sets,
+      awardedXp: setXp.map(() => 0),
+      heldBack: heldBack(scored, "too_old"),
+      bodyweightKg: typed,
+    };
   }
   const dayXpBefore = await repo.sumXpOnDay(db, userId, workout.earnedOn, XP_SOURCES_UNDER_DAILY_CAP);
   const capped = applyDailyCap(dayXpBefore, setXp);
-  return { sets: score.sets, awardedXp: capped.awarded, heldBack: heldBack(capped.heldBack, "daily_cap"), bodyweightKg: typed };
+  return {
+    sets: score.sets,
+    awardedXp: capped.awarded,
+    heldBack: heldBack(capped.heldBack, "daily_cap"),
+    bodyweightKg: typed,
+  };
 }
 
 /**

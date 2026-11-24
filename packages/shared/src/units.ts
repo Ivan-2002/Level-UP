@@ -73,6 +73,9 @@ export const DEFAULT_INCREMENTS_BY_UNIT: Record<WeightUnit, IncrementsInUnit> = 
  */
 export function coachIncrementsKg(unit: WeightUnit, increments: IncrementsInUnit = DEFAULT_INCREMENTS_BY_UNIT[unit]) {
   return Object.fromEntries(
-    Object.entries(increments).map(([equipment, step]) => [equipment, step === null ? null : fromInputWeight(step, unit)]),
+    Object.entries(increments).map(([equipment, step]) => [
+      equipment,
+      step === null ? null : fromInputWeight(step, unit),
+    ]),
   ) as Record<Equipment, number | null>;
 }

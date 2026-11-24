@@ -8,12 +8,32 @@ import { useTheme } from "@/theme/use-theme";
 export function Avatar({ width = 104, height = 140 }: { width?: number; height?: number }) {
   const stroke = useTheme().colors.ink;
   return (
-    <Svg width={width} height={height} viewBox="0 0 104 140" accessibilityRole="image" accessibilityLabel="Rookie stickman avatar">
+    <Svg
+      width={width}
+      height={height}
+      viewBox="0 0 104 140"
+      accessibilityRole="image"
+      accessibilityLabel="Rookie stickman avatar"
+    >
       <Circle cx={52} cy={22} r={13} fill="none" stroke={stroke} strokeWidth={3} />
       <Line x1={52} y1={36} x2={52} y2={84} stroke={stroke} strokeWidth={3} strokeLinecap="round" />
       <Line x1={40} y1={46} x2={64} y2={46} stroke={stroke} strokeWidth={3} strokeLinecap="round" />
-      <Path d="M40 46 L32 68 L34 88" fill="none" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M64 46 L72 68 L70 88" fill="none" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M40 46 L32 68 L34 88"
+        fill="none"
+        stroke={stroke}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M64 46 L72 68 L70 88"
+        fill="none"
+        stroke={stroke}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <Path d="M52 84 L42 132" fill="none" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />
       <Path d="M52 84 L62 132" fill="none" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />
     </Svg>

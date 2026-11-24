@@ -23,7 +23,9 @@ const args = z
   .tuple([z.string().email(), z.coerce.number().int().positive().max(10_000_000)])
   .safeParse(process.argv.slice(2));
 if (!args.success) {
-  console.error("Usage: pnpm --filter api dev:grant-xp <email> <amount>   (amount: a whole number from 1 to 10,000,000)");
+  console.error(
+    "Usage: pnpm --filter api dev:grant-xp <email> <amount>   (amount: a whole number from 1 to 10,000,000)",
+  );
   process.exit(1);
 }
 const [email, amount] = args.data;

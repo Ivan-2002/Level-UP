@@ -1,5 +1,10 @@
 import type { Request, Response } from "express";
-import type { CelebrateLevelInput, CreateProfileInput, RecordBodyweightInput, UpdateProfileInput } from "@levelup/shared";
+import type {
+  CelebrateLevelInput,
+  CreateProfileInput,
+  RecordBodyweightInput,
+  UpdateProfileInput,
+} from "@levelup/shared";
 import * as usersService from "./users.service.js";
 
 // Controllers translate HTTP <-> service calls, and nothing else:

@@ -27,7 +27,15 @@ type ChipProps = {
   accessibilityLabel?: string;
 };
 
-export function Chip({ label, selected, onPress, count, done = false, role = "button", accessibilityLabel }: ChipProps) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  count,
+  done = false,
+  role = "button",
+  accessibilityLabel,
+}: ChipProps) {
   const styles = useStyles();
   const t = useTheme();
   // On the indigo fill, everything is white: muted grey and green both fail contrast there.
@@ -55,7 +63,15 @@ export function Chip({ label, selected, onPress, count, done = false, role = "bu
   );
 }
 
-export function AddChip({ label = "Add", onPress, accessibilityLabel }: { label?: string; onPress: () => void; accessibilityLabel: string }) {
+export function AddChip({
+  label = "Add",
+  onPress,
+  accessibilityLabel,
+}: {
+  label?: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
   const styles = useStyles();
   const t = useTheme();
   return (
@@ -120,7 +136,15 @@ const useStyles = createStyles((t) => ({
   unselected: { backgroundColor: t.colors.surface, borderColor: t.colors.border },
   add: { borderStyle: "dashed", borderColor: t.colors.border, backgroundColor: "transparent", gap: 6 },
   pressed: { opacity: 0.7 },
-  info: { height: 28, paddingHorizontal: 10, borderRadius: t.radius.sm, flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
+  info: {
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: t.radius.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+  },
   infoNeutral: { backgroundColor: t.colors.surfaceRaised },
   infoProgress: { backgroundColor: t.colors.purpleSoft },
 }));

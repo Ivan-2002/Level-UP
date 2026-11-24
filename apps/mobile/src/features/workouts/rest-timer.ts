@@ -51,7 +51,12 @@ export function viewRest(timer: RestTimer, now: number): RestView {
   if (timer.status === "idle") return { phase: "idle" };
   const remainingMs = timer.status === "paused" ? timer.remainingMs : timer.endsAt - now;
   if (remainingMs <= 0) return { phase: "done" };
-  return { phase: "resting", paused: timer.status === "paused", remainingMs, fraction: Math.min(1, remainingMs / timer.totalMs) };
+  return {
+    phase: "resting",
+    paused: timer.status === "paused",
+    remainingMs,
+    fraction: Math.min(1, remainingMs / timer.totalMs),
+  };
 }
 
 /** When the "rest is over" notification should fire, or null if none should be scheduled. */

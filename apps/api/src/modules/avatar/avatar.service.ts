@@ -12,7 +12,10 @@ export async function stageAt(level: number): Promise<AvatarStage | null> {
 }
 
 /** The stages of two levels with one query (the Finish summary: before and after). */
-export async function stagesAt(before: number, after: number): Promise<{ before: AvatarStage | null; after: AvatarStage | null }> {
+export async function stagesAt(
+  before: number,
+  after: number,
+): Promise<{ before: AvatarStage | null; after: AvatarStage | null }> {
   const stages = await repo.findStages();
   return { before: stageForLevel(stages, before), after: stageForLevel(stages, after) };
 }

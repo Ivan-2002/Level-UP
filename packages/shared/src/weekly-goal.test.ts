@@ -92,7 +92,9 @@ describe("qualifiesAsTrainingDay", () => {
     expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "check_set", isFlagged: true }) })).toBe(false);
     expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "beyond_set_limit", isFlagged: false }) })).toBe(false);
     // Warm-ups plus 2 working sets: still 2 that count.
-    expect(qualifiesAsTrainingDay({ sets: [...sets(3, { tag: "warm_up", isFlagged: false }), ...sets(2)] })).toBe(false);
+    expect(qualifiesAsTrainingDay({ sets: [...sets(3, { tag: "warm_up", isFlagged: false }), ...sets(2)] })).toBe(
+      false,
+    );
   });
 
   it("counts jump-capped and time-capped sets: they're real work, held to a line", () => {
@@ -148,7 +150,13 @@ describe("streaks and milestones", () => {
     let streak = 0;
     const weeks = [...Array(12).fill(true), false, ...Array(12).fill(true)];
     for (const met of weeks) {
-      const evaluation = evaluateWeek({ kind: "goal", target: 2, daysTrained: met ? 2 : 0, streakBefore: streak, closed: true });
+      const evaluation = evaluateWeek({
+        kind: "goal",
+        target: 2,
+        daysTrained: met ? 2 : 0,
+        streakBefore: streak,
+        closed: true,
+      });
       paid.push(...evaluation.milestones.map((m) => m.xp));
       streak = evaluation.streakAfter;
     }
@@ -158,10 +166,21 @@ describe("streaks and milestones", () => {
 });
 
 describe("evaluateWeek", () => {
-  const week = (daysTrained: number, closed: boolean, kind: WeekKind = "goal") => ({ kind, target: 3, daysTrained, streakBefore: 6, closed });
+  const week = (daysTrained: number, closed: boolean, kind: WeekKind = "goal") => ({
+    kind,
+    target: 3,
+    daysTrained,
+    streakBefore: 6,
+    closed,
+  });
 
   it("pays the flat bonus once the goal is met, even mid-week", () => {
-    expect(evaluateWeek(week(3, false))).toEqual({ met: true, streakAfter: 7, bonusXp: WEEKLY_GOAL.weeklyBonusXp, milestones: [] });
+    expect(evaluateWeek(week(3, false))).toEqual({
+      met: true,
+      streakAfter: 7,
+      bonusXp: WEEKLY_GOAL.weeklyBonusXp,
+      milestones: [],
+    });
   });
 
   it("pays the same bonus for extra days", () => {

@@ -17,7 +17,8 @@ import { previousSetText } from "./live-workout";
 import { volumeText } from "./summary-view";
 import { HISTORY_SESSIONS, useExerciseSummary } from "./use-exercise-summary";
 
-const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
 // One exercise's records, trend and recent sessions. Everything is calculated from the
 // logged sets (on the server, and PR highlights here with the same shared rules).
@@ -36,7 +37,11 @@ export function ExerciseHistoryScreen({ exerciseId }: { exerciseId: string }) {
       <SafeAreaView style={styles.screen}>
         <ScreenHeader title="History" onBack={back} />
         <View style={styles.centered}>
-          {history.isError ? <Text tone="inkMuted">{"Couldn't load this exercise's history. Check your connection."}</Text> : <ActivityIndicator />}
+          {history.isError ? (
+            <Text tone="inkMuted">{"Couldn't load this exercise's history. Check your connection."}</Text>
+          ) : (
+            <ActivityIndicator />
+          )}
         </View>
       </SafeAreaView>
     );
@@ -103,7 +108,9 @@ export function ExerciseHistoryScreen({ exerciseId }: { exerciseId: string }) {
                 return (
                   <Card key={s.workoutId}>
                     <View style={styles.sessionTop}>
-                      <Text variant="bodyStrong">{day === "Today" || day === "Yesterday" ? day : shortDate(s.startedAt)}</Text>
+                      <Text variant="bodyStrong">
+                        {day === "Today" || day === "Yesterday" ? day : shortDate(s.startedAt)}
+                      </Text>
                       <Text variant="caption" tone="inkMuted" tabular>
                         {sessionLine(s, exercise, unit)}
                       </Text>
@@ -111,7 +118,12 @@ export function ExerciseHistoryScreen({ exerciseId }: { exerciseId: string }) {
                     <View style={styles.sets}>
                       {s.sets.map((set, i) =>
                         flags[i] ? (
-                          <InfoChip key={i} icon="pr" tone="progress" value={`${previousSetText(s.sets, i, exercise, unit)} PR`} />
+                          <InfoChip
+                            key={i}
+                            icon="pr"
+                            tone="progress"
+                            value={`${previousSetText(s.sets, i, exercise, unit)} PR`}
+                          />
                         ) : (
                           <InfoChip key={i} value={previousSetText(s.sets, i, exercise, unit)} />
                         ),
@@ -156,7 +168,11 @@ function Records({ summary, unit }: { summary: ExerciseSummary; unit: WeightUnit
     });
   }
   tiles.push({
-    label: timed ? "Longest hold" : records.mostReps ? `Most reps at ${formatWeight(records.mostReps.weightKg, unit, { bodyweight: exercise.equipment === "bodyweight" })}` : "Most reps",
+    label: timed
+      ? "Longest hold"
+      : records.mostReps
+        ? `Most reps at ${formatWeight(records.mostReps.weightKg, unit, { bodyweight: exercise.equipment === "bodyweight" })}`
+        : "Most reps",
     value: records.mostReps ? (timed ? `${records.mostReps.reps} s` : plural(records.mostReps.reps, "rep")) : "—",
     note: records.mostReps ? shortDate(records.mostReps.date) : "",
   });
@@ -164,11 +180,22 @@ function Records({ summary, unit }: { summary: ExerciseSummary; unit: WeightUnit
   return (
     <View style={styles.tiles}>
       {tiles.map((tile) => (
-        <View key={tile.label} style={[styles.tile, tile.highlight && styles.tileHighlight]} accessible accessibilityLabel={`${tile.label}: ${tile.value}${tile.note ? `, ${tile.note}` : ""}`}>
+        <View
+          key={tile.label}
+          style={[styles.tile, tile.highlight && styles.tileHighlight]}
+          accessible
+          accessibilityLabel={`${tile.label}: ${tile.value}${tile.note ? `, ${tile.note}` : ""}`}
+        >
           <Text variant="caption" tone="inkMuted" numberOfLines={1}>
             {tile.label}
           </Text>
-          <Text variant="value" tone={tile.highlight && tile.value !== "—" ? "purple" : "ink"} tabular numberOfLines={1} adjustsFontSizeToFit>
+          <Text
+            variant="value"
+            tone={tile.highlight && tile.value !== "—" ? "purple" : "ink"}
+            tabular
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {tile.value}
           </Text>
           <Text variant="caption" tone="inkMuted">

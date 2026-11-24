@@ -48,7 +48,9 @@ export function WeeklyGoalCard({ userId }: { userId: string }) {
         {goalProgressText(goal)}
       </Text>
       {/* Current index past the end: every segment is "other" (muted) or "complete" (green). */}
-      {goal.kind === "goal" ? <ProgressSegments segments={days} currentIndex={goal.target} accessibilityLabel={goalProgressText(goal)} /> : null}
+      {goal.kind === "goal" ? (
+        <ProgressSegments segments={days} currentIndex={goal.target} accessibilityLabel={goalProgressText(goal)} />
+      ) : null}
       <View style={styles.streak}>
         <Icon name="pr" size={16} color={t.colors.purple} />
         <Text variant="label" tone="purple" tabular>

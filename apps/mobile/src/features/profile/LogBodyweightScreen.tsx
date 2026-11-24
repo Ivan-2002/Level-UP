@@ -9,7 +9,12 @@ import { Text } from "@/components/Text";
 import { TextField } from "@/components/TextField";
 import { createStyles } from "@/theme/use-theme";
 import { useProfile, useRecordBodyweight } from "./use-profile";
-import { bodyweightChangeText, bodyweightMessage, needsBodyweightConfirm, parseBodyweightInput } from "./weight-unit-input";
+import {
+  bodyweightChangeText,
+  bodyweightMessage,
+  needsBodyweightConfirm,
+  parseBodyweightInput,
+} from "./weight-unit-input";
 
 // "Log bodyweight": today's weight, in the player's unit. A change of more than 10% from
 // the last entry asks for confirmation first (a typo is likelier than a real 10% change,
@@ -43,10 +48,14 @@ export function LogBodyweightScreen() {
         onError: (e) => setError(`Couldn't save your bodyweight. ${e.message}`),
       });
     if (previousKg !== null && needsBodyweightConfirm(previousKg, parsed.data.kg)) {
-      Alert.alert(`Save ${formatWeight(parsed.data.kg, unit)}?`, `${bodyweightChangeText(previousKg, parsed.data.kg, unit)} Is that right?`, [
-        { text: "Change it", style: "cancel" },
-        { text: "Save", onPress: save },
-      ]);
+      Alert.alert(
+        `Save ${formatWeight(parsed.data.kg, unit)}?`,
+        `${bodyweightChangeText(previousKg, parsed.data.kg, unit)} Is that right?`,
+        [
+          { text: "Change it", style: "cancel" },
+          { text: "Save", onPress: save },
+        ],
+      );
       return;
     }
     save();
@@ -86,6 +95,12 @@ export function LogBodyweightScreen() {
 const useStyles = createStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.surface },
   flex: { flex: 1 },
-  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: t.space[4], paddingTop: t.space[4] },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: t.space[4],
+    paddingTop: t.space[4],
+  },
   content: { padding: t.space[4], gap: t.space[4], paddingBottom: t.space[8] },
 }));

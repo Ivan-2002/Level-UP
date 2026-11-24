@@ -20,7 +20,11 @@ const pushDay = (): RoutineInput => ({
   ],
 });
 
-const create = (as: TestUser, body: unknown) => request(app).post("/v1/routines").set("Cookie", as.cookie).send(body as object);
+const create = (as: TestUser, body: unknown) =>
+  request(app)
+    .post("/v1/routines")
+    .set("Cookie", as.cookie)
+    .send(body as object);
 
 describe("routines without a session", () => {
   it.each([
@@ -51,8 +55,16 @@ describe("POST /routines", () => {
     ["an empty name", (r) => ({ ...r, name: "  " }), "name"],
     ["no exercises", (r) => ({ ...r, exercises: [] }), "exercises"],
     ["0 target sets", (r) => ({ ...r, exercises: [{ ...r.exercises[0]!, targetSets: 0 }] }), "exercises.0.targetSets"],
-    ["a rest that isn't a 15 s step", (r) => ({ ...r, exercises: [{ ...r.exercises[0]!, restSec: 100 }] }), "exercises.0.restSec"],
-    ["a rest over 10 minutes", (r) => ({ ...r, exercises: [{ ...r.exercises[0]!, restSec: 615 }] }), "exercises.0.restSec"],
+    [
+      "a rest that isn't a 15 s step",
+      (r) => ({ ...r, exercises: [{ ...r.exercises[0]!, restSec: 100 }] }),
+      "exercises.0.restSec",
+    ],
+    [
+      "a rest over 10 minutes",
+      (r) => ({ ...r, exercises: [{ ...r.exercises[0]!, restSec: 615 }] }),
+      "exercises.0.restSec",
+    ],
   ])("rejects %s", async (_case, change, path) => {
     const res = await create(user, change(pushDay()));
 
@@ -61,7 +73,10 @@ describe("POST /routines", () => {
   });
 
   it("rejects an exercise that doesn't exist", async () => {
-    const res = await create(user, { name: "Mystery", exercises: [{ exerciseId: randomUUID(), targetSets: 3, targetReps: 8 }] });
+    const res = await create(user, {
+      name: "Mystery",
+      exercises: [{ exerciseId: randomUUID(), targetSets: 3, targetReps: 8 }],
+    });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("UnknownExercise");
@@ -92,7 +107,10 @@ describe("routine targets by unit", () => {
 describe("GET /routines", () => {
   it("lists your routines in the order you made them, with counts and last done", async () => {
     await create(user, pushDay());
-    await create(user, { name: "Pull day", exercises: [{ exerciseId: ids["pull-up"]!, targetSets: 4, targetReps: 8 }] });
+    await create(user, {
+      name: "Pull day",
+      exercises: [{ exerciseId: ids["pull-up"]!, targetSets: 4, targetReps: 8 }],
+    });
     await create(await signUpUser(), { ...pushDay(), name: "Someone else's" });
 
     const res = await request(app).get("/v1/routines").set("Cookie", user.cookie);
@@ -115,10 +133,15 @@ describe("one routine", () => {
     const replaced = await request(app)
       .put(`/v1/routines/${id}`)
       .set("Cookie", user.cookie)
-      .send({ name: "Push day v2", exercises: [{ exerciseId: ids["overhead-press"]!, targetSets: 5, targetReps: 5, restSec: 180 }] });
+      .send({
+        name: "Push day v2",
+        exercises: [{ exerciseId: ids["overhead-press"]!, targetSets: 5, targetReps: 5, restSec: 180 }],
+      });
     expect(replaced.status).toBe(200);
     expect(replaced.body.name).toBe("Push day v2");
-    expect(replaced.body.exercises.map((e: { exercise: { name: string } }) => e.exercise.name)).toEqual(["Overhead Press"]);
+    expect(replaced.body.exercises.map((e: { exercise: { name: string } }) => e.exercise.name)).toEqual([
+      "Overhead Press",
+    ]);
 
     const deleted = await request(app).delete(`/v1/routines/${id}`).set("Cookie", user.cookie);
     expect(deleted.status).toBe(204);
@@ -130,7 +153,10 @@ describe("one routine", () => {
     const intruder = await signUpUser();
 
     const read = await request(app).get(`/v1/routines/${id}`).set("Cookie", intruder.cookie);
-    const replaced = await request(app).put(`/v1/routines/${id}`).set("Cookie", intruder.cookie).send({ ...pushDay(), name: "Hacked" });
+    const replaced = await request(app)
+      .put(`/v1/routines/${id}`)
+      .set("Cookie", intruder.cookie)
+      .send({ ...pushDay(), name: "Hacked" });
     const deleted = await request(app).delete(`/v1/routines/${id}`).set("Cookie", intruder.cookie);
 
     expect([read.status, replaced.status, deleted.status]).toEqual([404, 404, 404]);

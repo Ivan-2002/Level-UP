@@ -15,7 +15,14 @@ type Props = {
 };
 
 /** A 44 x 44 icon-only button. */
-export function IconButton({ icon, accessibilityLabel, accessibilityHint, onPress, variant = "bordered", disabled = false }: Props) {
+export function IconButton({
+  icon,
+  accessibilityLabel,
+  accessibilityHint,
+  onPress,
+  variant = "bordered",
+  disabled = false,
+}: Props) {
   const styles = useStyles();
   const t = useTheme();
   return (
@@ -26,7 +33,11 @@ export function IconButton({ icon, accessibilityLabel, accessibilityHint, onPres
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.base, variant === "bordered" && styles.bordered, (pressed || disabled) && styles.dimmed]}
+      style={({ pressed }) => [
+        styles.base,
+        variant === "bordered" && styles.bordered,
+        (pressed || disabled) && styles.dimmed,
+      ]}
     >
       <Icon name={icon} color={disabled ? t.colors.inkMuted : t.colors.ink} />
     </Pressable>
@@ -34,7 +45,13 @@ export function IconButton({ icon, accessibilityLabel, accessibilityHint, onPres
 }
 
 const useStyles = createStyles((t) => ({
-  base: { width: TAP_TARGET, height: TAP_TARGET, borderRadius: t.radius.md, alignItems: "center", justifyContent: "center" },
+  base: {
+    width: TAP_TARGET,
+    height: TAP_TARGET,
+    borderRadius: t.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   bordered: { borderWidth: 1, borderColor: t.colors.border, backgroundColor: t.colors.surfaceRaised },
   dimmed: { opacity: 0.6 },
 }));

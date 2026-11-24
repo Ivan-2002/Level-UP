@@ -1,7 +1,15 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { BODYWEIGHT_FALLBACK_KG, goalProgressText, streakText, type FinishSummary, type FinishWorkoutResponse, type LevelStatus, type WeightUnit } from "@levelup/shared";
+import {
+  BODYWEIGHT_FALLBACK_KG,
+  goalProgressText,
+  streakText,
+  type FinishSummary,
+  type FinishWorkoutResponse,
+  type LevelStatus,
+  type WeightUnit,
+} from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Icon } from "@/components/Icon";
@@ -66,14 +74,22 @@ export function WorkoutSummaryScreen() {
   const preview = previewSummary(last.workout, last.finishedAt, profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG);
   const failed = outboxItem?.status === "needs_attention";
   const title = last.workout.name.trim() ? `${last.workout.name.trim()} complete` : "Workout complete";
-  const date = new Date(last.workout.startedAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const date = new Date(last.workout.startedAt).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View style={styles.status} accessibilityLiveRegion="polite">
-            <Icon name={summary ? "check" : failed ? "alert" : "sync"} size={16} color={summary ? t.colors.success : failed ? t.colors.danger : t.colors.ice} />
+            <Icon
+              name={summary ? "check" : failed ? "alert" : "sync"}
+              size={16}
+              color={summary ? t.colors.success : failed ? t.colors.danger : t.colors.ice}
+            />
             <Text variant="labelStrong" tone={summary ? "success" : failed ? "danger" : "ice"}>
               {summary ? "Workout saved" : failed ? "The server didn't accept this workout" : "Saved on this phone"}
             </Text>
@@ -93,18 +109,28 @@ export function WorkoutSummaryScreen() {
           ) : null}
         </View>
 
-        {summary ? <XpCard summary={summary} preview={last.preview} /> : <PreviewXp preview={last.preview} levelBefore={last.levelBefore} failed={failed} />}
+        {summary ? (
+          <XpCard summary={summary} preview={last.preview} />
+        ) : (
+          <PreviewXp preview={last.preview} levelBefore={last.levelBefore} failed={failed} />
+        )}
 
         <View style={styles.tiles}>
           <StatTile
             label="Duration"
             value={formatElapsed((summary?.stats.durationSec ?? preview.durationSec) * 1000)}
-            note={summary ? compareDuration(summary.stats.durationSec, summary.stats.previous?.durationSec ?? null)?.text : undefined}
+            note={
+              summary
+                ? compareDuration(summary.stats.durationSec, summary.stats.previous?.durationSec ?? null)?.text
+                : undefined
+            }
           />
           <StatTile
             label="Sets"
             value={String(summary?.stats.setCount ?? preview.setCount)}
-            note={summary ? compareCount(summary.stats.setCount, summary.stats.previous?.setCount ?? null)?.text : undefined}
+            note={
+              summary ? compareCount(summary.stats.setCount, summary.stats.previous?.setCount ?? null)?.text : undefined
+            }
           />
           <VolumeTile summary={summary} previewKg={preview.volumeKg} unit={unit} />
         </View>
@@ -155,7 +181,12 @@ function XpCard({ summary, preview }: { summary: FinishSummary; preview: SavedPr
         </Text>
       ) : null}
       <View style={styles.barWrap}>
-        <View style={styles.barTrack} accessible accessibilityRole="progressbar" accessibilityLabel={`${bar.levelText}: ${bar.progressText}. ${bar.toNextText}.`}>
+        <View
+          style={styles.barTrack}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={`${bar.levelText}: ${bar.progressText}. ${bar.toNextText}.`}
+        >
           <View style={[styles.barBefore, { width: `${bar.before * 100}%` }]} />
           <View style={[styles.barGained, { width: `${bar.gained * 100}%` }]} />
         </View>
@@ -188,7 +219,11 @@ function XpCard({ summary, preview }: { summary: FinishSummary; preview: SavedPr
 function GapNote({ gap }: { gap: GapExplanation }) {
   const styles = useStyles();
   return (
-    <View style={styles.breakdown} accessible accessibilityLabel={`Different from the estimate. ${gap.estimateText}. ${gap.lines.map((l) => `${l.text}: ${l.amountText}`).join(". ")}.`}>
+    <View
+      style={styles.breakdown}
+      accessible
+      accessibilityLabel={`Different from the estimate. ${gap.estimateText}. ${gap.lines.map((l) => `${l.text}: ${l.amountText}`).join(". ")}.`}
+    >
       <Text variant="labelStrong">Why it differs from the estimate</Text>
       <Text variant="caption" tone="inkMuted" tabular>
         {gap.estimateText}
@@ -262,7 +297,15 @@ function ExerciseXp({ response }: { response: FinishWorkoutResponse }) {
  * Before the server answers: the live score saved at Finish, labelled as an estimate, with
  * the level bar's pending segment. Never "Level up!": only the server's answer says that.
  */
-function PreviewXp({ preview, levelBefore, failed }: { preview: SavedPreview | null; levelBefore: LevelStatus | null; failed: boolean }) {
+function PreviewXp({
+  preview,
+  levelBefore,
+  failed,
+}: {
+  preview: SavedPreview | null;
+  levelBefore: LevelStatus | null;
+  failed: boolean;
+}) {
   const styles = useStyles();
   if (!preview) {
     // Saved by an older app version, or no history was ever pinned: no estimate to show.
@@ -328,10 +371,26 @@ function PreviewXp({ preview, levelBefore, failed }: { preview: SavedPreview | n
   );
 }
 
-function VolumeTile({ summary, previewKg, unit }: { summary: FinishSummary | null; previewKg: number; unit: WeightUnit }) {
+function VolumeTile({
+  summary,
+  previewKg,
+  unit,
+}: {
+  summary: FinishSummary | null;
+  previewKg: number;
+  unit: WeightUnit;
+}) {
   const kg = summary?.stats.volumeKg ?? previewKg;
   const comparison = summary ? compareVolume(summary.stats.volumeKg, summary.stats.previous?.volumeKg ?? null) : null;
-  return <StatTile label="Volume" value={volumeText(kg, unit)} suffix={` ${unit}`} note={comparison?.text} noteGood={comparison?.better} />;
+  return (
+    <StatTile
+      label="Volume"
+      value={volumeText(kg, unit)}
+      suffix={` ${unit}`}
+      note={comparison?.text}
+      noteGood={comparison?.better}
+    />
+  );
 }
 
 function PrList({ prs, workout, unit }: { prs: FinishSummary["prs"]; workout: ActiveWorkout; unit: WeightUnit }) {
@@ -345,7 +404,12 @@ function PrList({ prs, workout, unit }: { prs: FinishSummary["prs"]; workout: Ac
         {prs.map((pr, i) => {
           const line = prLine(pr, exercises.get(pr.exerciseId), unit);
           return (
-            <View key={`${pr.exerciseId}-${pr.kind}`} style={[styles.prRow, i > 0 && styles.prDivider]} accessible accessibilityLabel={`${pr.exerciseName}, ${line.detail}: ${line.value}, ${line.was}`}>
+            <View
+              key={`${pr.exerciseId}-${pr.kind}`}
+              style={[styles.prRow, i > 0 && styles.prDivider]}
+              accessible
+              accessibilityLabel={`${pr.exerciseName}, ${line.detail}: ${line.value}, ${line.was}`}
+            >
               <View style={styles.prIcon}>
                 <Icon name="pr" size={18} color={t.colors.purple} />
               </View>
@@ -378,11 +442,30 @@ const useStyles = createStyles((t) => ({
   content: { padding: t.space[4], paddingTop: t.space[6], gap: t.space[6] },
   header: { gap: t.space[1] },
   status: { flexDirection: "row", alignItems: "center", gap: 6 },
-  xpCard: { backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border, borderRadius: t.radius.xl, padding: t.space[4], gap: t.space[4] },
+  xpCard: {
+    backgroundColor: t.colors.surface,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    borderRadius: t.radius.xl,
+    padding: t.space[4],
+    gap: t.space[4],
+  },
   xpTop: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
-  levelPill: { height: 28, paddingHorizontal: t.space[3], borderRadius: t.radius.pill, backgroundColor: t.colors.purpleSoft, justifyContent: "center" },
+  levelPill: {
+    height: 28,
+    paddingHorizontal: t.space[3],
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.purpleSoft,
+    justifyContent: "center",
+  },
   barWrap: { gap: 6 },
-  barTrack: { height: 10, borderRadius: t.radius.pill, backgroundColor: t.colors.purpleSoft, overflow: "hidden", flexDirection: "row" },
+  barTrack: {
+    height: 10,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.purpleSoft,
+    overflow: "hidden",
+    flexDirection: "row",
+  },
   barBefore: { height: 10, backgroundColor: t.colors.purple },
   barGained: { height: 10, backgroundColor: t.colors.ice },
   // The estimate: the gained colour, lighter, so it reads as not yet confirmed.
@@ -393,10 +476,23 @@ const useStyles = createStyles((t) => ({
   tiles: { flexDirection: "row", gap: t.space[2] },
   prs: { gap: t.space[3] },
   prCard: { padding: 0, gap: 0 },
-  prRow: { flexDirection: "row", alignItems: "center", gap: t.space[3], paddingVertical: t.space[3], paddingHorizontal: t.space[4] },
+  prRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: t.space[3],
+    paddingVertical: t.space[3],
+    paddingHorizontal: t.space[4],
+  },
   prDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
   exerciseRow: { gap: 2, paddingVertical: t.space[3], paddingHorizontal: t.space[4] },
-  prIcon: { width: 36, height: 36, borderRadius: t.radius.pill, backgroundColor: t.colors.purpleSoft, alignItems: "center", justifyContent: "center" },
+  prIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.purpleSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   prValue: { alignItems: "flex-end" },
   footer: { paddingHorizontal: t.space[4], paddingTop: t.space[3], paddingBottom: t.space[2] },
 }));

@@ -19,7 +19,14 @@ import { useProfile } from "@/features/profile/use-profile";
 import { currentExercise, setCounts, type ActiveWorkout } from "./active-workout";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
 import { ElapsedTimer } from "./ElapsedTimer";
-import { lastSessionText, nextUp, scoreLiveWorkout, scoringContext, snapshotToPin, workoutSegments } from "./live-workout";
+import {
+  lastSessionText,
+  nextUp,
+  scoreLiveWorkout,
+  scoringContext,
+  snapshotToPin,
+  workoutSegments,
+} from "./live-workout";
 import { RestBar } from "./RestBar";
 import { exerciseSummaryQuery, useExerciseSummary } from "./use-exercise-summary";
 import { useXpHistory } from "./use-xp-history";
@@ -76,7 +83,9 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   const snapshot = snapshotToPin(workout, {
     history: xpHistory?.history,
     bodyweight: { xp: profile?.xpBodyweightKg ?? bodyweightKg, typed: bodyweightKg },
-    dailyCap: xpHistory?.dailyCap ? { config: xpHistory.dailyCap.config, xpBefore: xpHistory.dailyCap.xpBeforeOn(capDay) } : null,
+    dailyCap: xpHistory?.dailyCap
+      ? { config: xpHistory.dailyCap.config, xpBefore: xpHistory.dailyCap.xpBeforeOn(capDay) }
+      : null,
   });
   useEffect(() => {
     if (snapshot) activeWorkoutStore.getState().pinScoring(snapshot);
@@ -105,15 +114,22 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   // exercises at the gym doesn't wait for the network.
   const exerciseIds = workout.exercises.map((e) => e.exercise.id).join(",");
   useEffect(() => {
-    for (const id of exerciseIds.split(",").filter(Boolean)) void queryClient.prefetchQuery(exerciseSummaryQuery(userId, id));
+    for (const id of exerciseIds.split(",").filter(Boolean))
+      void queryClient.prefetchQuery(exerciseSummaryQuery(userId, id));
   }, [exerciseIds, queryClient, userId]);
 
   const { done, total } = setCounts(workout);
   const { segments, currentIndex } = workoutSegments(workout);
   const index = Math.max(0, currentIndex);
   const following = workout.exercises[index + 1];
-  const followingSummary = queryClient.getQueryData(exerciseSummaryQuery(userId, following?.exercise.id ?? "none").queryKey);
-  const started = new Date(workout.startedAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const followingSummary = queryClient.getQueryData(
+    exerciseSummaryQuery(userId, following?.exercise.id ?? "none").queryKey,
+  );
+  const started = new Date(workout.startedAt).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 
   function discard() {
     Alert.alert("Discard workout?", "Your sets will be deleted from this phone. This can't be undone.", [
@@ -140,16 +156,34 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
               {workout.name.trim() || "Workout"}
             </Text>
             <Text variant="caption" tone="inkMuted">
-              {workout.exercises.length > 0 ? `Exercise ${index + 1} of ${workout.exercises.length} · ${started}` : started}
+              {workout.exercises.length > 0
+                ? `Exercise ${index + 1} of ${workout.exercises.length} · ${started}`
+                : started}
             </Text>
           </View>
           <Button label="Finish" variant="secondary" size="md" onPress={() => router.push("/finish-workout")} />
         </View>
 
         <View style={styles.tiles}>
-          <StatTile label="Elapsed" icon="timer" value={<ElapsedTimer startedAt={workout.startedAt} />} accessibilityLabel="Elapsed time" />
-          <StatTile label="Sets left" value={String(total - done)} suffix={` / ${total}`} accessibilityLabel={`${total - done} of ${total} sets left`} />
-          <StatTile label="XP earned" icon="xp" tone="progress" value={live ? `+${live.total}` : "…"} accessibilityLabel={live ? `XP earned, ${live.total}` : "XP earned, loading"} />
+          <StatTile
+            label="Elapsed"
+            icon="timer"
+            value={<ElapsedTimer startedAt={workout.startedAt} />}
+            accessibilityLabel="Elapsed time"
+          />
+          <StatTile
+            label="Sets left"
+            value={String(total - done)}
+            suffix={` / ${total}`}
+            accessibilityLabel={`${total - done} of ${total} sets left`}
+          />
+          <StatTile
+            label="XP earned"
+            icon="xp"
+            tone="progress"
+            value={live ? `+${live.total}` : "…"}
+            accessibilityLabel={live ? `XP earned, ${live.total}` : "XP earned, loading"}
+          />
         </View>
         {live?.dailyCapNote ? (
           <Text variant="caption" tone="inkMuted" style={styles.capNote}>
@@ -159,7 +193,13 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
 
         {segments.length > 0 ? <ProgressSegments segments={segments} currentIndex={index} /> : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsScroll} accessibilityRole="tablist">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+          style={styles.tabsScroll}
+          accessibilityRole="tablist"
+        >
           {workout.exercises.map((e) => {
             const doneHere = e.sets.filter((s) => s.doneAt !== null).length;
             return (
@@ -182,7 +222,14 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft ? (
-            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} live={live} context={context} />
+            <CurrentExerciseCard
+              workout={workout}
+              draft={draft}
+              summary={summary.data}
+              bodyweightKg={bodyweightKg}
+              live={live}
+              context={context}
+            />
           ) : (
             <Card>
               <Text variant="heading">Add your first exercise</Text>
@@ -229,7 +276,14 @@ const useStyles = createStyles((t) => ({
   flex: { flex: 1, minWidth: 0 },
   empty: { alignItems: "stretch", justifyContent: "center", padding: t.space[4], gap: t.space[4] },
   centeredText: { textAlign: "center" },
-  header: { paddingTop: t.space[4], paddingHorizontal: t.space[4], paddingBottom: t.space[3], gap: t.space[3], borderBottomWidth: 1, borderBottomColor: t.colors.border },
+  header: {
+    paddingTop: t.space[4],
+    paddingHorizontal: t.space[4],
+    paddingBottom: t.space[3],
+    gap: t.space[3],
+    borderBottomWidth: 1,
+    borderBottomColor: t.colors.border,
+  },
   titleRow: { flexDirection: "row", alignItems: "center", gap: t.space[3] },
   tiles: { flexDirection: "row", gap: t.space[2] },
   capNote: { marginTop: -t.space[1] },

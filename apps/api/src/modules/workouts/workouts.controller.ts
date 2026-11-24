@@ -43,7 +43,10 @@ export async function getWorkoutSummary(req: Request<{ id: string }>, res: Respo
   res.json(await workoutsService.getWorkoutSummary(req.session!.user.id, req.params.id));
 }
 
-export async function exerciseSummary(req: Request<{ id: string }>, res: Response<ExerciseSummary, { query: ExerciseSummaryQuery }>) {
+export async function exerciseSummary(
+  req: Request<{ id: string }>,
+  res: Response<ExerciseSummary, { query: ExerciseSummaryQuery }>,
+) {
   res.json(await historyService.exerciseSummary(req.session!.user.id, req.params.id, res.locals.query.sessions));
 }
 

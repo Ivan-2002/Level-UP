@@ -24,7 +24,9 @@ describe("GET /exercises", () => {
     const { items } = exerciseListSchema.parse(res.body); // throws if the contract drifted
     expect(items).toHaveLength(EXERCISE_CATALOG.length);
     expect(new Set(items.map((e) => e.bodyPart))).toEqual(new Set(BODY_PARTS));
-    expect(items).toContainEqual(expect.objectContaining({ name: "Push-up", bodyPart: "chest", equipment: "bodyweight" }));
+    expect(items).toContainEqual(
+      expect.objectContaining({ name: "Push-up", bodyPart: "chest", equipment: "bodyweight" }),
+    );
   });
 
   it("marks plank as timed (seconds) and everything else as counted reps", async () => {
@@ -58,19 +60,29 @@ describe("GET /exercises", () => {
     const user = await signUpUser();
     const res = await request(app).get("/v1/exercises").set("Cookie", user.cookie);
     const limits = Object.fromEntries(
-      res.body.items.filter((e: { maxPlausibleWeightKg: number | null }) => e.maxPlausibleWeightKg !== null).map((e: { name: string; maxPlausibleWeightKg: number }) => [e.name, e.maxPlausibleWeightKg]),
+      res.body.items
+        .filter((e: { maxPlausibleWeightKg: number | null }) => e.maxPlausibleWeightKg !== null)
+        .map((e: { name: string; maxPlausibleWeightKg: number }) => [e.name, e.maxPlausibleWeightKg]),
     );
 
-    expect(limits).toEqual({ "Back Squat": 450, Deadlift: 450, "Leg Press": 500, "Standing Calf Raise": 300, "One-arm Dumbbell Row": 100 });
+    expect(limits).toEqual({
+      "Back Squat": 450,
+      Deadlift: 450,
+      "Leg Press": 500,
+      "Standing Calf Raise": 300,
+      "One-arm Dumbbell Row": 100,
+    });
     expect(res.body.items.every((e: { maxPlausibleReps: number | null }) => e.maxPlausibleReps === null)).toBe(true);
   });
 
   it("searches name OR muscle group, ignoring case, every word must match", async () => {
     const user = await signUpUser();
     const search = async (q: string) =>
-      (await request(app).get(`/v1/exercises?search=${encodeURIComponent(q)}`).set("Cookie", user.cookie)).body.items.map(
-        (e: { name: string }) => e.name,
-      );
+      (
+        await request(app)
+          .get(`/v1/exercises?search=${encodeURIComponent(q)}`)
+          .set("Cookie", user.cookie)
+      ).body.items.map((e: { name: string }) => e.name);
 
     expect(await search("BENCH")).toEqual(["Bench Press"]);
     expect(await search("lats")).toEqual(expect.arrayContaining(["Pull-up", "Lat Pulldown", "One-arm Dumbbell Row"]));
@@ -101,7 +113,13 @@ describe("POST /exercises (custom exercise)", () => {
     await seedExercises();
   });
 
-  const custom = { name: "Landmine Press", muscleGroup: "Front delts", bodyPart: "shoulders", equipment: "barbell", mechanic: "compound" };
+  const custom = {
+    name: "Landmine Press",
+    muscleGroup: "Front delts",
+    bodyPart: "shoulders",
+    equipment: "barbell",
+    mechanic: "compound",
+  };
 
   it("creates it with conservative server-chosen XP tuning", async () => {
     const user = await signUpUser();
@@ -134,10 +152,13 @@ describe("POST /exercises (custom exercise)", () => {
   it("gives bodyweight custom exercises a share of bodyweight so they still earn XP", async () => {
     const user = await signUpUser();
 
-    const res = await request(app)
-      .post("/v1/exercises")
-      .set("Cookie", user.cookie)
-      .send({ name: "Archer Push-up", muscleGroup: "Chest", bodyPart: "chest", equipment: "bodyweight", mechanic: "compound" });
+    const res = await request(app).post("/v1/exercises").set("Cookie", user.cookie).send({
+      name: "Archer Push-up",
+      muscleGroup: "Chest",
+      bodyPart: "chest",
+      equipment: "bodyweight",
+      mechanic: "compound",
+    });
 
     expect(res.body.bodyweightRatio).toBe(0.6);
   });
@@ -148,7 +169,9 @@ describe("POST /exercises (custom exercise)", () => {
     await request(app).post("/v1/exercises").set("Cookie", owner.cookie).send(custom);
 
     const names = async (user: typeof owner) =>
-      (await request(app).get("/v1/exercises?search=landmine").set("Cookie", user.cookie)).body.items.map((e: { name: string }) => e.name);
+      (await request(app).get("/v1/exercises?search=landmine").set("Cookie", user.cookie)).body.items.map(
+        (e: { name: string }) => e.name,
+      );
 
     expect(await names(owner)).toEqual(["Landmine Press"]);
     expect(await names(someoneElse)).toEqual([]);
@@ -157,7 +180,10 @@ describe("POST /exercises (custom exercise)", () => {
   it("validates the body and needs a session", async () => {
     const user = await signUpUser();
 
-    const invalid = await request(app).post("/v1/exercises").set("Cookie", user.cookie).send({ ...custom, name: "X", equipment: "rock" });
+    const invalid = await request(app)
+      .post("/v1/exercises")
+      .set("Cookie", user.cookie)
+      .send({ ...custom, name: "X", equipment: "rock" });
     const anonymous = await request(app).post("/v1/exercises").send(custom);
 
     expect(invalid.status).toBe(400);

@@ -9,7 +9,8 @@ import { app, signUpPlayer, signUpUser, type TestUser } from "../../test/helpers
 // never past the real level, so repeats and late requests are harmless.
 
 /** Sets the cached total XP (all the level reads); the ledger isn't needed here. */
-const setTotalXp = (user: TestUser, totalXp: number) => prisma.profile.update({ where: { userId: user.userId }, data: { totalXp } });
+const setTotalXp = (user: TestUser, totalXp: number) =>
+  prisma.profile.update({ where: { userId: user.userId }, data: { totalXp } });
 
 async function celebrate(user: TestUser, level: number) {
   const res = await request(app).post("/v1/profile/celebrated").set("Cookie", user.cookie).send({ level });
@@ -46,7 +47,9 @@ describe("POST /profile/celebrated", () => {
     const user = await signUpPlayer();
     await setTotalXp(user, xpForLevel(5));
 
-    await Promise.all([3, 5, 4].map((level) => request(app).post("/v1/profile/celebrated").set("Cookie", user.cookie).send({ level })));
+    await Promise.all(
+      [3, 5, 4].map((level) => request(app).post("/v1/profile/celebrated").set("Cookie", user.cookie).send({ level })),
+    );
 
     expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).celebratedLevel).toBe(5);
   });
@@ -73,7 +76,10 @@ describe("POST /profile/celebrated", () => {
     expect(bad.status).toBe(400);
 
     const noCharacter = await signUpUser();
-    const missing = await request(app).post("/v1/profile/celebrated").set("Cookie", noCharacter.cookie).send({ level: 1 });
+    const missing = await request(app)
+      .post("/v1/profile/celebrated")
+      .set("Cookie", noCharacter.cookie)
+      .send({ level: 1 });
     expect(missing.status).toBe(404);
 
     expect((await request(app).post("/v1/profile/celebrated").send({ level: 1 })).status).toBe(401);

@@ -28,9 +28,7 @@ export async function signUpUser(overrides: { email?: string; password?: string 
   const email = overrides.email ?? `player${counter}@example.com`;
   const password = overrides.password ?? "correct-horse-battery";
 
-  const res = await request(app)
-    .post("/api/auth/sign-up/email")
-    .send({ email, password, name: "Test Player" });
+  const res = await request(app).post("/api/auth/sign-up/email").send({ email, password, name: "Test Player" });
   if (res.status !== 200) {
     throw new Error(`Test sign-up failed (${res.status}): ${res.text}`);
   }

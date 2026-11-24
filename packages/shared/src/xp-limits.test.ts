@@ -29,11 +29,19 @@ describe("plausibilityLimits", () => {
 
   it("lets an exercise override either limit (a leg press moves more than a chest press)", () => {
     const legPress = { ...machineCompound, maxPlausibleWeightKg: 500, maxPlausibleReps: null };
-    expect(plausibilityLimits(legPress)).toEqual({ maxWeightKg: 500, maxReps: DEFAULT_PLAUSIBILITY.machine.compound.maxReps });
+    expect(plausibilityLimits(legPress)).toEqual({
+      maxWeightKg: 500,
+      maxReps: DEFAULT_PLAUSIBILITY.machine.compound.maxReps,
+    });
   });
 
   it("never flags a timed exercise for duration: its limit is the hard 600 s", () => {
-    const plank = { equipment: "bodyweight", mechanic: "isolation", repsUnit: "seconds", maxPlausibleReps: 30 } as const;
+    const plank = {
+      equipment: "bodyweight",
+      mechanic: "isolation",
+      repsUnit: "seconds",
+      maxPlausibleReps: 30,
+    } as const;
     expect(plausibilityLimits(plank).maxReps).toBe(HOLD_MAX_SEC);
   });
 
@@ -72,7 +80,9 @@ describe("flagReasonText", () => {
     expect(flagReasonText("weight_above_range", { reps: 12, weightKg: 300 }, limits, "kg")).toBe(
       "300 kg is above the 50 kg limit for this exercise, so this set earns no XP and doesn't count as a PR.",
     );
-    expect(flagReasonText("weight_above_range", { reps: 12, weightKg: 300 }, limits, "lb")).toContain("661.39 lb is above the 110.23 lb limit");
+    expect(flagReasonText("weight_above_range", { reps: 12, weightKg: 300 }, limits, "lb")).toContain(
+      "661.39 lb is above the 110.23 lb limit",
+    );
   });
 
   it("names the reps and the limit", () => {
@@ -138,7 +148,10 @@ describe("jump cap: estimated 1RM (Epley) at every rep count, or seconds for tim
 
 describe("applyDailyCap: full XP to 3,100, 25% beyond, never more than 6,200 a day", () => {
   it("takes other cap values (the app uses the ones the server sent)", () => {
-    expect(applyDailyCap(0, [80, 80], { limit: 100, bandRate: 0.5, ceilingMultiple: 2 })).toEqual({ awarded: [80, 50], heldBack: 30 }); // 20 to the limit, then 50% of 60
+    expect(applyDailyCap(0, [80, 80], { limit: 100, bandRate: 0.5, ceilingMultiple: 2 })).toEqual({
+      awarded: [80, 50],
+      heldBack: 30,
+    }); // 20 to the limit, then 50% of 60
   });
 
   it("uses the limit chosen with the simulation", () => {
@@ -179,9 +192,17 @@ describe("applyDailyCap: full XP to 3,100, 25% beyond, never more than 6,200 a d
   });
 
   it("reaches the ceiling only after about 15,500 raw XP in a day", () => {
-    const { awarded } = applyDailyCap(0, Array.from({ length: 155 }, () => 100));
+    const { awarded } = applyDailyCap(
+      0,
+      Array.from({ length: 155 }, () => 100),
+    );
     expect(awarded.reduce((a, b) => a + b, 0)).toBe(DAILY_XP_CAP.limit * DAILY_XP_CAP.ceilingMultiple);
-    expect(applyDailyCap(0, Array.from({ length: 154 }, () => 100)).awarded.reduce((a, b) => a + b, 0)).toBeLessThan(6200);
+    expect(
+      applyDailyCap(
+        0,
+        Array.from({ length: 154 }, () => 100),
+      ).awarded.reduce((a, b) => a + b, 0),
+    ).toBeLessThan(6200);
   });
 
   it("covers set XP only: weekly and streak bonuses are outside it", () => {

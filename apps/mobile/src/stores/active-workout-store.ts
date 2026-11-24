@@ -56,11 +56,22 @@ export function createActiveWorkoutStore(deps: { storage: StateStorage; newId: (
           },
           startFromRoutine: (userId, weightUnit, routine, lastSets) => {
             if (busy(userId)) return;
-            set({ workout: workout.startFromRoutine({ userId, clientId: deps.newId(), now: deps.now(), weightUnit, routine, lastSets, newId: deps.newId }) });
+            set({
+              workout: workout.startFromRoutine({
+                userId,
+                clientId: deps.newId(),
+                now: deps.now(),
+                weightUnit,
+                routine,
+                lastSets,
+                newId: deps.newId,
+              }),
+            });
           },
           rename: (name) => update((w) => ({ ...w, name })),
           linkRoutine: (routineId) => update((w) => workout.linkRoutine(w, routineId)),
-          addExercises: (exercises, lastSets) => update((w) => workout.addExercises(w, exercises, deps.newId, lastSets)),
+          addExercises: (exercises, lastSets) =>
+            update((w) => workout.addExercises(w, exercises, deps.newId, lastSets)),
           removeExercise: (key) => update((w) => workout.removeExercise(w, key)),
           selectExercise: (key) => update((w) => workout.selectExercise(w, key)),
           stepRest: (key, direction) => update((w) => workout.stepRest(w, key, direction)),

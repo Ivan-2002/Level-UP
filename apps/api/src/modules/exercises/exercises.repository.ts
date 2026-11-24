@@ -38,7 +38,10 @@ export function findUsableExercises(
 }
 
 export function findUsableExercisesByIds(userId: string, ids: string[], db: Db = prisma): Promise<ExerciseRow[]> {
-  return db.exercise.findMany({ where: { AND: [{ id: { in: ids } }, usableBy(userId)] }, include: withPreferenceOf(userId) });
+  return db.exercise.findMany({
+    where: { AND: [{ id: { in: ids } }, usableBy(userId)] },
+    include: withPreferenceOf(userId),
+  });
 }
 
 export type NewCustomExercise = {

@@ -45,7 +45,9 @@ export function CreateExerciseScreen({ initialName }: { initialName: string }) {
     const parsed = createExerciseSchema.safeParse({ name, muscleGroup, bodyPart, equipment, mechanic, repsUnit });
     if (!parsed.success) {
       const found: Partial<Record<Field, string>> = {};
-      for (const issue of parsed.error.issues) found[issue.path[0] as Field] ??= issue.path[0] === "bodyPart" || issue.path[0] === "equipment" ? "Choose one." : issue.message;
+      for (const issue of parsed.error.issues)
+        found[issue.path[0] as Field] ??=
+          issue.path[0] === "bodyPart" || issue.path[0] === "equipment" ? "Choose one." : issue.message;
       return setErrors(found);
     }
     setErrors({});
@@ -59,12 +61,24 @@ export function CreateExerciseScreen({ initialName }: { initialName: string }) {
     });
   }
 
-  const choice = <T extends string>(label: string, options: readonly T[], value: T | null, onChange: (v: T) => void, error?: string) => (
+  const choice = <T extends string>(
+    label: string,
+    options: readonly T[],
+    value: T | null,
+    onChange: (v: T) => void,
+    error?: string,
+  ) => (
     <View style={styles.group}>
       <Text variant="label">{label}</Text>
       <View style={styles.chips} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {options.map((option) => (
-          <Chip key={option} label={capitalise(option)} role="radio" selected={option === value} onPress={() => onChange(option)} />
+          <Chip
+            key={option}
+            label={capitalise(option)}
+            role="radio"
+            selected={option === value}
+            onPress={() => onChange(option)}
+          />
         ))}
       </View>
       {error ? (
@@ -85,7 +99,14 @@ export function CreateExerciseScreen({ initialName }: { initialName: string }) {
       </View>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <TextField label="Name" value={name} onChangeText={setName} error={errors.name} placeholder="e.g. Landmine press" maxLength={40} />
+          <TextField
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            error={errors.name}
+            placeholder="e.g. Landmine press"
+            maxLength={40}
+          />
           <TextField
             label="Muscle group"
             value={muscleGroup}
@@ -114,7 +135,13 @@ export function CreateExerciseScreen({ initialName }: { initialName: string }) {
 const useStyles = createStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.surface },
   flex: { flex: 1 },
-  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: t.space[4], paddingTop: t.space[4] },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: t.space[4],
+    paddingTop: t.space[4],
+  },
   content: { padding: t.space[4], gap: t.space[4], paddingBottom: t.space[8] },
   group: { gap: t.space[2] },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: t.space[2] },

@@ -77,3 +77,7 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      # Fails if any file isn't formatted the way Prettier would write it. To fix: pnpm format.
+      - name: Check formatting (Prettier)
+        run: pnpm format:check

@@ -52,7 +52,6 @@ export const MAX_XP_SETS_PER_EXERCISE = 10;
  */
 export const MAX_WARM_UPS_PER_EXERCISE = 5;
 
-
 /** The short label shown after a set's XP in the live view and the summary. */
 export function setTagText(tag: SetTag): string {
   switch (tag) {
@@ -125,7 +124,13 @@ export function scoreSessionSets(input: {
   history: Map<string, ExerciseXpHistory>;
   bodyweight: { xp: number; typed: number };
 }): SessionScore {
-  const scored: ScoredSet[] = input.sets.map(() => ({ xp: 0, effort: 1, tag: null, flagReason: null, isFlagged: false }));
+  const scored: ScoredSet[] = input.sets.map(() => ({
+    xp: 0,
+    effort: 1,
+    tag: null,
+    flagReason: null,
+    isFlagged: false,
+  }));
   const summary: SessionScore["exercises"] = new Map();
 
   for (const [exerciseId, indexes] of groupByExercise(input.sets)) {
@@ -141,21 +146,42 @@ export function scoreSessionSets(input: {
     }
 
     // 2. Jump cap, against earlier sessions only (the baseline is fixed for the session).
-    const lifted = valid.map((i) => liftedKg(input.sets[i]!.weightKg, input.bodyweight.typed, exercise.bodyweightRatio));
-    const values = valid.map((i, n) => jumpCheckValue({ reps: input.sets[i]!.reps, loadKg: lifted[n]! }, exercise.repsUnit));
+    const lifted = valid.map((i) =>
+      liftedKg(input.sets[i]!.weightKg, input.bodyweight.typed, exercise.bodyweightRatio),
+    );
+    const values = valid.map((i, n) =>
+      jumpCheckValue({ reps: input.sets[i]!.reps, loadKg: lifted[n]! }, exercise.repsUnit),
+    );
     const judged = judgeSession(history.jumpBaseline, values);
     const sessionBest = trustedBest(values, judged.aboveHistory);
     summary.set(exerciseId, { jumpBaselineAfter: judged.baselineAfter, sessionBest });
 
     // 3-6. Effort, tags, the 10-set limit and the XP.
-    scoreValidSets({ sets: input.sets, valid, lifted, values, judged, recentBest: history.recentBest, exercise, bodyweightXp: input.bodyweight.xp }, scored);
+    scoreValidSets(
+      {
+        sets: input.sets,
+        valid,
+        lifted,
+        values,
+        judged,
+        recentBest: history.recentBest,
+        exercise,
+        bodyweightXp: input.bodyweight.xp,
+      },
+      scored,
+    );
   }
 
   return { sets: scored, exercises: summary };
 }
 
 /** Step 1: flags each implausible set in `scored` (0 XP, "Check this set") and returns the indexes of the rest. */
-function flagImplausibleSets(sets: SessionSet[], indexes: number[], limits: PlausibilityLimits, scored: ScoredSet[]): number[] {
+function flagImplausibleSets(
+  sets: SessionSet[],
+  indexes: number[],
+  limits: PlausibilityLimits,
+  scored: ScoredSet[],
+): number[] {
   const valid: number[] = [];
   for (const i of indexes) {
     const reason = plausibilityFlag(sets[i]!, limits);
@@ -192,7 +218,9 @@ function scoreValidSets(
   // 50 would otherwise turn every honest set after it into a warm-up or an easy set.
   const trusted = (n: number) => !judged.aboveHistory[n];
   let reference = baseline ? (trustedBest(values, judged.aboveHistory) ?? 0) : input.recentBest!;
-  const heaviestAt = baseline ? firstHeaviestPosition(valid.map((i, n) => (trusted(n) ? sets[i]!.weightKg : -Infinity))) : -1;
+  const heaviestAt = baseline
+    ? firstHeaviestPosition(valid.map((i, n) => (trusted(n) ? sets[i]!.weightKg : -Infinity)))
+    : -1;
   let workingSetDone = false;
   let warmUps = 0;
   let counted = 0;
@@ -242,7 +270,13 @@ function firstHeaviestPosition(weights: number[]): number {
 }
 
 /** The tag of a set that earns XP (step 4), in order of priority. */
-function tagFor(set: { reps: number; effort: number; timed: boolean; warmUp: boolean; aboveHistory: boolean }): SetTag | null {
+function tagFor(set: {
+  reps: number;
+  effort: number;
+  timed: boolean;
+  warmUp: boolean;
+  aboveHistory: boolean;
+}): SetTag | null {
   if (set.aboveHistory) return "above_history";
   if (set.warmUp) return "warm_up";
   if (!set.timed && set.effort < LOW_EFFORT) return "easy_set";
@@ -261,7 +295,10 @@ function groupByExercise(sets: SessionSet[]): Map<string, number[]> {
     const times = indexes.map((i) => (sets[i]!.completedAt ? Date.parse(sets[i]!.completedAt!) : NaN));
     if (times.some(Number.isNaN)) continue;
     const order = indexes.map((index, n) => ({ index, at: times[n]! })).sort((a, b) => a.at - b.at);
-    groups.set(exerciseId, order.map((o) => o.index));
+    groups.set(
+      exerciseId,
+      order.map((o) => o.index),
+    );
   }
   return groups;
 }
@@ -296,7 +333,12 @@ export function exerciseXpHistory(
   today: string,
 ): ExerciseXpHistory {
   const values = sessions.map((s) =>
-    s.sets.map((set) => jumpCheckValue({ reps: set.reps, loadKg: liftedKg(set.weightKg, s.bodyweightKg, exercise.bodyweightRatio) }, exercise.repsUnit)),
+    s.sets.map((set) =>
+      jumpCheckValue(
+        { reps: set.reps, loadKg: liftedKg(set.weightKg, s.bodyweightKg, exercise.bodyweightRatio) },
+        exercise.repsUnit,
+      ),
+    ),
   );
   let baseline: number | null = null;
   const bests: { date: string; value: number }[] = [];

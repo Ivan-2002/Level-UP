@@ -28,7 +28,13 @@ export function WorkoutsScreen() {
     <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={routines.isRefetching} onRefresh={() => void routines.refetch()} tintColor={t.colors.purple} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={routines.isRefetching}
+            onRefresh={() => void routines.refetch()}
+            tintColor={t.colors.purple}
+          />
+        }
       >
         <Text variant="display" accessibilityRole="header">
           Workouts
@@ -46,14 +52,20 @@ export function WorkoutsScreen() {
           {/* A workout without a routine: secondary, so a small link (hidden during a workout,
               whose Resume card is above). Shown with or without routines. */}
           {inProgress ? null : (
-            <StartOrResumeWorkout userId={userId} label="Start empty workout" look={{ variant: "plain", tone: "link", size: "md", icon: "play" }} />
+            <StartOrResumeWorkout
+              userId={userId}
+              label="Start empty workout"
+              look={{ variant: "plain", tone: "link", size: "md", icon: "play" }}
+            />
           )}
         </View>
 
         {items === undefined ? (
           routines.isError ? (
             <Card>
-              <Text tone="inkMuted">{"Couldn't load your routines. Connect once and they're saved on this phone."}</Text>
+              <Text tone="inkMuted">
+                {"Couldn't load your routines. Connect once and they're saved on this phone."}
+              </Text>
               <Button label="Try again" variant="secondary" size="md" onPress={() => routines.refetch()} />
             </Card>
           ) : (
@@ -98,7 +110,8 @@ function EmptyRoutines() {
     <Card>
       <Text variant="heading">No routines yet</Text>
       <Text tone="inkMuted">
-        Tap New routine to save the workouts you repeat, like a push day, and start them with one tap. Last time&apos;s numbers come with them.
+        Tap New routine to save the workouts you repeat, like a push day, and start them with one tap. Last time&apos;s
+        numbers come with them.
       </Text>
     </Card>
   );
@@ -111,4 +124,3 @@ const useStyles = createStyles((t) => ({
   routineRow: { flexDirection: "row", alignItems: "center" },
   flex: { flex: 1, gap: 2 },
 }));
-

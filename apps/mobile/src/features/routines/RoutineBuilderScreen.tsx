@@ -39,7 +39,8 @@ export function RoutineBuilderScreen({ routineId }: { routineId: string | null }
   useEffect(() => {
     if (opened.current) return;
     if (routineId === null) routineDraftStore.getState().begin(draftRules.emptyDraft(), forKey);
-    else if (existing.data) routineDraftStore.getState().begin(draftRules.draftFromRoutine(existing.data, newDraftKey), forKey);
+    else if (existing.data)
+      routineDraftStore.getState().begin(draftRules.draftFromRoutine(existing.data, newDraftKey), forKey);
     else return;
     opened.current = true;
   }, [forKey, routineId, existing.data]);
@@ -144,7 +145,13 @@ export function RoutineBuilderScreen({ routineId }: { routineId: string | null }
             </Card>
           ))}
 
-          <Button label="Add exercises" icon="plus" variant="dashed" size="md" onPress={() => router.push({ pathname: "/add-exercise", params: { for: "routine" } })} />
+          <Button
+            label="Add exercises"
+            icon="plus"
+            variant="dashed"
+            size="md"
+            onPress={() => router.push({ pathname: "/add-exercise", params: { for: "routine" } })}
+          />
         </ScrollView>
 
         <SafeAreaView edges={["bottom"]} style={styles.footer}>
@@ -167,7 +174,11 @@ function PlanSteppers({ item }: { item: draftRules.DraftRoutineExercise }) {
   const timed = item.exercise.repsUnit === "seconds";
   const rest = item.restSec ?? draftRules.inheritedRestSec(item.exercise);
   const restHint =
-    item.restSec !== null ? "Set for this routine" : item.exercise.restPreferenceSec !== null ? "Your usual for this exercise" : "Suggested";
+    item.restSec !== null
+      ? "Set for this routine"
+      : item.exercise.restPreferenceSec !== null
+        ? "Your usual for this exercise"
+        : "Suggested";
 
   return (
     <View style={styles.steppers}>

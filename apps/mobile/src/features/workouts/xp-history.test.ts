@@ -1,8 +1,23 @@
-import { applyDailyCap, epleyOneRepMax, exerciseXpHistoryListSchema, JUMP_CAP, type FinishWorkoutInput } from "@levelup/shared";
+import {
+  applyDailyCap,
+  epleyOneRepMax,
+  exerciseXpHistoryListSchema,
+  JUMP_CAP,
+  type FinishWorkoutInput,
+} from "@levelup/shared";
 import { readCached, writeCached } from "@/lib/device-cache";
 import { benchPress, pullUp, testUuid } from "@/test/fixtures";
 import type { OutboxItem } from "./outbox";
-import { dayXpBefore, effectiveXpHistory, historyAfterWorkout, historyFromList, replayOutbox, xpHistoryCacheKey, type ReplayContext, type XpHistory } from "./xp-history";
+import {
+  dayXpBefore,
+  effectiveXpHistory,
+  historyAfterWorkout,
+  historyFromList,
+  replayOutbox,
+  xpHistoryCacheKey,
+  type ReplayContext,
+  type XpHistory,
+} from "./xp-history";
 
 // expo-sqlite's kv-store is native: stand in an in-memory map with the same sync API.
 jest.mock("expo-sqlite/kv-store", () => {
@@ -17,7 +32,10 @@ jest.mock("expo-sqlite/kv-store", () => {
   };
 });
 
-const context: ReplayContext = { exercises: new Map([benchPress, pullUp].map((e) => [e.id, e])), bodyweight: { xp: 80, typed: 80 } };
+const context: ReplayContext = {
+  exercises: new Map([benchPress, pullUp].map((e) => [e.id, e])),
+  bodyweight: { xp: 80, typed: 80 },
+};
 const empty: XpHistory = new Map();
 
 /** A finished bench workout: `sets` x 8 reps at `kg`. */
@@ -53,19 +71,26 @@ describe("historyAfterWorkout", () => {
   });
 
   it("holds a jump of more than 25% to the line, as the server's replay does", () => {
-    const after = historyAfterWorkout(historyAfterWorkout(empty, bench(1, 60), context), bench(2, 100), context).get(benchPress.id)!;
+    const after = historyAfterWorkout(historyAfterWorkout(empty, bench(1, 60), context), bench(2, 100), context).get(
+      benchPress.id,
+    )!;
     expect(after.jumpBaseline).toBeCloseTo(epleyOneRepMax(60, 8) * (1 + JUMP_CAP.maxJump));
     expect(after.recentBest).toBeCloseTo(epleyOneRepMax(60, 8)); // a jump-capped lift is never the 12-week best
   });
 
   it("skips exercises missing from the library", () => {
-    const unknown: FinishWorkoutInput = { ...bench(1, 100), exercises: [{ exerciseId: testUuid(99), sets: [{ reps: 8, weightKg: 100 }] }] };
+    const unknown: FinishWorkoutInput = {
+      ...bench(1, 100),
+      exercises: [{ exerciseId: testUuid(99), sets: [{ reps: 8, weightKg: 100 }] }],
+    };
     expect(historyAfterWorkout(empty, unknown, context)).toBe(empty);
   });
 });
 
 describe("effectiveXpHistory: the server's copy plus the outbox", () => {
-  const server = historyFromList({ items: [{ exerciseId: benchPress.id, recentBest: epleyOneRepMax(60, 8), jumpBaseline: epleyOneRepMax(60, 8) }] });
+  const server = historyFromList({
+    items: [{ exerciseId: benchPress.id, recentBest: epleyOneRepMax(60, 8), jumpBaseline: epleyOneRepMax(60, 8) }],
+  });
 
   it("builds each queued workout on the one before, in outbox order", () => {
     // Two workouts logged offline: 72 kg (within 25% of the server's 60), then 88 kg
@@ -79,7 +104,9 @@ describe("effectiveXpHistory: the server's copy plus the outbox", () => {
     expect(history).toEqual(historyAfterWorkout(historyAfterWorkout(server, first, context), second, context));
     expect(history.get(benchPress.id)!.jumpBaseline).toBeCloseTo(epleyOneRepMax(88, 8));
     // ...whereas against the server's copy alone it would have been held to 60 x 8 + 25%.
-    expect(historyAfterWorkout(server, second, context).get(benchPress.id)!.jumpBaseline).toBeCloseTo(epleyOneRepMax(60, 8) * (1 + JUMP_CAP.maxJump));
+    expect(historyAfterWorkout(server, second, context).get(benchPress.id)!.jumpBaseline).toBeCloseTo(
+      epleyOneRepMax(60, 8) * (1 + JUMP_CAP.maxJump),
+    );
   });
 
   it("leaves out a workout the server rejected (needs attention): its bests were never saved", () => {
@@ -151,7 +178,9 @@ describe("dayXpBefore: the daily cap's starting point", () => {
 
 describe("the saved copy from before the daily cap fields", () => {
   it("is still read, with its history and no cap data, so offline exercises aren't all baseline sessions", () => {
-    const old = { items: [{ exerciseId: benchPress.id, recentBest: epleyOneRepMax(100, 8), jumpBaseline: epleyOneRepMax(100, 8) }] };
+    const old = {
+      items: [{ exerciseId: benchPress.id, recentBest: epleyOneRepMax(100, 8), jumpBaseline: epleyOneRepMax(100, 8) }],
+    };
     writeCached(xpHistoryCacheKey("user-1"), old);
 
     // The read the query does on open (initialData), with the app's key and schema.

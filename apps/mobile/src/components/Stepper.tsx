@@ -66,7 +66,16 @@ export function Stepper({ label, value, onDecrease, onIncrease, canDecrease = tr
 }
 
 const useStyles = createStyles((t) => ({
-  row: { flexDirection: "row", alignItems: "center", gap: 2, paddingLeft: t.space[3], paddingRight: 6, paddingVertical: 2, borderRadius: t.radius.md, backgroundColor: t.colors.surfaceRaised },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingLeft: t.space[3],
+    paddingRight: 6,
+    paddingVertical: 2,
+    borderRadius: t.radius.md,
+    backgroundColor: t.colors.surfaceRaised,
+  },
   labels: { flex: 1, minWidth: 0 },
   button: { width: TAP_TARGET, height: TAP_TARGET, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   pressed: { backgroundColor: t.colors.surface },

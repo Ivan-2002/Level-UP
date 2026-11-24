@@ -123,13 +123,23 @@ async function settleWeek(
   return { ...evaluation, daysTrained };
 }
 
-async function payBonus(db: Db, userId: string, source: "weekly_goal" | "streak_milestone", weekId: string, amount: number, earnedOn: string) {
+async function payBonus(
+  db: Db,
+  userId: string,
+  source: "weekly_goal" | "streak_milestone",
+  weekId: string,
+  amount: number,
+  earnedOn: string,
+) {
   if (amount <= 0) return;
   const paidNow = await xpRepo.insertBonusXpEvent(db, { userId, amount, source, sourceId: weekId, earnedOn });
   if (paidNow) await usersService.addTotalXp(db, userId, amount);
 }
 
-function toStatus(week: repo.WeekRow, result: { met: boolean; streakAfter: number; daysTrained: number }): WeeklyGoalStatus {
+function toStatus(
+  week: repo.WeekRow,
+  result: { met: boolean; streakAfter: number; daysTrained: number },
+): WeeklyGoalStatus {
   return {
     weekStart: week.weekStart,
     kind: week.kind,
@@ -154,13 +164,20 @@ export async function bonusXpOf(workoutId: string): Promise<{ weeklyGoal: number
  * ("2 of 3 days"), and a repeated Finish returns exactly the same numbers even after
  * later workouts. Null if that week has no goal row.
  */
-export async function weekStatusAsOf(userId: string, startedAt: Date, daysTrainedAsOf: DaysTrainedIn): Promise<WeeklyGoalStatus | null> {
+export async function weekStatusAsOf(
+  userId: string,
+  startedAt: Date,
+  daysTrainedAsOf: DaysTrainedIn,
+): Promise<WeeklyGoalStatus | null> {
   const timeZone = await usersService.timeZoneOf(userId);
   const week = await repo.findWeek(userId, weekStartOf(localDate(startedAt, timeZone)));
   if (!week) return null;
   const streakBefore = (await repo.findWeek(userId, addDays(week.weekStart, -7)))?.streakAfter ?? 0;
   const daysTrained = await daysTrainedAsOf(week.weekStart, timeZone);
-  return toStatus(week, { ...evaluateWeek({ kind: week.kind, target: week.target, daysTrained, streakBefore, closed: false }), daysTrained });
+  return toStatus(week, {
+    ...evaluateWeek({ kind: week.kind, target: week.target, daysTrained, streakBefore, closed: false }),
+    daysTrained,
+  });
 }
 
 /** Badges earned so far, e.g. ["streak_12"]. */

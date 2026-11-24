@@ -14,7 +14,9 @@ const toDate = (day: string) => new Date(`${day}T00:00:00Z`); // a Postgres DATE
  */
 export async function insertSetXpEvents(db: Db, events: NewXpEvent[]): Promise<void> {
   if (events.length === 0) return;
-  await db.xpEvent.createMany({ data: events.map((e) => ({ ...e, earnedOn: toDate(e.earnedOn), source: "workout_set" as const })) });
+  await db.xpEvent.createMany({
+    data: events.map((e) => ({ ...e, earnedOn: toDate(e.earnedOn), source: "workout_set" as const })),
+  });
 }
 
 /**
@@ -27,7 +29,10 @@ export async function insertBonusXpEvent(
   db: Db,
   event: { userId: string; amount: number; source: XpSource; sourceId: string; earnedOn: string },
 ): Promise<boolean> {
-  const { count } = await db.xpEvent.createMany({ data: [{ ...event, earnedOn: toDate(event.earnedOn), bodyPart: null }], skipDuplicates: true });
+  const { count } = await db.xpEvent.createMany({
+    data: [{ ...event, earnedOn: toDate(event.earnedOn), bodyPart: null }],
+    skipDuplicates: true,
+  });
   return count === 1;
 }
 
@@ -46,7 +51,12 @@ export async function sumBonusXp(sourceId: string): Promise<{ weeklyGoal: number
  * XP already recorded on one local day (`earnedOn`, "YYYY-MM-DD") from these sources: what
  * the daily cap has used up. Uses the (userId, earnedOn) index.
  */
-export async function sumXpOnDay(db: Db, userId: string, earnedOn: string, sources: readonly XpSource[]): Promise<number> {
+export async function sumXpOnDay(
+  db: Db,
+  userId: string,
+  earnedOn: string,
+  sources: readonly XpSource[],
+): Promise<number> {
   const result = await db.xpEvent.aggregate({
     where: { userId, earnedOn: toDate(earnedOn), source: { in: [...sources] } },
     _sum: { amount: true },
@@ -65,6 +75,9 @@ export async function setXpBySet(setIds: string[]): Promise<Map<string, number>>
 
 /** The player's total XP from everything recorded before `before`. */
 export async function sumXpBefore(userId: string, before: Date): Promise<number> {
-  const result = await prisma.xpEvent.aggregate({ where: { userId, createdAt: { lt: before } }, _sum: { amount: true } });
+  const result = await prisma.xpEvent.aggregate({
+    where: { userId, createdAt: { lt: before } },
+    _sum: { amount: true },
+  });
   return result._sum.amount ?? 0;
 }

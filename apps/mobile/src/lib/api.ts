@@ -11,11 +11,8 @@ const baseUrl = process.env.EXPO_PUBLIC_API_URL;
 
 if (!baseUrl) {
   // Fail loudly in development instead of sending requests to "undefined/health".
-  throw new Error(
-    "EXPO_PUBLIC_API_URL is not set. Copy apps/mobile/.env.example to apps/mobile/.env.",
-  );
+  throw new Error("EXPO_PUBLIC_API_URL is not set. Copy apps/mobile/.env.example to apps/mobile/.env.");
 }
-
 
 async function request<T>(
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
@@ -59,9 +56,7 @@ async function request<T>(
     console.warn(`[api] ${method} ${path} failed:`, error);
     const timedOut = error instanceof Error && error.name === "AbortError";
     throw new ApiError(
-      timedOut
-        ? `The API at ${baseUrl} took too long to answer`
-        : `Can't reach the API at ${baseUrl}`,
+      timedOut ? `The API at ${baseUrl} took too long to answer` : `Can't reach the API at ${baseUrl}`,
       null,
     );
   } finally {
@@ -74,15 +69,11 @@ async function request<T>(
 const API_VERSION = "/v1";
 
 export const apiGet = <T>(path: string) => request<T>("GET", `${API_VERSION}${path}`);
-export const apiPost = <T>(path: string, body: unknown) =>
-  request<T>("POST", `${API_VERSION}${path}`, body);
-export const apiPatch = <T>(path: string, body: unknown) =>
-  request<T>("PATCH", `${API_VERSION}${path}`, body);
-export const apiPut = <T>(path: string, body: unknown) =>
-  request<T>("PUT", `${API_VERSION}${path}`, body);
+export const apiPost = <T>(path: string, body: unknown) => request<T>("POST", `${API_VERSION}${path}`, body);
+export const apiPatch = <T>(path: string, body: unknown) => request<T>("PATCH", `${API_VERSION}${path}`, body);
+export const apiPut = <T>(path: string, body: unknown) => request<T>("PUT", `${API_VERSION}${path}`, body);
 /** 204 No Content: resolves with nothing. */
 export const apiDelete = (path: string) => request<null>("DELETE", `${API_VERSION}${path}`);
 
 /** For the few routes outside the versioned API: today only GET /health. */
 export const apiGetUnversioned = <T>(path: string) => request<T>("GET", path);
-

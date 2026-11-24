@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { DAILY_XP_CAP, epleyOneRepMax, exerciseXpHistoryListSchema, finishWorkoutResponseSchema, JUMP_CAP, type FinishWorkoutInput } from "@levelup/shared";
+import {
+  DAILY_XP_CAP,
+  epleyOneRepMax,
+  exerciseXpHistoryListSchema,
+  finishWorkoutResponseSchema,
+  JUMP_CAP,
+  type FinishWorkoutInput,
+} from "@levelup/shared";
 import { setNow } from "../../lib/clock.js";
 import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/helpers.js";
 
@@ -53,7 +60,13 @@ describe("GET /v1/exercises/xp-history", () => {
   it("gives each exercise done its 12-week best and jump baseline (estimated 1RM, lifted kg)", async () => {
     const user = await signUpPlayer({ bodyweightKg: 80 });
     await finish(user, workout(100, [["barbell-bench-press", [{ reps: 5, weightKg: 90 }]]])); // outside 12 weeks
-    await finish(user, workout(10, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]], ["pull-up", [{ reps: 8, weightKg: 0 }]]]));
+    await finish(
+      user,
+      workout(10, [
+        ["barbell-bench-press", [{ reps: 8, weightKg: 60 }]],
+        ["pull-up", [{ reps: 8, weightKg: 0 }]],
+      ]),
+    );
 
     const items = await xpHistory(user);
 
@@ -70,7 +83,18 @@ describe("GET /v1/exercises/xp-history", () => {
   it("keeps a jump-capped set at the line for the baseline, out of the 12-week best, and leaves out flagged sets", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
     await finish(user, workout(3, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
-    await finish(user, workout(2, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }, { reps: 8, weightKg: 400 }]]])); // capped; flagged
+    await finish(
+      user,
+      workout(2, [
+        [
+          "barbell-bench-press",
+          [
+            { reps: 8, weightKg: 100 },
+            { reps: 8, weightKg: 400 },
+          ],
+        ],
+      ]),
+    ); // capped; flagged
 
     const [bench] = await xpHistory(user);
 
@@ -92,14 +116,21 @@ describe("GET /v1/exercises/xp-history: the daily cap for the live preview", () 
   const TZ = "Pacific/Auckland";
   const local = (time: string) => new Date(`${time}+13:00`);
 
-
   async function finishAt(user: TestUser, startLocal: string) {
     const startedAt = local(startLocal);
     const body: FinishWorkoutInput = {
       clientId: randomUUID(),
       startedAt: startedAt.toISOString(),
       finishedAt: iso(startedAt.getTime() + 30 * MINUTE),
-      exercises: [{ exerciseId: ids["barbell-bench-press"]!, sets: [{ reps: 8, weightKg: 60 }, { reps: 8, weightKg: 60 }] }],
+      exercises: [
+        {
+          exerciseId: ids["barbell-bench-press"]!,
+          sets: [
+            { reps: 8, weightKg: 60 },
+            { reps: 8, weightKg: 60 },
+          ],
+        },
+      ],
     };
     setNow(new Date(startedAt.getTime() + 30 * MINUTE));
     const res = await request(app).post("/v1/workouts").set("Cookie", user.cookie).send(body);
@@ -108,7 +139,9 @@ describe("GET /v1/exercises/xp-history: the daily cap for the live preview", () 
   }
 
   it("sends the cap's values, so the app never hardcodes them", async () => {
-    const res = await request(app).get("/v1/exercises/xp-history").set("Cookie", (await signUpPlayer()).cookie);
+    const res = await request(app)
+      .get("/v1/exercises/xp-history")
+      .set("Cookie", (await signUpPlayer()).cookie);
     expect(exerciseXpHistoryListSchema.parse(res.body).dailyCap).toEqual({
       limit: DAILY_XP_CAP.limit,
       bandRate: DAILY_XP_CAP.bandRate,
@@ -125,14 +158,20 @@ describe("GET /v1/exercises/xp-history: the daily cap for the live preview", () 
     setNow(local("2026-10-15T03:00:00"));
     const res = await request(app).get("/v1/exercises/xp-history").set("Cookie", user.cookie);
 
-    expect(exerciseXpHistoryListSchema.parse(res.body).today).toEqual({ date: "2026-10-15", setXp: today.setXp, clientIds: [today.clientId] });
+    expect(exerciseXpHistoryListSchema.parse(res.body).today).toEqual({
+      date: "2026-10-15",
+      setXp: today.setXp,
+      clientIds: [today.clientId],
+    });
     expect(today.setXp).toBeGreaterThan(0);
     expect(yesterday.setXp).toBeGreaterThan(0); // left out for its day, not for having no XP
   });
 
   it("is an empty day before the first workout today", async () => {
     setNow(local("2026-10-15T03:00:00"));
-    const res = await request(app).get("/v1/exercises/xp-history").set("Cookie", (await signUpPlayer({ timeZone: TZ })).cookie);
+    const res = await request(app)
+      .get("/v1/exercises/xp-history")
+      .set("Cookie", (await signUpPlayer({ timeZone: TZ })).cookie);
     expect(exerciseXpHistoryListSchema.parse(res.body).today).toEqual({ date: "2026-10-15", setXp: 0, clientIds: [] });
   });
 });

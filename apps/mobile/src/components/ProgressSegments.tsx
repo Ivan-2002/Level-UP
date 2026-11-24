@@ -13,7 +13,11 @@ type Props = {
 export function ProgressSegments({ segments, currentIndex, accessibilityLabel }: Props) {
   const styles = useStyles();
   const t = useTheme();
-  const fills: Record<SegmentTone, string> = { complete: t.colors.success, current: t.colors.primary, other: t.colors.inkMuted };
+  const fills: Record<SegmentTone, string> = {
+    complete: t.colors.success,
+    current: t.colors.primary,
+    other: t.colors.inkMuted,
+  };
   const { done, total } = segmentTotals(segments);
 
   return (
@@ -35,6 +39,12 @@ export function ProgressSegments({ segments, currentIndex, accessibilityLabel }:
 
 const useStyles = createStyles((t) => ({
   row: { flexDirection: "row", gap: t.space[1] },
-  track: { flexBasis: 0, height: 6, borderRadius: t.radius.pill, backgroundColor: t.colors.surfaceRaised, overflow: "hidden" },
+  track: {
+    flexBasis: 0,
+    height: 6,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.surfaceRaised,
+    overflow: "hidden",
+  },
   fill: { height: 6, borderRadius: t.radius.pill },
 }));

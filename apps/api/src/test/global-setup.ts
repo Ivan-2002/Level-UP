@@ -41,7 +41,7 @@ function applyMigrations(url: string) {
       stdio: "pipe",
     });
   } catch (error) {
-    const output = (error as { stdout?: Buffer; stderr?: Buffer });
+    const output = error as { stdout?: Buffer; stderr?: Buffer };
     throw new Error(
       `prisma migrate deploy failed for the test database:\n${output.stdout ?? ""}${output.stderr ?? ""}`,
     );

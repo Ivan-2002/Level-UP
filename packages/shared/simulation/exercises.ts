@@ -24,7 +24,15 @@ const x = (
   bodyweightRatio = 0,
   repsUnit: RepsUnit = "reps",
   maxPlausibleWeightKg: number | null = null,
-): SimExercise => ({ equipment, mechanic, loadFactor, bodyweightRatio, repsUnit, maxPlausibleWeightKg, maxPlausibleReps: null });
+): SimExercise => ({
+  equipment,
+  mechanic,
+  loadFactor,
+  bodyweightRatio,
+  repsUnit,
+  maxPlausibleWeightKg,
+  maxPlausibleReps: null,
+});
 
 export const SIM_EXERCISES = {
   // Legs

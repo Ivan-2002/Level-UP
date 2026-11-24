@@ -42,7 +42,9 @@ async function train(user: TestUser, startedAt: string): Promise<string> {
       clientId: randomUUID(),
       startedAt: start.toISOString(),
       finishedAt: end.toISOString(),
-      exercises: [{ exerciseId: ids["barbell-bench-press"], sets: Array.from({ length: 3 }, () => ({ reps: 8, weightKg: 60 })) }],
+      exercises: [
+        { exerciseId: ids["barbell-bench-press"], sets: Array.from({ length: 3 }, () => ({ reps: 8, weightKg: 60 })) },
+      ],
     });
   expect(res.status, res.text).toBe(201);
   return res.body.workout.id as string;
@@ -54,10 +56,20 @@ async function expectedDays(user: TestUser & { timeZone: string }) {
   return Promise.all(
     events.map(async (e) => {
       if (e.source === "workout_set") {
-        const set = await prisma.workoutSet.findUniqueOrThrow({ where: { id: e.sourceId }, include: { workoutExercise: { include: { workout: true } } } });
-        return { id: e.id, actual: day(e.earnedOn), expected: localDate(set.workoutExercise.workout.startedAt, user.timeZone) };
+        const set = await prisma.workoutSet.findUniqueOrThrow({
+          where: { id: e.sourceId },
+          include: { workoutExercise: { include: { workout: true } } },
+        });
+        return {
+          id: e.id,
+          actual: day(e.earnedOn),
+          expected: localDate(set.workoutExercise.workout.startedAt, user.timeZone),
+        };
       }
-      const week = await prisma.weeklyGoal.findUniqueOrThrow({ where: { id: e.sourceId }, include: { metByWorkout: true } });
+      const week = await prisma.weeklyGoal.findUniqueOrThrow({
+        where: { id: e.sourceId },
+        include: { metByWorkout: true },
+      });
       const expected = week.metByWorkout ? localDate(week.metByWorkout.startedAt, user.timeZone) : day(week.weekStart);
       return { id: e.id, actual: day(e.earnedOn), expected };
     }),
@@ -113,10 +125,23 @@ describe("the earned_on backfill (the migration's own SQL)", () => {
 
     // A bonus with no recorded workout (a recount found the week met): the week's Monday.
     const week = await prisma.weeklyGoal.create({
-      data: { userId: kolkata.userId, weekStart: new Date("2026-09-28T00:00:00Z"), target: 2, daysTrained: 2, met: true, closedAt: new Date() },
+      data: {
+        userId: kolkata.userId,
+        weekStart: new Date("2026-09-28T00:00:00Z"),
+        target: 2,
+        daysTrained: 2,
+        met: true,
+        closedAt: new Date(),
+      },
     });
     await prisma.xpEvent.create({
-      data: { userId: kolkata.userId, amount: 400, source: "weekly_goal", sourceId: week.id, earnedOn: new Date("2026-10-01T00:00:00Z") },
+      data: {
+        userId: kolkata.userId,
+        amount: 400,
+        source: "weekly_goal",
+        sourceId: week.id,
+        earnedOn: new Date("2026-10-01T00:00:00Z"),
+      },
     });
 
     // Wipe the dates, then run the migration's backfill on them.
@@ -129,7 +154,11 @@ describe("the earned_on backfill (the migration's own SQL)", () => {
       for (const d of days) expect(d.actual, `${user.timeZone} row ${d.id}`).toBe(d.expected);
     }
     // Spot checks against hand-worked days, so a bug shared by both sides would show too.
-    expect((await expectedDays(jhb)).map((d) => d.actual)).toEqual([...Array(3).fill("2026-10-06"), ...Array(3).fill("2026-10-08"), "2026-10-08"]);
+    expect((await expectedDays(jhb)).map((d) => d.actual)).toEqual([
+      ...Array(3).fill("2026-10-06"),
+      ...Array(3).fill("2026-10-08"),
+      "2026-10-08",
+    ]);
     expect(new Set((await expectedDays(newYork)).map((d) => d.actual))).toEqual(new Set(["2026-10-06"]));
     expect((await expectedDays(kolkata)).map((d) => d.actual)).toEqual([...Array(3).fill("2026-10-07"), "2026-09-28"]);
   });

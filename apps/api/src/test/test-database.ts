@@ -31,9 +31,7 @@ export function resolveTestDatabaseUrl(): string {
 export function assertIsTestDatabase(url: string): void {
   const name = databaseName(url);
   if (!name.endsWith("_test")) {
-    throw new Error(
-      `Refusing to run tests against the database "${name}": a test database name must end in "_test".`,
-    );
+    throw new Error(`Refusing to run tests against the database "${name}": a test database name must end in "_test".`);
   }
 }
 

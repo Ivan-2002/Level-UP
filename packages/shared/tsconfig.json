@@ -8,8 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": [
-    "src",
-    "simulation"
-  ]
+  "include": ["src", "simulation"]
 }

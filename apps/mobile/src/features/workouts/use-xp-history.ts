@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { BODYWEIGHT_FALLBACK_KG, exerciseXpHistoryListSchema, type DailyCapConfig, type ExerciseXpHistoryList } from "@levelup/shared";
+import {
+  BODYWEIGHT_FALLBACK_KG,
+  exerciseXpHistoryListSchema,
+  type DailyCapConfig,
+  type ExerciseXpHistoryList,
+} from "@levelup/shared";
 import { apiGet } from "@/lib/api";
 import { fetchWithDeviceCache, readCached } from "@/lib/device-cache";
 import { useExercises } from "@/features/exercises/use-exercises";
@@ -15,7 +20,10 @@ import { dayXpBefore, historyFromList, replayOutbox, xpHistoryCacheKey, type XpH
 export function xpHistoryQuery(userId: string) {
   return queryOptions({
     queryKey: ["xp-history", userId],
-    queryFn: () => fetchWithDeviceCache(xpHistoryCacheKey(userId), exerciseXpHistoryListSchema, () => apiGet<ExerciseXpHistoryList>("/exercises/xp-history")),
+    queryFn: () =>
+      fetchWithDeviceCache(xpHistoryCacheKey(userId), exerciseXpHistoryListSchema, () =>
+        apiGet<ExerciseXpHistoryList>("/exercises/xp-history"),
+      ),
     initialData: () => readCached(xpHistoryCacheKey(userId), exerciseXpHistoryListSchema),
     initialDataUpdatedAt: 0,
     staleTime: 5 * 60_000, // it only changes when a workout reaches the server (which refetches it)
@@ -43,7 +51,10 @@ export function useXpHistory(userId: string): XpPreviewData | undefined {
   return useMemo(() => {
     if (!server) return undefined;
     const exercises = new Map((library ?? []).map((e) => [e.id, e]));
-    const bodyweight = { xp: profile?.xpBodyweightKg ?? BODYWEIGHT_FALLBACK_KG, typed: profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG };
+    const bodyweight = {
+      xp: profile?.xpBodyweightKg ?? BODYWEIGHT_FALLBACK_KG,
+      typed: profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG,
+    };
     const counted = new Set(server.today?.clientIds ?? []);
     const replayed = replayOutbox(historyFromList(server), items, userId, { exercises, bodyweight }, counted);
     const config = server.dailyCap;
@@ -51,7 +62,11 @@ export function useXpHistory(userId: string): XpPreviewData | undefined {
     return {
       history: replayed.history,
       dailyCap: config
-        ? { config, xpBeforeOn: (day: string) => dayXpBefore({ day, timeZone, today: server.today, cap: config, queued: replayed.workouts }) }
+        ? {
+            config,
+            xpBeforeOn: (day: string) =>
+              dayXpBefore({ day, timeZone, today: server.today, cap: config, queued: replayed.workouts }),
+          }
         : null,
     };
   }, [server, library, profile, items, userId]);

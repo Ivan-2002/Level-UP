@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { AccessibilityInfo, Alert, View } from "react-native";
 import { router } from "expo-router";
-import { coachAdvice, coachHintText, formatWeight, REST_MAX_SEC, REST_MIN_SEC, type ExerciseSummary } from "@levelup/shared";
+import {
+  coachAdvice,
+  coachHintText,
+  formatWeight,
+  REST_MAX_SEC,
+  REST_MIN_SEC,
+  type ExerciseSummary,
+} from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { InfoChip } from "@/components/Chip";
@@ -66,7 +73,13 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, liv
   const today = todayBestE1rm(draft, unit, bodyweightKg);
   const bestShown = Math.max(bestBefore ?? 0, today ?? 0);
   const hint = coachHintText(
-    coachAdvice({ lastSets: previous ?? [], targetReps: draft.targetReps, equipment: exercise.equipment, repsUnit: exercise.repsUnit, weightUnit: unit }),
+    coachAdvice({
+      lastSets: previous ?? [],
+      targetReps: draft.targetReps,
+      equipment: exercise.equipment,
+      repsUnit: exercise.repsUnit,
+      weightUnit: unit,
+    }),
     exercise.repsUnit,
     unit,
   );
@@ -83,7 +96,9 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, liv
     const after = updated && context ? scoreLiveWorkout(updated, context) : null;
     const feedback = tickFeedback({ setId: setKey, setNumber, done: !wasDone, before: live, after });
     AccessibilityInfo.announceForAccessibility(feedback.announcement);
-    setLastTick(!wasDone && feedback.rescoredAsWarmUps > 0 ? { setId: setKey, rescored: feedback.rescoredAsWarmUps } : null);
+    setLastTick(
+      !wasDone && feedback.rescoredAsWarmUps > 0 ? { setId: setKey, rescored: feedback.rescoredAsWarmUps } : null,
+    );
     if (wasDone) return;
     // Ticked done: rest starts now, unless that was the last set of the workout.
     const next = updated ? nextUp(updated) : null;
@@ -116,7 +131,13 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, liv
       {previous?.length || bestShown > 0 ? (
         <View style={styles.chips}>
           {previous?.length ? <InfoChip label="Last time" value={lastSessionText(previous, exercise, unit)} /> : null}
-          {bestShown > 0 ? <InfoChip icon="pr" tone="progress" value={`PR est. 1RM ${formatWeight(bestShown, unit, { decimals: 0 })}`} /> : null}
+          {bestShown > 0 ? (
+            <InfoChip
+              icon="pr"
+              tone="progress"
+              value={`PR est. 1RM ${formatWeight(bestShown, unit, { decimals: 0 })}`}
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -178,7 +199,9 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, liv
               onToggleDone={() => toggle(set.id, index + 1)}
               xpNote={note && lastTick?.setId === set.id ? tickLine(note, lastTick.rescored) : note}
               prText={pr ? `New PR · est. 1RM ${formatWeight(pr, unit, { decimals: 0 })}` : undefined}
-              error={errors[set.id] ?? (editing === set.id ? undefined : (doneSetError(set, exercise, unit) ?? undefined))}
+              error={
+                errors[set.id] ?? (editing === set.id ? undefined : (doneSetError(set, exercise, unit) ?? undefined))
+              }
               numberHint="Removes this set"
               onPressNumber={() =>
                 Alert.alert(`Remove set ${index + 1}?`, undefined, [

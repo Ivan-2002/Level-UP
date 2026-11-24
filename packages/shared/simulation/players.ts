@@ -43,7 +43,12 @@ export const WARM_UP_RAMP = [
   { share: 0.8, reps: 2 },
 ] as const;
 
-const ex = (slug: SimExerciseSlug, sets: number, reps: number, kg: number): PlannedExercise => ({ slug, sets, reps, kg });
+const ex = (slug: SimExerciseSlug, sets: number, reps: number, kg: number): PlannedExercise => ({
+  slug,
+  sets,
+  reps,
+  kg,
+});
 
 /** Scales loaded exercises (not plain bodyweight ones) by `factor`, in 0.5 kg steps. */
 const scaledLoads = (session: Session, factor: number): Session =>
@@ -57,7 +62,12 @@ const heavyBeginnerFullBody: Session = [
   ex("dumbbell-curl", 2, 12, 8),
 ];
 
-const fullBody: Session = [ex("barbell-back-squat", 3, 8, 50), ex("barbell-bench-press", 3, 8, 40), ex("lat-pulldown", 3, 10, 40), ex("dumbbell-curl", 2, 12, 8)];
+const fullBody: Session = [
+  ex("barbell-back-squat", 3, 8, 50),
+  ex("barbell-bench-press", 3, 8, 40),
+  ex("lat-pulldown", 3, 10, 40),
+  ex("dumbbell-curl", 2, 12, 8),
+];
 
 const push: Session = [
   ex("barbell-bench-press", 4, 8, 80),
@@ -133,8 +143,20 @@ const repRangeDay = (reps: number, percent: number): Session => [
 const MON_WED_FRI = [0, 2, 4];
 
 export const SIM_PLAYERS: SimPlayer[] = [
-  { name: "Beginner (75 kg, 2x/wk, full body)", bodyweightKg: 75, trainingDays: [0, 3], sessions: [fullBody], growth: { perWeek: 0.01, max: 1.5 } },
-  { name: "Intermediate (80 kg, 3x/wk, push/pull/legs)", bodyweightKg: 80, trainingDays: MON_WED_FRI, sessions: [push, pull, legs], growth: { perWeek: 0.002, max: 1.1 } },
+  {
+    name: "Beginner (75 kg, 2x/wk, full body)",
+    bodyweightKg: 75,
+    trainingDays: [0, 3],
+    sessions: [fullBody],
+    growth: { perWeek: 0.01, max: 1.5 },
+  },
+  {
+    name: "Intermediate (80 kg, 3x/wk, push/pull/legs)",
+    bodyweightKg: 80,
+    trainingDays: MON_WED_FRI,
+    sessions: [push, pull, legs],
+    growth: { perWeek: 0.002, max: 1.1 },
+  },
   {
     name: "Advanced (90 kg, 4x/wk, high volume)",
     bodyweightKg: 90,
@@ -150,7 +172,13 @@ export const SIM_PLAYERS: SimPlayer[] = [
     sessions: [push, pull, legs].map((s) => scaledLoads(s, 0.75)),
     growth: { perWeek: 0.002, max: 1.1 },
   },
-  { name: "Bodyweight-only (75 kg, 3x/wk)", bodyweightKg: 75, trainingDays: MON_WED_FRI, sessions: [bodyweightOnly], growth: { perWeek: 0.003, max: 1.15 } },
+  {
+    name: "Bodyweight-only (75 kg, 3x/wk)",
+    bodyweightKg: 75,
+    trainingDays: MON_WED_FRI,
+    sessions: [bodyweightOnly],
+    growth: { perWeek: 0.003, max: 1.15 },
+  },
   {
     // Honest: never gets stronger, but changes rep range every session. Must never be jump-capped.
     name: "Rep-range switcher (80 kg, 3x/wk, 5 / 10 / 20 / 30 reps)",
@@ -182,7 +210,8 @@ export const SIM_PLAYERS: SimPlayer[] = [
     trainingDays: MON_WED_FRI,
     sessions: [push, pull, legs],
     growth: { perWeek: 0.002, max: 1.1 },
-    strengthAt: (week) => (week < 52 ? 1 + 0.002 * week : week < 104 ? null : Math.min(1.1, 0.77 + 0.011 * (week - 104))),
+    strengthAt: (week) =>
+      week < 52 ? 1 + 0.002 * week : week < 104 ? null : Math.min(1.1, 0.77 + 0.011 * (week - 104)),
     weeks: 156,
   },
   {
@@ -211,7 +240,9 @@ export const SIM_PLAYERS: SimPlayer[] = [
     name: "Cheat: volume junkie (60 hard sets a day)",
     bodyweightKg: 80,
     trainingDays: MON_WED_FRI,
-    sessions: [[ex("barbell-back-squat", 20, 8, 100), ex("barbell-bench-press", 20, 8, 80), ex("barbell-row", 20, 10, 70)]],
+    sessions: [
+      [ex("barbell-back-squat", 20, 8, 100), ex("barbell-bench-press", 20, 8, 80), ex("barbell-row", 20, 10, 70)],
+    ],
     growth: { perWeek: 0, max: 1 },
     cheat: true,
   },

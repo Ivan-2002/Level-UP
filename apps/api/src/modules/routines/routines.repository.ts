@@ -13,7 +13,13 @@ export type RoutineData = {
 };
 
 const numbered = (exercises: RoutineData["exercises"]) =>
-  exercises.map((e, order) => ({ order, exerciseId: e.exerciseId, targetSets: e.targetSets, targetReps: e.targetReps, restSec: e.restSec ?? null }));
+  exercises.map((e, order) => ({
+    order,
+    exerciseId: e.exerciseId,
+    targetSets: e.targetSets,
+    targetReps: e.targetReps,
+    restSec: e.restSec ?? null,
+  }));
 
 export function findRoutinesForUser(userId: string) {
   return prisma.routine.findMany({

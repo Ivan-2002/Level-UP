@@ -87,7 +87,12 @@ export function moveExercise(draft: RoutineDraft, key: string, direction: -1 | 1
 }
 
 /** One step more or fewer sets (1 to 10) or reps (1 to 100; for timed exercises 5 s steps up to 600 s). */
-export function stepTarget(draft: RoutineDraft, key: string, field: "targetSets" | "targetReps", direction: -1 | 1): RoutineDraft {
+export function stepTarget(
+  draft: RoutineDraft,
+  key: string,
+  field: "targetSets" | "targetReps",
+  direction: -1 | 1,
+): RoutineDraft {
   return mapExercise(draft, key, (e) => {
     const step = field === "targetSets" ? 1 : repsStep(e.exercise);
     const max = field === "targetSets" ? TARGET_SETS_MAX : repsMaxFor(e.exercise.repsUnit);
@@ -127,7 +132,9 @@ export function toRoutineInput(draft: RoutineDraft): Result<RoutineInput> {
       restSec: e.restSec,
     })),
   });
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false, message: parsed.error.issues[0]?.message ?? "Check the routine." };
+  return parsed.success
+    ? { ok: true, value: parsed.data }
+    : { ok: false, message: parsed.error.issues[0]?.message ?? "Check the routine." };
 }
 
 /** Whether leaving now would lose changes (compares what would be SAVED, not local keys). */
@@ -140,6 +147,10 @@ export function hasChanges(draft: RoutineDraft, original: RoutineDraft): boolean
   return comparable(draft) !== comparable(original);
 }
 
-function mapExercise(draft: RoutineDraft, key: string, change: (e: DraftRoutineExercise) => DraftRoutineExercise): RoutineDraft {
+function mapExercise(
+  draft: RoutineDraft,
+  key: string,
+  change: (e: DraftRoutineExercise) => DraftRoutineExercise,
+): RoutineDraft {
   return { ...draft, exercises: draft.exercises.map((e) => (e.key === key ? change(e) : e)) };
 }

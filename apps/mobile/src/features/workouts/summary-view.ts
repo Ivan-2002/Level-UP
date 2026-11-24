@@ -103,7 +103,11 @@ export type XpLine = { label: string; amount: number };
 export function xpLines(summary: Pick<FinishSummary, "xp" | "weeklyGoal">): { headline: XpLine; breakdown: XpLine[] } {
   const breakdown: XpLine[] = [{ label: "XP for sets", amount: summary.xp.sets }];
   if (summary.xp.weeklyGoal > 0) breakdown.push({ label: "Weekly goal met", amount: summary.xp.weeklyGoal });
-  if (summary.xp.streakMilestone > 0) breakdown.push({ label: `${summary.weeklyGoal?.streak ?? ""}-week streak bonus`, amount: summary.xp.streakMilestone });
+  if (summary.xp.streakMilestone > 0)
+    breakdown.push({
+      label: `${summary.weeklyGoal?.streak ?? ""}-week streak bonus`,
+      amount: summary.xp.streakMilestone,
+    });
   return { headline: { label: "Total XP earned", amount: summary.xp.total }, breakdown };
 }
 
@@ -123,7 +127,10 @@ export type ExerciseXpRow = { key: string; name: string; xp: number; tagged: Tag
  * easy sets, jump-capped, beyond 10 sets, flagged): a normal workout stays short. An
  * exercise logged twice (a superset) is two rows, as in the workout.
  */
-export function exerciseXpRows(workout: Pick<WorkoutDetail, "exercises">, sets: FinishSummary["sets"]): ExerciseXpRow[] {
+export function exerciseXpRows(
+  workout: Pick<WorkoutDetail, "exercises">,
+  sets: FinishSummary["sets"],
+): ExerciseXpRow[] {
   const bySet = new Map(sets.map((s) => [s.setId, s]));
   return workout.exercises.map((e) => {
     const scored = e.sets.map((set) => bySet.get(set.id));
@@ -132,7 +139,9 @@ export function exerciseXpRows(workout: Pick<WorkoutDetail, "exercises">, sets: 
       const label = `Set ${i + 1} · ${setTagText(s.tag)}`;
       if (s.tag === "check_set") return [{ text: `${label} · 0 XP`, tone: "danger" }];
       const text = `${label} · +${s.xp} XP`;
-      return [s.tag === "above_history" ? { text, tone: "inkMuted", detail: JUMP_CAP_TEXT } : { text, tone: "inkMuted" }];
+      return [
+        s.tag === "above_history" ? { text, tone: "inkMuted", detail: JUMP_CAP_TEXT } : { text, tone: "inkMuted" },
+      ];
     });
     return { key: e.id, name: e.exercise.name, xp: scored.reduce((sum, s) => sum + (s?.xp ?? 0), 0), tagged };
   });
@@ -151,7 +160,11 @@ export function prLine(pr: Pr, exercise: Pick<Exercise, "equipment" | "repsUnit"
         was: `was ${Math.round(toDisplayWeight(pr.previousValue, unit))}`,
       };
     case "reps_at_weight":
-      return { detail: `Most reps at ${formatWeight(pr.set.weightKg, unit, { bodyweight: exercise?.equipment === "bodyweight" })}`, value: `${pr.value} reps`, was: `was ${pr.previousValue}` };
+      return {
+        detail: `Most reps at ${formatWeight(pr.set.weightKg, unit, { bodyweight: exercise?.equipment === "bodyweight" })}`,
+        value: `${pr.value} reps`,
+        was: `was ${pr.previousValue}`,
+      };
     case "longest_hold":
       return { detail: "Longest hold", value: `${pr.value} s`, was: `was ${pr.previousValue} s` };
   }
@@ -184,7 +197,10 @@ export function pendingLevelBar(status: LevelStatus, estimatedXp: number): Pendi
     before: status.xpIntoLevel / status.xpForNextLevel,
     pending: shown / status.xpForNextLevel,
     progressText: `${n(status.xpIntoLevel + shown)} / ${n(status.xpForNextLevel)} XP`,
-    toNextText: estimatedXp >= room ? "Your level is confirmed when it syncs" : `About ${n(room - shown)} XP to level ${status.level + 1}`,
+    toNextText:
+      estimatedXp >= room
+        ? "Your level is confirmed when it syncs"
+        : `About ${n(room - shown)} XP to level ${status.level + 1}`,
   };
 }
 
@@ -205,7 +221,9 @@ export function previewSummary(workout: ActiveWorkout, finishedAt: string, bodyw
     durationSec: Math.max(0, Math.round((Date.parse(finishedAt) - Date.parse(workout.startedAt)) / 1000)),
     setCount: done.length,
     volumeKg: volumeKg(
-      done.filter((d) => d.exercise.repsUnit === "reps").map((d) => ({ reps: d.reps, loadKg: liftedKg(d.weightKg, bodyweightKg, d.exercise.bodyweightRatio) })),
+      done
+        .filter((d) => d.exercise.repsUnit === "reps")
+        .map((d) => ({ reps: d.reps, loadKg: liftedKg(d.weightKg, bodyweightKg, d.exercise.bodyweightRatio) })),
     ),
   };
 }
@@ -244,7 +262,8 @@ export function explainGap(preview: SavedPreview, summary: Pick<FinishSummary, "
     };
   };
 
-  if (summary.xp.heldBack?.reason === "too_old") return result([line("Synced more than 14 days after it started: no XP for sets", gap)]);
+  if (summary.xp.heldBack?.reason === "too_old")
+    return result([line("Synced more than 14 days after it started: no XP for sets", gap)]);
 
   const lines: GapLine[] = [];
   const capChange = preview.heldBack - (summary.xp.heldBack?.amount ?? 0);
@@ -261,7 +280,9 @@ export function explainGap(preview: SavedPreview, summary: Pick<FinishSummary, "
         ? "check"
         : server.tag === "above_history"
           ? "above"
-          : server.tag !== null && LOW_EFFORT_TAGS.has(server.tag) && !(before.tag !== null && LOW_EFFORT_TAGS.has(before.tag))
+          : server.tag !== null &&
+              LOW_EFFORT_TAGS.has(server.tag) &&
+              !(before.tag !== null && LOW_EFFORT_TAGS.has(before.tag))
             ? "low"
             : "other";
     const group = groups.get(key) ?? { count: 0, amount: 0 };

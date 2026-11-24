@@ -53,7 +53,10 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
 
   // 2. XP needs a character to go to, and every exercise must be usable by this user.
   await usersService.requireProfile(userId);
-  const exercises = await usableExercisesOrThrow(userId, input.exercises.map((e) => e.exerciseId));
+  const exercises = await usableExercisesOrThrow(
+    userId,
+    input.exercises.map((e) => e.exerciseId),
+  );
   assertRepsFitExercises(input, exercises);
 
   // 3. Save everything in one transaction. Every module writes through `tx`.
@@ -65,7 +68,9 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
       // A routine deleted (or never ours) is ignored rather than failing the whole
       // Finish: an offline workout must never become an error the outbox retries forever.
       const routineId =
-        input.routineId && (await routinesService.routineBelongsTo(tx, userId, input.routineId)) ? input.routineId : null;
+        input.routineId && (await routinesService.routineBelongsTo(tx, userId, input.routineId))
+          ? input.routineId
+          : null;
       const startedAt = new Date(input.startedAt);
       const earnedOn = localDate(startedAt, timeZone);
 
@@ -77,7 +82,14 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         receivedAt: now(),
         earnedOn,
         // completedAt orders each exercise's sets for scoring (list order if any is missing).
-        sets: input.exercises.flatMap((e) => e.sets.map((set) => ({ exerciseId: e.exerciseId, reps: set.reps, weightKg: set.weightKg, completedAt: set.completedAt }))),
+        sets: input.exercises.flatMap((e) =>
+          e.sets.map((set) => ({
+            exerciseId: e.exerciseId,
+            reps: set.reps,
+            weightKg: set.weightKg,
+            completedAt: set.completedAt,
+          })),
+        ),
         exercises,
         pastSessions: await pastSessions(userId, [...exercises.keys()], startedAt, tx),
       });
@@ -173,13 +185,17 @@ async function usableExercisesOrThrow(userId: string, ids: string[]): Promise<Ma
 function assertRepsFitExercises(input: FinishWorkoutInput, exercises: Map<string, Exercise>): void {
   for (const e of input.exercises) {
     const exercise = exerciseOf(exercises, e.exerciseId);
-    e.sets.forEach((set, i) => exercisesService.assertRepsWithinLimit(exercise, set.reps, `${exercise.name}, set ${i + 1}`));
+    e.sets.forEach((set, i) =>
+      exercisesService.assertRepsWithinLimit(exercise, set.reps, `${exercise.name}, set ${i + 1}`),
+    );
   }
 }
 
 /** The ledger awards: each saved set (in the order logged) with the XP it was awarded. */
 function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, awardedXp: number[]) {
-  const saved = row.exercises.flatMap((we) => we.sets.map((s) => ({ setId: s.id, bodyPart: exerciseOf(exercises, we.exerciseId).bodyPart })));
+  const saved = row.exercises.flatMap((we) =>
+    we.sets.map((s) => ({ setId: s.id, bodyPart: exerciseOf(exercises, we.exerciseId).bodyPart })),
+  );
   return saved.map((s, i) => ({ ...s, amount: awardedXp[i]! }));
 }
 
@@ -196,24 +212,41 @@ function chosenRestTimes(input: FinishWorkoutInput) {
 
 /** The workout in the API shape, plus the exercises it used (loaded unless already known). */
 async function detailOf(userId: string, row: repo.WorkoutDetailRow, knownExercises?: Map<string, Exercise>) {
-  const exercises = knownExercises ?? (await exercisesService.findUsableExercises(userId, row.exercises.map((e) => e.exerciseId)));
+  const exercises =
+    knownExercises ??
+    (await exercisesService.findUsableExercises(
+      userId,
+      row.exercises.map((e) => e.exerciseId),
+    ));
   return { workout: buildDetail(row, exercises), exercises };
 }
 
 /** Detail + summary: what Finish (new or repeated) and GET /workouts/:id/summary return. */
-async function present(userId: string, row: repo.WorkoutDetailRow, knownExercises?: Map<string, Exercise>): Promise<FinishWorkoutResponse> {
+async function present(
+  userId: string,
+  row: repo.WorkoutDetailRow,
+  knownExercises?: Map<string, Exercise>,
+): Promise<FinishWorkoutResponse> {
   const { workout, exercises } = await detailOf(userId, row, knownExercises);
   return { workout, summary: await buildSummary(userId, row, exercises) };
 }
 
-async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>): Promise<FinishSummary> {
+async function buildSummary(
+  userId: string,
+  row: repo.WorkoutDetailRow,
+  exercises: Map<string, Exercise>,
+): Promise<FinishSummary> {
   const bodyweights = await usersService.bodyweightHistory(userId);
   const bodyweightOn = (date: Date) => bodyweightOnDate(bodyweights, date.toISOString());
   const bodyweightKg = bodyweightOn(row.startedAt);
 
   // XP: what the ledger recorded for these sets, and the total just before.
   const sets = row.exercises.flatMap((e) => e.sets);
-  const { perSet, earned, totalBefore } = await progressionService.workoutXp(userId, sets.map((s) => s.id), row.createdAt);
+  const { perSet, earned, totalBefore } = await progressionService.workoutXp(
+    userId,
+    sets.map((s) => s.id),
+    row.createdAt,
+  );
   const bonus = await weeklyGoalService.bonusXpOf(row.id);
   const total = earned + bonus.weeklyGoal + bonus.streakMilestone;
   const heldBack = row.xpHeldBackReason ? { amount: row.xpHeldBack, reason: row.xpHeldBackReason } : null;
@@ -221,7 +254,10 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
   // Compared with last time (same routine, or the previous workout).
   const previous = await repo.findPreviousWorkout(userId, row);
   const previousExercises = previous
-    ? await exercisesService.findUsableExercises(userId, previous.exercises.map((e) => e.exerciseId))
+    ? await exercisesService.findUsableExercises(
+        userId,
+        previous.exercises.map((e) => e.exerciseId),
+      )
     : null;
 
   return {
@@ -244,7 +280,10 @@ async function buildSummary(userId: string, row: repo.WorkoutDetailRow, exercise
     })),
     stats: {
       ...sessionStats(row, exercises, bodyweightKg),
-      previous: previous && previousExercises ? sessionStats(previous, previousExercises, bodyweightOn(previous.startedAt)) : null,
+      previous:
+        previous && previousExercises
+          ? sessionStats(previous, previousExercises, bodyweightOn(previous.startedAt))
+          : null,
     },
     weeklyGoal: await weeklyGoalService.weekStatusAsOf(userId, row.startedAt, daysTrainedAsOf(userId, row.createdAt)),
     prs: await personalRecords(userId, row, exercises, bodyweightKg, bodyweightOn),
@@ -256,7 +295,10 @@ function sessionStats(row: repo.WorkoutDetailRow, exercises: Map<string, Exercis
   const loaded = row.exercises.flatMap((we) => {
     const exercise = exerciseOf(exercises, we.exerciseId);
     if (exercise.repsUnit === "seconds") return []; // seconds x kg isn't volume
-    return we.sets.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bodyweightKg, exercise.bodyweightRatio) }));
+    return we.sets.map((s) => ({
+      reps: s.reps,
+      loadKg: liftedKg(s.weightKg.toNumber(), bodyweightKg, exercise.bodyweightRatio),
+    }));
   });
   return {
     durationSec: Math.round((row.finishedAt.getTime() - row.startedAt.getTime()) / 1000),
@@ -284,8 +326,13 @@ async function personalRecords(
   for (const past of history) {
     const exercise = exerciseOf(exercises, past.exerciseId);
     const bw = bodyweightOn(past.workout.startedAt);
-    const sets = past.sets.filter(canBeRecord).map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bw, exercise.bodyweightRatio) }));
-    books.set(past.exerciseId, addToRecordBook(books.get(past.exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit));
+    const sets = past.sets
+      .filter(canBeRecord)
+      .map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg.toNumber(), bw, exercise.bodyweightRatio) }));
+    books.set(
+      past.exerciseId,
+      addToRecordBook(books.get(past.exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit),
+    );
   }
 
   const prs: FinishSummary["prs"] = [];
@@ -295,7 +342,10 @@ async function personalRecords(
       .filter((we) => we.exerciseId === exerciseId)
       .flatMap((we) => we.sets.filter(canBeRecord)) // not implausible, not jump-capped
       .map((s) => ({ reps: s.reps, weightKg: s.weightKg.toNumber() }));
-    const sets = logged.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg, bodyweightKg, exercise.bodyweightRatio) }));
+    const sets = logged.map((s) => ({
+      reps: s.reps,
+      loadKg: liftedKg(s.weightKg, bodyweightKg, exercise.bodyweightRatio),
+    }));
     const records = findNewRecords(books.get(exerciseId) ?? emptyRecordBook(), sets, exercise.repsUnit);
 
     for (const kind of new Set(records.map((r) => r.kind))) {
@@ -303,8 +353,16 @@ async function personalRecords(
       const best = ofKind.reduce((a, b) => (b.value > a.value ? b : a));
       // e1RM and holds improve step by step within a session: compare with the
       // pre-workout best. "Reps at weight" compares at the best set's own weight.
-      const previousValue = kind === "reps_at_weight" ? best.previousValue : Math.min(...ofKind.map((r) => r.previousValue));
-      prs.push({ exerciseId, exerciseName: exercise.name, kind, value: best.value, previousValue, set: logged[best.index]! });
+      const previousValue =
+        kind === "reps_at_weight" ? best.previousValue : Math.min(...ofKind.map((r) => r.previousValue));
+      prs.push({
+        exerciseId,
+        exerciseName: exercise.name,
+        kind,
+        value: best.value,
+        previousValue,
+        set: logged[best.index]!,
+      });
     }
   }
   return prs;

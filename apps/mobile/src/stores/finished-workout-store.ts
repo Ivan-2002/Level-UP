@@ -44,7 +44,10 @@ export function createFinishedWorkoutStore(storage: StateStorage) {
     persist(
       (set, get) => ({
         last: null,
-        record: (finished) => set({ last: { clientId: finished.workout.clientId, userId: finished.workout.userId, ...finished, response: null } }),
+        record: (finished) =>
+          set({
+            last: { clientId: finished.workout.clientId, userId: finished.workout.userId, ...finished, response: null },
+          }),
         attachResponse: (clientId, response) => {
           const last = get().last;
           if (last?.clientId === clientId && last.response === null) set({ last: { ...last, response } });

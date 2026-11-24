@@ -16,7 +16,12 @@ const CHANNEL_ID = "rest-timer";
 /** Show it even when the app is open (the player may be on another screen). */
 export function configureNotifications(): void {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
   });
 }
 

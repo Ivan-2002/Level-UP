@@ -1,5 +1,12 @@
 import { createProfileSchema } from "@levelup/shared";
-import { bodyweightChangeText, bodyweightMessage, bodyweightRange, needsBodyweightConfirm, parseBodyweightInput, weightUnitForMeasurementSystem } from "./weight-unit-input";
+import {
+  bodyweightChangeText,
+  bodyweightMessage,
+  bodyweightRange,
+  needsBodyweightConfirm,
+  parseBodyweightInput,
+  weightUnitForMeasurementSystem,
+} from "./weight-unit-input";
 
 describe("weightUnitForMeasurementSystem", () => {
   it("suggests lb only for the US measurement system", () => {
@@ -43,7 +50,8 @@ describe("bodyweightMessage", () => {
   it.each(["kg", "lb"] as const)("states a %s range whose ends the schema really accepts", (unit) => {
     const { min, max } = bodyweightRange(unit);
     const accepts = (value: number) =>
-      createProfileSchema.safeParse({ username: "IvanLifts", bodyweightKg: parseBodyweightInput(String(value), unit) }).success;
+      createProfileSchema.safeParse({ username: "IvanLifts", bodyweightKg: parseBodyweightInput(String(value), unit) })
+        .success;
 
     expect([accepts(min), accepts(max)]).toEqual([true, true]);
     expect([accepts(min - 1), accepts(max + 1)]).toEqual([false, false]);

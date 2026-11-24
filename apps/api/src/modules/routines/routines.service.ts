@@ -73,7 +73,10 @@ async function usableExercisesOrThrow(userId: string, input: RoutineInput): Prom
 }
 
 async function toRoutine(userId: string, row: repo.RoutineRow): Promise<Routine> {
-  const exercises = await exercisesService.findUsableExercises(userId, row.exercises.map((e) => e.exerciseId));
+  const exercises = await exercisesService.findUsableExercises(
+    userId,
+    row.exercises.map((e) => e.exerciseId),
+  );
   return buildRoutine(row, exercises);
 }
 
@@ -88,7 +91,14 @@ function buildRoutine(row: repo.RoutineRow, exercises: Map<string, Exercise>): R
       const exercise = exercises.get(re.exerciseId);
       // Can't happen: routine_exercise -> exercise is ON DELETE RESTRICT.
       if (!exercise) throw new Error(`Exercise ${re.exerciseId} of routine ${row.id} not found`);
-      return { id: re.id, order: re.order, exercise, targetSets: re.targetSets, targetReps: re.targetReps, restSec: re.restSec };
+      return {
+        id: re.id,
+        order: re.order,
+        exercise,
+        targetSets: re.targetSets,
+        targetReps: re.targetReps,
+        restSec: re.restSec,
+      };
     }),
   };
 }

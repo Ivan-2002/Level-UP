@@ -90,9 +90,14 @@ export type BodyweightReceipt = { kg: number; measuredOn: string; receivedAt: st
  * taken as typed too, so the latest one that week is where the limit starts. Without
  * `signedUpAt` there's no grace week (stricter, never looser).
  */
-export function xpBodyweightOnDate(receipts: BodyweightReceipt[], date: string, options: { signedUpAt?: string } = {}): number {
+export function xpBodyweightOnDate(
+  receipts: BodyweightReceipt[],
+  date: string,
+  options: { signedUpAt?: string } = {},
+): number {
   if (receipts.length === 0) return BODYWEIGHT_FALLBACK_KG;
-  const graceEnds = options.signedUpAt === undefined ? -Infinity : Date.parse(options.signedUpAt) + BODYWEIGHT_XP.graceDays * DAY_MS;
+  const graceEnds =
+    options.signedUpAt === undefined ? -Infinity : Date.parse(options.signedUpAt) + BODYWEIGHT_XP.graceDays * DAY_MS;
   const limited = limitedOnReceipt(receipts, graceEnds);
   // Each date's latest receipt is that date's entry (Map keys keep the walk's order).
   const latestPerDate = new Map<string, BodyweightReceipt>();
@@ -297,7 +302,10 @@ function judgeSets(start: RecordBook, sets: RecordSet[], repsUnit: RepsUnit) {
 
 /** Total weight moved: reps x lifted kg. Not meaningful for timed exercises. */
 export function volumeKg(sets: RecordSet[]): number {
-  return round(sets.reduce((sum, s) => sum + s.reps * s.loadKg, 0), 1);
+  return round(
+    sets.reduce((sum, s) => sum + s.reps * s.loadKg, 0),
+    1,
+  );
 }
 
 export type StatSet = RecordSet & { weightKg: number; date: string };
@@ -322,10 +330,18 @@ export function exerciseStats(sessions: { date: string; sets: (RecordSet & { wei
       const s: StatSet = { ...set, date: session.date };
       const e1rm = estimatedOneRepMax(set.loadKg, set.reps);
       if (e1rm !== null && (!stats.bestE1rm || e1rm > stats.bestE1rm.e1rm)) stats.bestE1rm = { ...s, e1rm };
-      if (!stats.heaviestSet || set.loadKg > stats.heaviestSet.loadKg || (set.loadKg === stats.heaviestSet.loadKg && set.reps > stats.heaviestSet.reps)) {
+      if (
+        !stats.heaviestSet ||
+        set.loadKg > stats.heaviestSet.loadKg ||
+        (set.loadKg === stats.heaviestSet.loadKg && set.reps > stats.heaviestSet.reps)
+      ) {
         stats.heaviestSet = s;
       }
-      if (!stats.mostReps || set.reps > stats.mostReps.reps || (set.reps === stats.mostReps.reps && set.loadKg > stats.mostReps.loadKg)) {
+      if (
+        !stats.mostReps ||
+        set.reps > stats.mostReps.reps ||
+        (set.reps === stats.mostReps.reps && set.loadKg > stats.mostReps.loadKg)
+      ) {
         stats.mostReps = s;
       }
     }
@@ -417,7 +433,13 @@ export function coachAdvice(input: {
   }
   if (step === null) return { kind: "add_reps", lastWeightKg, lastReps, weightKg: lastWeightKg, reps: target + 1 };
   // Same precision as storage, so 135 lb + 5 lb shows as exactly 140 lb.
-  return { kind: "increase_weight", lastWeightKg, lastReps, weightKg: round(lastWeightKg + step, STORED_KG_DECIMALS), reps: target };
+  return {
+    kind: "increase_weight",
+    lastWeightKg,
+    lastReps,
+    weightKg: round(lastWeightKg + step, STORED_KG_DECIMALS),
+    reps: target,
+  };
 }
 
 /** The one-line hint under the exercise name, in the player's unit. Sentence case, no AI. */

@@ -71,7 +71,13 @@ describe("formatSet", () => {
 
 describe("topSet", () => {
   it("picks the heaviest, then the most reps", () => {
-    expect(topSet([{ reps: 10, weightKg: 60 }, { reps: 6, weightKg: 70 }, { reps: 8, weightKg: 70 }])).toEqual({ reps: 8, weightKg: 70 });
+    expect(
+      topSet([
+        { reps: 10, weightKg: 60 },
+        { reps: 6, weightKg: 70 },
+        { reps: 8, weightKg: 70 },
+      ]),
+    ).toEqual({ reps: 8, weightKg: 70 });
     expect(topSet([])).toBeNull();
   });
 });
