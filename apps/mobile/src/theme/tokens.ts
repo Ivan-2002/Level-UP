@@ -82,6 +82,17 @@ const light: Palette = {
 
 export const palettes: Record<ColorScheme, Palette> = { dark, light };
 
+// --- Avatar skin tones ---------------------------------------------------------------
+// The player's chosen fill for the avatar's head and hands (the face's `skinTone` slot).
+// The same in both themes: it's the avatar's colour, not the UI's. `feature` draws the eyes,
+// brows and mouth ON that fill (at least 3:1, theme/contrast.test.ts), because `ink` is
+// near-white in the dark theme. Milestone 6b has one tone to prove the slot; 6e adds the
+// rest (light to dark, tone1 to tone5).
+export const SKIN_TONES = {
+  tone3: { fill: "#B97A4E", feature: "#1F140D" },
+} as const satisfies Record<string, { fill: string; feature: string }>;
+export type SkinTone = keyof typeof SKIN_TONES;
+
 // --- Type ----------------------------------------------------------------------------
 // Sora for numbers and titles, Inter for body text. In React Native every weight of a
 // custom font is its OWN family name (fontWeight can't pick a weight from a family loaded

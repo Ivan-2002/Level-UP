@@ -1,5 +1,5 @@
 import { contrastRatio, parseColor } from "./contrast";
-import { palettes, type ColorScheme, type Palette } from "./tokens";
+import { palettes, SKIN_TONES, type ColorScheme, type Palette } from "./tokens";
 
 type Key = keyof Palette;
 
@@ -46,6 +46,20 @@ describe.each<ColorScheme>(["dark", "light"])("%s theme contrast", (scheme) => {
   it.each(NON_TEXT_PAIRS)("%s on %s is at least 3:1", (fg, bg) => {
     expect(contrastRatio(parseColor(c[fg]), parseColor(c[bg]))).toBeGreaterThanOrEqual(3);
   });
+});
+
+describe("avatar colours", () => {
+  it.each(Object.entries(SKIN_TONES))("%s: the face's features are at least 3:1 on the skin", (_, tone) => {
+    expect(contrastRatio(parseColor(tone.feature), parseColor(tone.fill))).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each<ColorScheme>(["dark", "light"])(
+    "%s: the Legend cape's purple outline is at least 3:1 on the background",
+    (scheme) => {
+      const c = palettes[scheme];
+      expect(contrastRatio(parseColor(c.purple), parseColor(c.bg))).toBeGreaterThanOrEqual(3);
+    },
+  );
 });
 
 describe("contrastRatio", () => {
