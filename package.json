@@ -10,9 +10,10 @@
     "typecheck": "pnpm -r --no-bail --no-sort --if-present run typecheck",
     "test": "pnpm -r --no-bail --no-sort --if-present run test",
     "lint": "pnpm -r --no-bail --no-sort --if-present run lint",
-    "check": "pnpm typecheck && pnpm test && pnpm lint",
+    "check": "pnpm typecheck && pnpm test && pnpm lint && pnpm format:check",
     "prepare": "simple-git-hooks",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
   },
   "engines": {
     "node": ">=22"
