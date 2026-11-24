@@ -77,9 +77,6 @@ export function CreateCharacterScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text variant="captionStrong" tone="ice" style={styles.eyebrow}>
-              NEW PLAYER
-            </Text>
             <Text variant="display" accessibilityRole="header">
               Create your character
             </Text>
@@ -173,7 +170,6 @@ const useStyles = createStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.bg },
   content: { flexGrow: 1, paddingTop: 28, paddingHorizontal: t.space[4], paddingBottom: t.space[6], gap: 20 },
   header: { gap: 6 },
-  eyebrow: { letterSpacing: 1.9 },
   avatarCard: {
     height: 200,
     flexDirection: "row",
