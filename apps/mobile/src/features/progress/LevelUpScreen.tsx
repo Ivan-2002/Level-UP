@@ -81,7 +81,7 @@ export function LevelUpScreen() {
           importantForAccessibility="no-hide-descendants"
           style={styles.avatar}
         >
-          <Avatar width={130} height={175} />
+          <Avatar height={180} />
         </Animated.View>
       </View>
 
