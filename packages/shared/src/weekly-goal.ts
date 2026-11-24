@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SetTag } from "./xp-codes.js";
 
 // ---------------------------------------------------------------------------
 // Weekly goal and streak: the rules, as pure functions. The server's progression
@@ -8,8 +9,10 @@ import { z } from "zod";
 //   it (more days than the target -> next week +1, max 4); meeting it exactly keeps it;
 //   missing it -> next week -1 (min 2). Until Milestone 5, meeting it exactly also raised
 //   it, so a steady 3-day player was pushed to 4, missed, and lost their streak.
-// - A training day = a workout with at least 3 completed sets, counted once per LOCAL
-//   calendar day (the player's time zone). Week = Monday to Sunday, local time.
+// - A training day = a workout that qualifies (qualifiesAsTrainingDay: at least 3 sets
+//   that count, not warm-ups, easy sets, flagged or beyond the 10-set limit), counted once
+//   per LOCAL calendar day (the player's time zone). No minimum duration: people often
+//   tick their sets after training. Week = Monday to Sunday, local time.
 // - The week you sign up in is a warm-up (unless you sign up on a Monday): set XP only,
 //   no bonus, no streak, the target doesn't move.
 // - Streak = consecutive weeks with the goal met; a missed week resets it to 0.
@@ -22,7 +25,7 @@ export const WEEKLY_GOAL = {
   startTarget: 2,
   minTarget: 2,
   maxTarget: 4,
-  /** A workout needs this many completed (non-flagged) sets to make the day a training day. */
+  /** A workout needs this many sets that count (countsForTrainingDay) to make the day a training day. */
   minSetsPerTrainingDay: 3,
   /**
    * Paid once per week when the goal is met; the same at every target. About one
@@ -101,17 +104,38 @@ export function firstWeekKind(signedUpAt: Date | string, timeZone: string): Week
 
 // --- Training days ------------------------------------------------------------------------
 
-export type WorkoutForGoal = { startedAt: Date | string; completedSets: number };
+/** What the training-day rule needs from each set: how scoring tagged it (workout_set.xp_tag, is_flagged). */
+export type TrainingDaySet = { tag: SetTag | null; isFlagged: boolean };
+
+/** Tags of sets that are done but aren't real work for the weekly goal. */
+const NOT_TRAINING_TAGS: ReadonlySet<SetTag> = new Set<SetTag>(["warm_up", "easy_set", "beyond_set_limit"]);
+
+/** A set that counts toward a training day: not flagged, and not a warm-up, an easy set or beyond the 10-set limit. */
+export function countsForTrainingDay(set: TrainingDaySet): boolean {
+  return !set.isFlagged && (set.tag === null || !NOT_TRAINING_TAGS.has(set.tag));
+}
 
 /**
- * Distinct local days with at least one qualifying workout. A workout belongs to the
- * day it STARTED: a session from 23:30 to 00:40 is the evening's workout.
- * Pass `weekStart` to count only that week's days.
+ * Whether a workout makes its day a training day: the ONE place this rule lives.
+ * Strength: at least 3 sets that count, so 3 empty-bar warm-ups (or a 1-set workout) don't.
+ * The endurance milestone adds its own branch here (moving time at real effort), and a
+ * mixed session qualifies if either part does; callers pass the workout, not a count.
+ */
+export function qualifiesAsTrainingDay(workout: { sets: TrainingDaySet[] }): boolean {
+  return workout.sets.filter(countsForTrainingDay).length >= WEEKLY_GOAL.minSetsPerTrainingDay;
+}
+
+export type WorkoutForGoal = { startedAt: Date | string; sets: TrainingDaySet[] };
+
+/**
+ * Distinct local days with at least one workout that qualifies (qualifiesAsTrainingDay).
+ * A workout belongs to the day it STARTED: a session from 23:30 to 00:40 is the evening's
+ * workout. Pass `weekStart` to count only that week's days.
  */
 export function countTrainingDays(workouts: WorkoutForGoal[], timeZone: string, weekStart?: LocalDate): number {
   const days = new Set<LocalDate>();
   for (const w of workouts) {
-    if (w.completedSets < WEEKLY_GOAL.minSetsPerTrainingDay) continue;
+    if (!qualifiesAsTrainingDay(w)) continue;
     const day = localDate(w.startedAt, timeZone);
     if (weekStart === undefined || weekStartOf(day) === weekStart) days.add(day);
   }

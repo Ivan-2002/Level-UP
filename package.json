@@ -7,9 +7,9 @@
     "db:down": "docker compose down",
     "dev:api": "pnpm --filter api dev",
     "dev:mobile": "pnpm --filter mobile start",
-    "typecheck": "pnpm -r --if-present run typecheck",
-    "test": "pnpm -r --if-present run test",
-    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --no-bail --no-sort --if-present run typecheck",
+    "test": "pnpm -r --no-bail --no-sort --if-present run test",
+    "lint": "pnpm -r --no-bail --no-sort --if-present run lint",
     "check": "pnpm typecheck && pnpm test && pnpm lint",
     "prepare": "simple-git-hooks"
   },

@@ -1,6 +1,17 @@
+import type { FinishWorkoutInput } from "@levelup/shared";
 import type { ActiveWorkoutStore } from "@/stores/active-workout-store";
-import { buildFinishPayload, type Result } from "./active-workout";
+import { buildFinishPayload, type ActiveWorkout, type Result } from "./active-workout";
+import { exercisesOf, previewFromPayload, scoringContext, type SavedPreview } from "./live-workout";
 import type { OutboxStore } from "./outbox";
+
+export type FinishedResult = {
+  clientId: string;
+  /** The workout as sent: after editing ended (a pending valid edit included). */
+  workout: ActiveWorkout;
+  payload: FinishWorkoutInput;
+  /** The summary's XP until the server answers; null if no scoring context was ever pinned. */
+  preview: SavedPreview | null;
+};
 
 /**
  * "Finish workout": move the workout from in-progress into the outbox.
@@ -14,7 +25,9 @@ export function finishActiveWorkout(deps: {
   activeWorkout: ActiveWorkoutStore;
   outbox: OutboxStore;
   now: Date;
-}): Result<{ clientId: string }> {
+}): Result<FinishedResult> {
+  // Finishing ends editing: a valid edit to a done set is scored before the workout is sent.
+  deps.activeWorkout.getState().endEditing();
   const workout = deps.activeWorkout.getState().workout;
   if (!workout) return { ok: false, message: "No workout in progress." };
 
@@ -28,5 +41,6 @@ export function finishActiveWorkout(deps: {
     queuedAt: deps.now.toISOString(),
   });
   deps.activeWorkout.getState().clear();
-  return { ok: true, value: { clientId: workout.clientId } };
+  const preview = workout.scoring ? previewFromPayload(built.value, exercisesOf(workout), scoringContext(workout.scoring)) : null;
+  return { ok: true, value: { clientId: workout.clientId, workout, payload: built.value, preview } };
 }

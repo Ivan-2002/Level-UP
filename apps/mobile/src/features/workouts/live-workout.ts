@@ -1,17 +1,28 @@
 import {
+  applyDailyCap,
   estimatedOneRepMax,
+  isBaselineSession,
+  JUMP_CAP_TEXT,
   liftedKg,
-  setXp,
+  scoreSessionSets,
+  setTagText,
   toDisplayWeight,
+  type DailyCapConfig,
   type Exercise,
   type ExerciseSession,
+  type ExerciseXpHistory,
+  type FinishWorkoutInput,
   type LoggedSet,
   type Mechanic,
+  type ScoredSet,
+  type SessionScore,
+  type SessionSet,
+  type SetTag,
   type WeightUnit,
 } from "@levelup/shared";
 import type { Segment } from "@/components/progress-segments";
-import { formatRest } from "./format";
-import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet } from "./active-workout";
+import { capitalise, formatRest } from "./format";
+import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet, type PinnedScoring } from "./active-workout";
 
 // What the active workout screen SHOWS, worked out from the workout in progress: live XP,
 // sets left, progress segments, PRs as they happen, "Next: ...", last time's numbers and
@@ -22,21 +33,210 @@ import { parseSet, type ActiveWorkout, type DraftExercise, type DraftSet } from 
 
 type Done = { set: DraftSet; reps: number; weightKg: number };
 
-/** The completed sets of an exercise, parsed (a set ticked done is always valid). */
+/**
+ * The completed sets of an exercise, parsed from the values each is SCORED with
+ * (DraftSet.scored: as ticked, or as last committed when editing ended), not what's typed
+ * right now. So the live XP, PRs and today's best don't move while a done set is edited.
+ */
 function doneSets(draft: DraftExercise, unit: WeightUnit): Done[] {
   return draft.sets.flatMap((set) => {
-    if (set.doneAt === null) return [];
-    const parsed = parseSet(set, draft.exercise, unit);
+    if (set.doneAt === null || set.scored === null) return [];
+    const parsed = parseSet({ ...set, ...set.scored }, draft.exercise, unit);
     return parsed.ok ? [{ set, ...parsed.value }] : [];
   });
 }
 
-/** XP earned so far, with the shared per-set formula. */
-export function liveXp(workout: ActiveWorkout, bodyweightKg: number): number {
-  return workout.exercises.reduce(
-    (sum, draft) => sum + doneSets(draft, workout.weightUnit).reduce((s, d) => s + setXp(d, bodyweightKg, draft.exercise), 0),
-    0,
+/** What scoring a workout in progress needs besides the workout: the player's history and bodyweights. */
+export type LiveScoringContext = {
+  /** Each exercise's 12-week best and jump baseline (GET /v1/exercises/xp-history, cached). */
+  history: Map<string, ExerciseXpHistory>;
+  /** `xp`: the XP bodyweight (profile.xpBodyweightKg); `typed`: the real one (profile.bodyweightKg), for lifted kg. */
+  bodyweight: { xp: number; typed: number };
+  /** The daily cap with the server's values, and the set XP already counted on the workout's day; null = no cap data. */
+  dailyCap: LiveDailyCap | null;
+};
+
+export type LiveDailyCap = { config: DailyCapConfig; xpBefore: number };
+
+export type LiveScore = {
+  /** Set XP so far, after the daily cap (not the 14-day rule: a workout in progress is today's). */
+  total: number;
+  /** Each done set's XP (after the daily cap, as the summary shows it), effort and tag, by its draft set id. */
+  bySet: Map<string, ScoredSet>;
+  /** Set XP the daily cap holds back, and the line that says so (null when nothing is held back). */
+  heldBack: number;
+  dailyCapNote: string | null;
+  /** Per exercise, for the NEXT session: what the cached history becomes after this Finish. */
+  exercises: SessionScore["exercises"];
+};
+
+/**
+ * Scores the done sets with the shared pipeline (scoreSessionSets), as Finish sends them
+ * (buildFinishPayload: exercise by exercise, each set with its doneAt as completedAt), so
+ * both score each exercise's sets in the order they were ticked. Then the daily cap, in
+ * the order the server applies it (the order sent), from the XP already counted that day.
+ * So the preview matches the server's number, except when the pinned day count is out of
+ * date (another phone trained today) or the cached copy has no cap data.
+ */
+export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringContext): LiveScore {
+  const done = workout.exercises.flatMap((draft) => doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })));
+  const scored = scoreWithCap(
+    done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg, completedAt: d.set.doneAt })),
+    exercisesOf(workout),
+    context,
   );
+  const cap = context.dailyCap;
+  return {
+    total: scored.total,
+    bySet: new Map(done.map((d, i) => [d.set.id, scored.sets[i]!])),
+    heldBack: scored.heldBack,
+    dailyCapNote: cap && scored.heldBack > 0 ? dailyCapNote(cap.config, cap.xpBefore + scored.total) : null,
+    exercises: scored.exercises,
+  };
+}
+
+/** The shared pipeline, then the daily cap in the order given (the order the server applies it: the order sent). */
+function scoreWithCap(sets: SessionSet[], exercises: Map<string, Exercise>, context: LiveScoringContext) {
+  const score = scoreSessionSets({ sets, exercises, history: context.history, bodyweight: context.bodyweight });
+  const cap = context.dailyCap;
+  const capped = cap ? applyDailyCap(cap.xpBefore, score.sets.map((s) => s.xp), cap.config) : null;
+  const scoredSets = capped ? score.sets.map((s, i) => ({ ...s, xp: capped.awarded[i]! })) : score.sets;
+  return { sets: scoredSets, total: scoredSets.reduce((sum, s) => sum + s.xp, 0), heldBack: capped?.heldBack ?? 0, exercises: score.exercises };
+}
+
+/** Each exercise of the workout by id, as scoring takes them. */
+export function exercisesOf(workout: Pick<ActiveWorkout, "exercises">): Map<string, Exercise> {
+  return new Map(workout.exercises.map((draft) => [draft.exercise.id, draft.exercise]));
+}
+
+/**
+ * The summary's XP before the server answers: the live score, saved at Finish. Set XP
+ * only, after the daily cap; the weekly and streak bonuses are the server's to decide.
+ */
+export type SavedPreview = {
+  setXp: number;
+  heldBack: number;
+  /** One per set SENT, in the payload's order, which is the order of the server's summary.sets: set n is set n. */
+  sets: { xp: number; tag: SetTag | null; isFlagged: boolean }[];
+};
+
+/**
+ * Scores exactly the sets Finish sends (`payload`, built after editing ended: ticked sets
+ * only, as last scored), with the workout's pinned context. The same pipeline and daily cap
+ * as the live view, on the same values, so the total is the one the player last saw;
+ * built from the payload so its sets line up with the server's one for one.
+ */
+export function previewFromPayload(payload: FinishWorkoutInput, exercises: Map<string, Exercise>, context: LiveScoringContext): SavedPreview {
+  const sent = payload.exercises.flatMap((e) =>
+    e.sets.map((s) => ({ exerciseId: e.exerciseId, reps: s.reps, weightKg: s.weightKg, completedAt: s.completedAt ?? null })),
+  );
+  const scored = scoreWithCap(sent, exercises, context);
+  return { setXp: scored.total, heldBack: scored.heldBack, sets: scored.sets.map((s) => ({ xp: s.xp, tag: s.tag, isFlagged: s.isFlagged })) };
+}
+
+/** The line under the tiles once the daily cap holds XP back. */
+export function dailyCapNote(config: DailyCapConfig, dayXpAfter: number): string {
+  if (dayXpAfter >= config.limit * config.ceilingMultiple) return "Daily maximum reached: sets earn no more XP today";
+  return `Daily limit reached: sets now earn ${Math.round(config.bandRate * 100)}%`;
+}
+
+/**
+ * The scoring context a workout is previewed with is PINNED per workout: taken once, when
+ * the history first arrives (or when the first set is ticked, if it hasn't by then), and
+ * saved with the workout (ActiveWorkout.scoring), so it survives leaving the screen and
+ * the app being killed. Without this, a background refetch (the profile, or the history
+ * after an earlier workout syncs) or reopening the screen would shift the total mid-workout;
+ * pinned, the total only changes when the player ticks or edits a set.
+ *
+ * Returns the snapshot to pin now, or null: already pinned, or still waiting for the history.
+ */
+export function snapshotToPin(
+  workout: Pick<ActiveWorkout, "exercises" | "scoring">,
+  available: {
+    history: LiveScoringContext["history"] | undefined;
+    bodyweight: LiveScoringContext["bodyweight"];
+    /** Null when there's no cap data (an old saved copy, or no history yet). */
+    dailyCap: LiveDailyCap | null;
+  },
+): PinnedScoring | null {
+  if (workout.scoring !== null) return null;
+  const anyDone = workout.exercises.some((e) => e.sets.some((s) => s.doneAt !== null));
+  if (available.history === undefined && !anyDone) return null; // wait a little for the history
+  const history = [...(available.history ?? new Map<string, ExerciseXpHistory>())].map(([exerciseId, h]) => ({ exerciseId, ...h }));
+  return { history, bodyweight: available.bodyweight, dailyCap: available.history === undefined ? null : available.dailyCap };
+}
+
+/** The saved snapshot as the context scoreLiveWorkout takes. */
+export function scoringContext(scoring: PinnedScoring): LiveScoringContext {
+  return {
+    history: new Map(scoring.history.map((h) => [h.exerciseId, { recentBest: h.recentBest, jumpBaseline: h.jumpBaseline }])),
+    bodyweight: scoring.bodyweight,
+    dailyCap: scoring.dailyCap,
+  };
+}
+
+/** The line under a done set: its XP and why it's lower, if it is ("+12 XP · Warm-up"). */
+export type SetXpNote = { text: string; tone: "inkMuted" | "danger"; detail?: string };
+
+export function setXpNote(score: ScoredSet): SetXpNote {
+  if (score.isFlagged) return { text: `0 XP · ${setTagText("check_set")}`, tone: "danger" };
+  const text = score.tag ? `+${score.xp} XP · ${setTagText(score.tag)}` : `+${score.xp} XP`;
+  return score.tag === "above_history" ? { text, tone: "inkMuted", detail: JUMP_CAP_TEXT } : { text, tone: "inkMuted" };
+}
+
+// --- Feedback when a set is ticked --------------------------------------------------
+
+/** "3 earlier sets now warm-ups" / "1 earlier set now a warm-up". */
+const rescoredText = (n: number) => (n === 1 ? "1 earlier set now a warm-up" : `${n} earlier sets now warm-ups`);
+
+export type TickFeedback = {
+  /** Read out by the screen reader on every tick, so a drop in the total is heard too. */
+  announcement: string;
+  /** Earlier done sets this tick turned into warm-ups (only in a baseline session). */
+  rescoredAsWarmUps: number;
+};
+
+/**
+ * What a tick or untick of set `setNumber` changed, from the live score before and after:
+ * "Set 4 done, plus 85 XP, 115 total. 3 earlier sets now warm-ups." It leads with the
+ * set's own gain; the total already carries the net change (no "-123").
+ * `before`/`after` null: no score yet (nothing pinned), so just the tick itself.
+ */
+export function tickFeedback(input: {
+  setId: string;
+  setNumber: number;
+  /** Whether the set is done after the tap (a tick) or not (an untick). */
+  done: boolean;
+  before: LiveScore | null;
+  after: LiveScore | null;
+}): TickFeedback {
+  const { setId, setNumber, done, before, after } = input;
+  const score = after?.bySet.get(setId);
+  if (!before || !after) return { announcement: `Set ${setNumber} ${done ? "done" : "not done"}`, rescoredAsWarmUps: 0 };
+  if (!done || !score) return { announcement: `Set ${setNumber} not done, ${after.total} total`, rescoredAsWarmUps: 0 };
+
+  let rescored = 0;
+  for (const [id, was] of before.bySet) {
+    if (id !== setId && was.tag !== "warm_up" && after.bySet.get(id)?.tag === "warm_up") rescored++;
+  }
+  const parts = [`Set ${setNumber} done, plus ${score.xp} XP, ${after.total} total.`];
+  if (rescored > 0) parts.push(`${capitalise(rescoredText(rescored))}.`);
+  if (after.dailyCapNote && !before.dailyCapNote) parts.push(`${after.dailyCapNote}.`);
+  return { announcement: parts.join(" "), rescoredAsWarmUps: rescored };
+}
+
+/** The ticked row's line while it's the latest tick: "+85 XP · 3 earlier sets now warm-ups". */
+export function tickLine(note: SetXpNote, rescoredAsWarmUps: number): SetXpNote {
+  return rescoredAsWarmUps > 0 ? { ...note, text: `${note.text} · ${rescoredText(rescoredAsWarmUps)}` } : note;
+}
+
+/** The caption on an exercise in a baseline session (its first, or the first after 12 weeks off). */
+export const BASELINE_CAPTION = "First session: this sets your baseline. Earlier sets may be re-scored as warm-ups.";
+
+/** Whether the exercise on screen gets the baseline caption: a reps exercise with no 12-week best in the pinned history. */
+export function showsBaselineCaption(exercise: Pick<Exercise, "id" | "repsUnit">, context: LiveScoringContext | null): boolean {
+  if (!context || exercise.repsUnit !== "reps") return false; // timed sets have no warm-ups
+  return isBaselineSession(context.history.get(exercise.id)?.recentBest ?? null);
 }
 
 /** One progress segment per exercise, plus which one is on screen. */

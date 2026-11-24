@@ -29,7 +29,19 @@ export type SimPlayer = {
   cheat?: true;
   /** How long to simulate, in weeks (default 104). */
   weeks?: number;
+  /** Logs a warm-up ramp before each barbell lift (WARM_UP_RAMP), as many honest lifters do. */
+  logsWarmUps?: true;
 };
+
+/**
+ * The warm-up ramp a player who logs warm-ups does before each barbell lift: share of the
+ * working weight x reps (never below the empty 20 kg bar). A common ramp for 5-8 rep work.
+ */
+export const WARM_UP_RAMP = [
+  { share: 0.4, reps: 5 },
+  { share: 0.6, reps: 3 },
+  { share: 0.8, reps: 2 },
+] as const;
 
 const ex = (slug: SimExerciseSlug, sets: number, reps: number, kg: number): PlannedExercise => ({ slug, sets, reps, kg });
 

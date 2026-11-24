@@ -26,6 +26,10 @@ export type ActiveWorkoutState = {
   updateSet: (exerciseKey: string, setKey: string, changes: { weight?: string; reps?: string }) => void;
   /** Returns an error message if the set's values aren't valid yet. */
   toggleSetDone: (exerciseKey: string, setKey: string) => string | null;
+  /** Editing ends (see endEditing in active-workout.ts): done sets are re-scored with valid edits. */
+  endEditing: () => void;
+  /** Saves the live preview's scoring context, once per workout (later calls do nothing). */
+  pinScoring: (scoring: workout.PinnedScoring) => void;
   /** Throws the workout away (after the user confirmed), or clears it once it's in the outbox. */
   clear: () => void;
 };
@@ -38,7 +42,9 @@ export function createActiveWorkoutStore(deps: { storage: StateStorage; newId: (
       (set, get) => {
         const update = (change: (current: ActiveWorkout) => ActiveWorkout) => {
           const current = get().workout;
-          if (current) set({ workout: change(current) });
+          if (!current) return;
+          const next = change(current);
+          if (next !== current) set({ workout: next }); // unchanged: no re-render, no save
         };
         const busy = (userId: string) => get().workout?.userId === userId; // never replace it by accident
 
@@ -69,18 +75,25 @@ export function createActiveWorkoutStore(deps: { storage: StateStorage; newId: (
             set({ workout: result.value });
             return null;
           },
+          endEditing: () => update((w) => workout.endEditing(w)),
+          pinScoring: (scoring) => update((w) => workout.pinScoring(w, scoring)),
           clear: () => set({ workout: null }),
         };
       },
       {
         name: "levelup.active-workout",
         // v2: weights typed in the player's unit, targets, rest per exercise, current exercise.
-        version: 2,
-        // A workout in progress must survive an app update: upgrade older saved shapes.
+        // v3: the live preview's pinned scoring context with the daily cap (ActiveWorkout.scoring),
+        // and the values each done set is scored with (DraftSet.scored).
+        version: 3,
+        // A workout in progress must survive an app update: upgrade older saved shapes,
+        // one version at a time (v1 -> v2 -> v3).
         migrate: (saved, version) => {
           const state = saved as { workout?: unknown };
-          if (version < 2) return { workout: workout.migrateV1(state.workout) };
-          return state as { workout: ActiveWorkout | null };
+          let current = state.workout ?? null;
+          if (version < 2) current = workout.migrateV1(current);
+          if (version < 3) current = workout.migrateV2(current);
+          return { workout: current as ActiveWorkout | null };
         },
         storage: createJSONStorage(() => deps.storage),
         partialize: (state) => ({ workout: state.workout }),

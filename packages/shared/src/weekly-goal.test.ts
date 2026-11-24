@@ -9,16 +9,20 @@ import {
   milestonesReached,
   nextStreak,
   nextWeeklyTarget,
+  qualifiesAsTrainingDay,
   streakText,
   timeZoneSchema,
   weekStartOf,
   WEEKLY_GOAL,
+  type TrainingDaySet,
   type WeekKind,
 } from "./index.js";
 
 const NY = "America/New_York"; // UTC-5 in November
 const JHB = "Africa/Johannesburg"; // UTC+2, no daylight saving
-const workout = (startedAt: string, completedSets = 3) => ({ startedAt, completedSets });
+const working: TrainingDaySet = { tag: null, isFlagged: false };
+const sets = (n: number, set: TrainingDaySet = working) => Array.from({ length: n }, () => set);
+const workout = (startedAt: string, workingSets = 3) => ({ startedAt, sets: sets(workingSets) });
 
 describe("local calendar", () => {
   it("finds the local day, not the UTC day", () => {
@@ -49,7 +53,7 @@ describe("countTrainingDays", () => {
     expect(countTrainingDays([workout("2026-11-10T06:00:00Z"), workout("2026-11-10T17:00:00Z")], JHB)).toBe(1);
   });
 
-  it("needs at least 3 completed sets in a workout", () => {
+  it("needs a workout that qualifies (at least 3 sets that count)", () => {
     expect(countTrainingDays([workout("2026-11-10T06:00:00Z", 2), workout("2026-11-11T06:00:00Z", 3)], JHB)).toBe(1);
   });
 
@@ -71,6 +75,29 @@ describe("countTrainingDays", () => {
   it("uses the player's zone for an evening workout west of UTC", () => {
     // 21:00 Sunday in New York is already Monday in UTC.
     expect(countTrainingDays([workout("2026-11-16T02:00:00Z")], NY, "2026-11-09")).toBe(1);
+  });
+});
+
+describe("qualifiesAsTrainingDay", () => {
+  it("needs at least 3 sets that count: a 1-set or 2-set workout doesn't", () => {
+    expect(qualifiesAsTrainingDay({ sets: sets(1) })).toBe(false);
+    expect(qualifiesAsTrainingDay({ sets: sets(2) })).toBe(false);
+    expect(qualifiesAsTrainingDay({ sets: sets(WEEKLY_GOAL.minSetsPerTrainingDay) })).toBe(true);
+  });
+
+  it("doesn't count warm-ups, easy sets, flagged sets or sets beyond the 10-set limit", () => {
+    // 3 empty-bar warm-ups are done sets, but not a training day.
+    expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "warm_up", isFlagged: false }) })).toBe(false);
+    expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "easy_set", isFlagged: false }) })).toBe(false);
+    expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "check_set", isFlagged: true }) })).toBe(false);
+    expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "beyond_set_limit", isFlagged: false }) })).toBe(false);
+    // Warm-ups plus 2 working sets: still 2 that count.
+    expect(qualifiesAsTrainingDay({ sets: [...sets(3, { tag: "warm_up", isFlagged: false }), ...sets(2)] })).toBe(false);
+  });
+
+  it("counts jump-capped and time-capped sets: they're real work, held to a line", () => {
+    expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "above_history", isFlagged: false }) })).toBe(true);
+    expect(qualifiesAsTrainingDay({ sets: sets(3, { tag: "timed_limit", isFlagged: false }) })).toBe(true);
   });
 });
 

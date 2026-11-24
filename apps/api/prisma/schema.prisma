@@ -108,6 +108,10 @@ model Profile {
   // training days count in this zone. The app updates it when the phone's zone changes.
   timeZone   String     @default("UTC")
   totalXp    Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
+  // The highest level the player has seen celebrated (the level-up screen), on any phone.
+  // Only ever goes up, and never past the real level: a level lowered by a correction
+  // (Milestone 7) isn't celebrated again on the way back up.
+  celebratedLevel Int @default(1)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
@@ -360,6 +364,7 @@ enum XpSource {
   workout_set // sourceId = workout_set.id
   weekly_goal // sourceId = weekly_goal.id: the goal of that week was met
   streak_milestone // sourceId = weekly_goal.id: the week the streak reached 12, 26 or 52
+  dev_grant // sourceId = a new UUID per grant: test XP from `pnpm --filter api dev:grant-xp`, never in production
 
   @@map("xp_source")
 }
@@ -436,4 +441,21 @@ model UserAchievement {
 
   @@id([userId, key])
   @@map("user_achievement")
+}
+
+// ---------------------------------------------------------------------------
+// Avatar stages: OWNED BY THE AVATAR MODULE.
+// Data, not code (CLAUDE.md rule 6): the rows are inserted by their migration and can be
+// tuned with a data change, no release. A player's stage is never stored: it's the stage
+// with the highest levelRequired at or below their level. Lower a threshold, never raise
+// one (raising would take a stage away from players who have it).
+// ---------------------------------------------------------------------------
+
+model AvatarStage {
+  // Stable id ("regular"); also the key the app draws the stage's extras from (Milestone 6).
+  key           String @id
+  name          String // shown to the player: "Regular"
+  levelRequired Int    @unique
+
+  @@map("avatar_stage")
 }

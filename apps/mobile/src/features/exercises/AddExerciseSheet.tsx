@@ -43,7 +43,7 @@ export function AddExerciseSheet({ target }: { target: AddExerciseTarget }) {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
   const { data: profile } = useProfile(userId);
-  const library = useExercises();
+  const library = useExercises(userId);
   const recent = useRecentExercises(userId);
   const selected = useStore(sheetSelection, (s) => s.ids);
   const [search, setSearch] = useState("");

@@ -26,6 +26,12 @@ export async function findProfileByUserId(userId: string): Promise<ProfileRecord
   return row ? withLatestBodyweight(row) : null;
 }
 
+/** The user id for a sign-in email, ignoring case (Better Auth's user table). Dev tools only. */
+export async function findUserIdByEmail(email: string): Promise<string | null> {
+  const row = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } });
+  return row?.id ?? null;
+}
+
 export async function profileExists(userId: string): Promise<boolean> {
   return (await prisma.profile.count({ where: { userId } })) > 0;
 }
@@ -33,6 +39,17 @@ export async function profileExists(userId: string): Promise<boolean> {
 /** Changes only the given fields. null = this user has no profile. */
 export async function updateProfile(userId: string, data: { weightUnit?: "kg" | "lb"; timeZone?: string }): Promise<ProfileRecord | null> {
   const { count } = await prisma.profile.updateMany({ where: { userId }, data });
+  return count === 0 ? null : findProfileByUserId(userId);
+}
+
+/**
+ * Raises celebratedLevel to `level` unless it's already higher, in ONE statement: two
+ * phones (or a retry racing the first request) can't lower it. null = no profile.
+ */
+export async function raiseCelebratedLevel(userId: string, level: number): Promise<ProfileRecord | null> {
+  const count = await prisma.$executeRaw`
+    UPDATE "profile" SET "celebratedLevel" = GREATEST("celebratedLevel", ${level}), "updatedAt" = now()
+    WHERE "userId" = ${userId}`;
   return count === 0 ? null : findProfileByUserId(userId);
 }
 

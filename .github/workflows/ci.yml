@@ -69,7 +69,10 @@ jobs:
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
-      - name: Run tests (shared unit tests + API integration tests)
+      # Every package's tests run to the end and print their failures in full: the root
+      # scripts use --no-bail (a failure doesn't stop the others mid-run) and --no-sort (a
+      # failure in packages/shared doesn't skip the apps that depend on it). Still exits 1.
+      - name: Run tests (shared and mobile unit tests, API integration tests)
         run: pnpm test
 
       - name: Lint

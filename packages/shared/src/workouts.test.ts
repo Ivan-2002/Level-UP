@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   exerciseSchema,
+  exerciseXpHistoryListSchema,
   finishWorkoutSchema,
   HOLD_MAX_SEC,
   listWorkoutsQuerySchema,
@@ -96,5 +97,20 @@ describe("listWorkoutsQuerySchema", () => {
 
   it("caps the page size at 50", () => {
     expect(listWorkoutsQuerySchema.safeParse({ limit: "51" }).success).toBe(false);
+  });
+});
+
+describe("exerciseXpHistoryListSchema", () => {
+  const item = { exerciseId: "0195f3a0-0000-7000-8000-000000000001", recentBest: 116.7, jumpBaseline: 116.7 };
+
+  it("still reads a response saved before the daily cap fields, keeping its history (no cap data)", () => {
+    expect(exerciseXpHistoryListSchema.parse({ items: [item] })).toEqual({ items: [item], dailyCap: null, today: null });
+  });
+
+  it("reads the daily cap and today's XP", () => {
+    const today = { date: "2026-11-18", setXp: 1200, clientIds: ["0195f3a0-0000-7000-8000-0000000000aa"] };
+    const parsed = exerciseXpHistoryListSchema.parse({ items: [], dailyCap: { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 }, today });
+    expect(parsed.today).toEqual(today);
+    expect(parsed.dailyCap?.limit).toBe(3100);
   });
 });

@@ -11,6 +11,7 @@ import {
   toDisplayWeight,
   WEIGHT_MAX_KG,
   WEIGHT_MIN_KG,
+  type DailyCapConfig,
   type Exercise,
   type FinishWorkoutInput,
   type LastSessionList,
@@ -34,7 +35,17 @@ export type DraftSet = {
   reps: string;
   /** When the set was ticked done (ISO), or null if not done yet. */
   doneAt: string | null;
+  /**
+   * The values a DONE set is scored with (null while not done): what it had when ticked,
+   * replaced only when editing ends with valid values (endEditing). So typing into a done
+   * set never moves the live XP keystroke by keystroke, and a half-typed value left by the
+   * app being killed is never scored.
+   */
+  scored: SetValues | null;
 };
+
+/** A set's typed values, in the workout's unit. */
+export type SetValues = Pick<DraftSet, "weight" | "reps">;
 
 export type DraftExercise = {
   id: string; // local key; the same exercise can appear twice in one workout
@@ -68,6 +79,24 @@ export type ActiveWorkout = {
    * with these changes?" on Finish. Optional: workouts saved before it existed have none.
    */
   plan?: PlannedExercise[];
+  /**
+   * What the live XP preview scores against, PINNED once per workout (see pinScoring in
+   * live-workout.ts) and saved with it, so the total stays the same after leaving the
+   * screen or the app being killed. Null until pinned. Never sent to the API.
+   */
+  scoring: PinnedScoring | null;
+};
+
+/**
+ * The scoring context as saved on the phone (plain JSON: the history is a list, not a Map).
+ * `history`: each exercise's 12-week best and jump baseline (the offline XP history when pinned);
+ * `bodyweight.xp`: the XP bodyweight, `bodyweight.typed`: the real one.
+ */
+export type PinnedScoring = {
+  history: { exerciseId: string; recentBest: number | null; jumpBaseline: number | null }[];
+  bodyweight: { xp: number; typed: number };
+  /** The daily cap's values and the set XP already counted on the workout's day (store v4); null = no cap data. */
+  dailyCap: { config: DailyCapConfig; xpBefore: number } | null;
 };
 
 export type PlannedExercise = { exerciseId: string; targetSets: number; targetReps: number; restSec: number | null };
@@ -93,7 +122,13 @@ export function startWorkout(args: { userId: string; clientId: string; now: Date
     exercises: [],
     routineId: null,
     currentExerciseKey: null,
+    scoring: null,
   };
+}
+
+/** Saves the scoring context for this workout, once: a workout already pinned keeps its own. */
+export function pinScoring(workout: ActiveWorkout, scoring: PinnedScoring): ActiveWorkout {
+  return workout.scoring === null ? { ...workout, scoring } : workout;
 }
 
 /**
@@ -172,7 +207,7 @@ export function stepRest(workout: ActiveWorkout, exerciseKey: string, direction:
 export function addSet(workout: ActiveWorkout, exerciseKey: string, newId: () => string): ActiveWorkout {
   return mapExercise(workout, exerciseKey, (exercise) => {
     const previous = exercise.sets.at(-1);
-    const set: DraftSet = previous ? { id: newId(), weight: previous.weight, reps: previous.reps, doneAt: null } : emptySet(newId());
+    const set: DraftSet = previous ? { id: newId(), weight: previous.weight, reps: previous.reps, doneAt: null, scored: null } : emptySet(newId());
     return { ...exercise, sets: [...exercise.sets, set] };
   });
 }
@@ -191,20 +226,57 @@ export function updateSet(
 }
 
 /**
- * Ticks a set done (only if its values are valid) or unticks it.
+ * Ticks a set done (only if its values are valid) or unticks it. Ticking any set also
+ * ends editing (endEditing), so another set's pending edit is scored first.
  * Validating here means Finish never meets an invalid completed set.
  */
-export function toggleSetDone(workout: ActiveWorkout, exerciseKey: string, setKey: string, now: Date): Result<ActiveWorkout> {
+export function toggleSetDone(current: ActiveWorkout, exerciseKey: string, setKey: string, now: Date): Result<ActiveWorkout> {
+  const workout = endEditing(current);
   const exercise = workout.exercises.find((e) => e.id === exerciseKey);
   const set = exercise?.sets.find((s) => s.id === setKey);
   if (!exercise || !set) return { ok: false, message: "That set no longer exists." };
 
   if (set.doneAt !== null) {
-    return { ok: true, value: mapSet(workout, exerciseKey, setKey, (s) => ({ ...s, doneAt: null })) };
+    return { ok: true, value: mapSet(workout, exerciseKey, setKey, (s) => ({ ...s, doneAt: null, scored: null })) };
   }
   const parsed = parseSet(set, exercise.exercise, workout.weightUnit);
   if (!parsed.ok) return parsed;
-  return { ok: true, value: mapSet(workout, exerciseKey, setKey, (s) => ({ ...s, doneAt: now.toISOString() })) };
+  return {
+    ok: true,
+    value: mapSet(workout, exerciseKey, setKey, (s) => ({ ...s, doneAt: now.toISOString(), scored: { weight: s.weight, reps: s.reps } })),
+  };
+}
+
+/**
+ * Editing ends: the field loses focus, the keyboard is dismissed, another set is ticked
+ * or focused, the app goes to the background, or the workout is reopened (after the app
+ * was killed). Each done set whose typed values changed is re-scored with them if they're
+ * valid; if not, it keeps the values it's scored with and shows why (doneSetError).
+ * Returns the same object when nothing changed (no re-render, no save).
+ */
+export function endEditing(workout: ActiveWorkout): ActiveWorkout {
+  let changed = false;
+  const exercises = workout.exercises.map((draft) => {
+    const sets = draft.sets.map((set) => {
+      if (set.doneAt === null || set.scored === null) return set;
+      if (set.scored.weight === set.weight && set.scored.reps === set.reps) return set;
+      if (!parseSet(set, draft.exercise, workout.weightUnit).ok) return set;
+      changed = true;
+      return { ...set, scored: { weight: set.weight, reps: set.reps } };
+    });
+    return sets.some((s, i) => s !== draft.sets[i]) ? { ...draft, sets } : draft;
+  });
+  return changed ? { ...workout, exercises } : workout;
+}
+
+/**
+ * Why a done set's typed values can't be scored (e.g. reps cleared), or null. Shown under
+ * the row once editing has ended; until it's fixed the set keeps its scored values.
+ */
+export function doneSetError(set: DraftSet, exercise: Exercise, unit: WeightUnit): string | null {
+  if (set.doneAt === null) return null;
+  const parsed = parseSet(set, exercise, unit);
+  return parsed.ok ? null : `${parsed.message} Until then it counts as it was when ticked.`;
 }
 
 export function setCounts(workout: ActiveWorkout): { done: number; total: number } {
@@ -227,7 +299,12 @@ export function parseSet(set: DraftSet, exercise: Exercise, unit: WeightUnit): R
   if (set.reps.trim() === "" || !Number.isInteger(reps) || reps < REPS_MIN || reps > max) {
     return { ok: false, message: `${label} must be a whole number from ${REPS_MIN} to ${max}.` };
   }
-  // Empty weight means 0: a plain bodyweight set is then just "enter reps, tick".
+  // Empty weight means 0 only for bodyweight exercises ("enter reps, tick"; the weight is
+  // what's ADDED). A barbell, dumbbell, machine, cable or kettlebell lift always has one:
+  // empty is a weight not entered yet, never silently 0 kg. A typed "0" is still 0 kg.
+  if (set.weight.trim() === "" && exercise.equipment !== "bodyweight") {
+    return { ok: false, message: "Enter the weight." };
+  }
   const typed = set.weight.trim() === "" ? 0 : parseDecimal(set.weight);
   const weightKg = Number.isNaN(typed) ? Number.NaN : fromInputWeight(typed, unit);
   if (Number.isNaN(weightKg) || weightKg < WEIGHT_MIN_KG || weightKg > WEIGHT_MAX_KG) {
@@ -300,7 +377,7 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
  */
 export function migrateV1(saved: unknown): ActiveWorkout | null {
   if (!saved || typeof saved !== "object") return null;
-  const old = saved as Omit<ActiveWorkout, "weightUnit" | "exercises" | "routineId" | "currentExerciseKey"> & {
+  const old = saved as Omit<ActiveWorkout, "weightUnit" | "exercises" | "routineId" | "currentExerciseKey" | "scoring"> & {
     routineId?: string | null;
     exercises: { id: string; exercise: Exercise; sets: { id: string; weightKg: string; reps: string; doneAt: string | null }[] }[];
   };
@@ -309,13 +386,36 @@ export function migrateV1(saved: unknown): ActiveWorkout | null {
     weightUnit: "kg", // version 1 always typed kg
     routineId: old.routineId ?? null,
     currentExerciseKey: old.exercises[0]?.id ?? null,
+    scoring: null, // the rest of version 3's fields come from migrateV2
     exercises: old.exercises.map((e) => ({
       id: e.id,
       exercise: e.exercise,
-      sets: e.sets.map((s) => ({ id: s.id, weight: s.weightKg, reps: s.reps, doneAt: s.doneAt })),
+      sets: e.sets.map((s) => ({ id: s.id, weight: s.weightKg, reps: s.reps, doneAt: s.doneAt, scored: null })),
       targetReps: null,
       restSec: resolveRestSec({ preferenceSec: e.exercise.restPreferenceSec, suggestedSec: e.exercise.suggestedRestSec }),
       restChanged: false,
+    })),
+  };
+}
+
+/**
+ * Upgrades a workout saved by version 2 of the store (before Milestone 5's live XP) to
+ * version 3:
+ * - nothing pinned yet (scoring null), so the live view pins on next open, as it did then;
+ * - each done set is scored with its typed values, as version 2 scored it. If they're
+ *   invalid it's left out of the live total until fixed, as before.
+ */
+export function migrateV2(saved: unknown): ActiveWorkout | null {
+  if (!saved || typeof saved !== "object") return null;
+  const old = saved as Omit<ActiveWorkout, "scoring" | "exercises"> & {
+    exercises: (Omit<DraftExercise, "sets"> & { sets: Omit<DraftSet, "scored">[] })[];
+  };
+  return {
+    ...old,
+    scoring: null,
+    exercises: old.exercises.map((e) => ({
+      ...e,
+      sets: e.sets.map((s) => ({ ...s, scored: s.doneAt === null ? null : { weight: s.weight, reps: s.reps } })),
     })),
   };
 }
@@ -357,12 +457,13 @@ function newDraftExercise(
       weight: weightKg > 0 ? String(toDisplayWeight(weightKg, unit)) : "",
       reps: reps ? String(reps) : "",
       doneAt: null,
+      scored: null,
     })),
   };
 }
 
 function emptySet(id: string): DraftSet {
-  return { id, weight: "", reps: "", doneAt: null };
+  return { id, weight: "", reps: "", doneAt: null, scored: null };
 }
 
 function mapExercise(workout: ActiveWorkout, exerciseKey: string, change: (exercise: DraftExercise) => DraftExercise): ActiveWorkout {

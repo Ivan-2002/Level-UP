@@ -1,3 +1,4 @@
+import { localDate, setTagSchema } from "@levelup/shared";
 import { isUuid } from "../../lib/ids.js";
 import { prisma, type Db } from "../../lib/prisma.js";
 import { Prisma, type XpHeldBackReason } from "../../generated/prisma/client.js";
@@ -217,9 +218,27 @@ export function findHistoryPage(
 }
 
 /**
+ * The clientIds of the player's workouts that STARTED on a local day (in `timeZone`): the
+ * same rule that dates their set XP (earned_on). Read from a window a day wider on each
+ * side of the UTC day, then filtered by local day, as findWorkoutsAround does.
+ */
+export async function findClientIdsStartedOn(userId: string, date: string, timeZone: string): Promise<string[]> {
+  const from = new Date(`${date}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const to = new Date(from);
+  to.setUTCDate(to.getUTCDate() + 3);
+  const rows = await prisma.workout.findMany({
+    where: { userId, startedAt: { gte: from, lt: to } },
+    select: { clientId: true, startedAt: true },
+  });
+  return rows.filter((w) => localDate(w.startedAt, timeZone) === date).map((w) => w.clientId);
+}
+
+/**
  * Workouts that may fall in a week: a window one day wider on each side than the UTC week,
  * because the player's local week can be up to 14 hours off UTC. The caller keeps those
- * whose LOCAL day is in the week. completedSets excludes flagged sets.
+ * whose LOCAL day is in the week. Each set comes with how scoring tagged it, for
+ * qualifiesAsTrainingDay (a code this version doesn't know reads as no tag).
  */
 export async function findWorkoutsAround(db: Db, userId: string, weekStart: string) {
   const from = new Date(`${weekStart}T00:00:00Z`);
@@ -228,11 +247,11 @@ export async function findWorkoutsAround(db: Db, userId: string, weekStart: stri
   to.setUTCDate(to.getUTCDate() + 9);
   const rows = await db.workout.findMany({
     where: { userId, startedAt: { gte: from, lt: to } },
-    select: { startedAt: true, createdAt: true, exercises: { select: { _count: { select: { sets: { where: { isFlagged: false } } } } } } },
+    select: { startedAt: true, createdAt: true, exercises: { select: { sets: { select: { isFlagged: true, xpTag: true } } } } },
   });
   return rows.map((w) => ({
     startedAt: w.startedAt,
     savedAt: w.createdAt,
-    completedSets: w.exercises.reduce((sum, e) => sum + e._count.sets, 0),
+    sets: w.exercises.flatMap((e) => e.sets.map((s) => ({ isFlagged: s.isFlagged, tag: setTagSchema.safeParse(s.xpTag).data ?? null }))),
   }));
 }

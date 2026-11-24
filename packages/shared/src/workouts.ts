@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { weeklyGoalStatusSchema } from "./weekly-goal.js";
 import { restSecSchema } from "./progression.js";
+import { avatarStageSchema } from "./avatar.js";
 import { levelStatusSchema } from "./levels.js";
 import { flagReasonSchema, setTagSchema } from "./xp-codes.js";
 
@@ -284,6 +285,11 @@ export const finishSummarySchema = z.object({
     statusAfter: levelStatusSchema,
   }),
   /**
+   * The avatar stage at the level before and after this workout; a new stage when they
+   * differ. Defaults to null for responses from before the field existed (saved on the phone).
+   */
+  stage: z.object({ before: avatarStageSchema.nullable(), after: avatarStageSchema.nullable() }).nullable().default(null),
+  /**
    * Every set of the workout, in the order of `workout.exercises[].sets`: the XP the ledger
    * recorded for it (after the daily cap), its tag and why it was flagged or capped.
    * Workouts from before Milestone 5 have no tags or reasons.
@@ -407,6 +413,32 @@ export const recentExerciseListSchema = z.object({
 export type RecentExerciseList = z.infer<typeof recentExerciseListSchema>;
 
 /**
+ * The daily cap's values as the server applies them (DAILY_XP_CAP), sent so the app's live
+ * preview uses the server's numbers: the cap can be tuned with a server deploy alone.
+ */
+export const dailyCapConfigSchema = z.object({
+  /** Set XP per day at the full rate. */
+  limit: z.number().int().positive(),
+  /** The share of XP beyond the limit that is still awarded. */
+  bandRate: z.number().min(0).max(1),
+  /** Never more than limit x this awarded in one day. */
+  ceilingMultiple: z.number().min(1),
+});
+export type DailyCapConfig = z.infer<typeof dailyCapConfigSchema>;
+
+/**
+ * The player's LOCAL today (in the profile's time zone) as the daily cap counts it: set XP
+ * already awarded for workouts that STARTED that day, and those workouts' clientIds, so the
+ * app doesn't count one twice when it's still in the outbox (a lost response).
+ */
+export const dayXpSchema = z.object({
+  date: z.iso.date(),
+  setXp: z.number().int().nonnegative(),
+  clientIds: z.array(z.uuid()),
+});
+export type DayXp = z.infer<typeof dayXpSchema>;
+
+/**
  * Response of GET /exercises/xp-history: for every exercise the player has done, the
  * history the shared scoring needs (ExerciseXpHistory), so the app can preview XP offline.
  * Values are estimated 1RM in lifted kg, or seconds for timed exercises. Worked out from
@@ -414,5 +446,11 @@ export type RecentExerciseList = z.infer<typeof recentExerciseListSchema>;
  */
 export const exerciseXpHistoryListSchema = z.object({
   items: z.array(z.object({ exerciseId: z.uuid(), recentBest: z.number().nullable(), jumpBaseline: z.number().nullable() })),
+  // Both added for the live daily cap (Phase 4c). DEFAULT null, not required: a copy saved
+  // on the phone by an older version has neither, and must still parse (keeping its
+  // history), or every exercise would become a baseline session offline.
+  dailyCap: dailyCapConfigSchema.nullable().default(null),
+  today: dayXpSchema.nullable().default(null),
 });
 export type ExerciseXpHistoryList = z.infer<typeof exerciseXpHistoryListSchema>;
+

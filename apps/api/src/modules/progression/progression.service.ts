@@ -12,9 +12,14 @@ import {
   type SessionSet,
   type BodyweightEntry,
   XP_SOURCES_UNDER_DAILY_CAP,
+  localDate,
 } from "@levelup/shared";
+import { randomUUID } from "node:crypto";
 import type { XpHeldBackReason } from "../../generated/prisma/client.js";
-import type { Db } from "../../lib/prisma.js";
+import { env } from "../../config/env.js";
+import { now } from "../../lib/clock.js";
+import { devToolRefusal } from "../../lib/dev-only.js";
+import { prisma, type Db } from "../../lib/prisma.js";
 import * as usersService from "../users/users.service.js";
 import * as repo from "./progression.repository.js";
 
@@ -33,7 +38,7 @@ export type WorkoutToScore = {
   receivedAt: Date;
   /** The local day it started ("YYYY-MM-DD"): the daily cap's day. */
   earnedOn: string;
-  /** Every set of the workout, in the order logged (exercise by exercise). */
+  /** Every set of the workout, in the order logged (exercise by exercise), with completedAt when the app sent it. */
   sets: SessionSet[];
   exercises: Map<string, ScoringExercise>;
   /** Per exercise in the workout: its sessions in workouts that started earlier, oldest first. */
@@ -85,6 +90,14 @@ export async function scoreWorkout(db: Db, userId: string, workout: WorkoutToSco
   const dayXpBefore = await repo.sumXpOnDay(db, userId, workout.earnedOn, XP_SOURCES_UNDER_DAILY_CAP);
   const capped = applyDailyCap(dayXpBefore, setXp);
   return { sets: score.sets, awardedXp: capped.awarded, heldBack: heldBack(capped.heldBack, "daily_cap"), bodyweightKg: typed };
+}
+
+/**
+ * Set XP already awarded on a local day (the daily cap's count, as Finish sums it):
+ * what the app's live preview starts the day from (GET /exercises/xp-history).
+ */
+export async function setXpOnDay(userId: string, earnedOn: string): Promise<number> {
+  return repo.sumXpOnDay(prisma, userId, earnedOn, XP_SOURCES_UNDER_DAILY_CAP);
 }
 
 // Zero means nothing was held back: no reason (the database's CHECK insists on that).
@@ -154,4 +167,23 @@ export async function workoutXp(
 ): Promise<{ perSet: Map<string, number>; earned: number; totalBefore: number }> {
   const [perSet, totalBefore] = await Promise.all([repo.setXpBySet(setIds), repo.sumXpBefore(userId, savedAt)]);
   return { perSet, earned: [...perSet.values()].reduce((a, b) => a + b, 0), totalBefore };
+}
+
+/**
+ * DEVELOPMENT ONLY: adds `amount` XP to a player through the ledger, so a level-up can be
+ * tested without weeks of workouts (`pnpm --filter api dev:grant-xp`). One `dev_grant` row
+ * (a new UUID as its sourceId, no body part, today's local date) and the cached total, in one
+ * transaction. dev_grant is outside the daily cap, so it doesn't eat into the day's set XP.
+ * Refuses in production or against a non-local database (devToolRefusal), even if something
+ * other than the script calls it. Returns the new total.
+ */
+export async function grantDevXp(userId: string, amount: number): Promise<number> {
+  const refusal = devToolRefusal(env);
+  if (refusal) throw new Error(refusal);
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error("amount must be a positive whole number.");
+  const earnedOn = localDate(now(), await usersService.timeZoneOf(userId));
+  return prisma.$transaction(async (tx) => {
+    await repo.insertBonusXpEvent(tx, { userId, amount, source: "dev_grant", sourceId: randomUUID(), earnedOn });
+    return usersService.addTotalXp(tx, userId, amount);
+  });
 }

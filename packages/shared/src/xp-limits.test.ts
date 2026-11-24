@@ -11,7 +11,6 @@ import {
   judgeSession,
   jumpBaseline,
   jumpCappedXp,
-  jumpCapText,
   jumpCheckValue,
   MECHANICS,
   plausibilityFlag,
@@ -135,16 +134,13 @@ describe("jump cap: estimated 1RM (Epley) at every rep count, or seconds for tim
     const judged = judgeSession(jumpBaseline([[60, 45]]), [90]);
     expect(judged.factors[0]).toBeCloseTo(75 / 90, 6);
   });
-
-  it("explains a capped set with the best and the line, in the player's unit", () => {
-    expect(jumpCapText(100, "reps", "kg")).toBe(
-      "Far above your best for this exercise (estimated 1RM 100 kg), so it earns XP as 125 kg for now and doesn't count as a PR. Keep it up: the full value catches up within a few sessions.",
-    );
-    expect(jumpCapText(60, "seconds", "kg")).toContain("(longest hold 60 s), so it earns XP as 75 s");
-  });
 });
 
 describe("applyDailyCap: full XP to 3,100, 25% beyond, never more than 6,200 a day", () => {
+  it("takes other cap values (the app uses the ones the server sent)", () => {
+    expect(applyDailyCap(0, [80, 80], { limit: 100, bandRate: 0.5, ceilingMultiple: 2 })).toEqual({ awarded: [80, 50], heldBack: 30 }); // 20 to the limit, then 50% of 60
+  });
+
   it("uses the limit chosen with the simulation", () => {
     expect(DAILY_XP_CAP).toEqual({ limit: 3100, bandRate: 0.25, ceilingMultiple: 2 });
   });

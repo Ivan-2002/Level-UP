@@ -2,9 +2,11 @@ import {
   bodyweightOnDate,
   BODYWEIGHT_FALLBACK_KG,
   canBeRecord,
+  DAILY_XP_CAP,
   estimatedOneRepMax,
   exerciseStats,
   liftedKg,
+  localDate,
   volumeKg,
   type Exercise,
   type ExerciseSession,
@@ -153,12 +155,27 @@ export async function pastSessions(
  * GET /exercises/xp-history: every exercise the player has done, with the history the
  * shared scoring needs, as of now. Replays the player's whole history (see the
  * performance test in exercise-xp-history.test.ts).
+ *
+ * Also what the live preview needs for the daily cap: the cap's values (so it can be tuned
+ * without an app update) and the player's local today as the cap counts it, with the
+ * workouts already counted in it (so the app doesn't count one that's still in its outbox).
  */
 export async function exerciseXpHistories(userId: string): Promise<ExerciseXpHistoryList> {
+  const at = now();
+  const timeZone = await usersService.timeZoneOf(userId);
+  const today = localDate(at, timeZone);
   const sessions = await pastSessions(userId, null);
   const exercises = await exercisesService.findUsableExercises(userId, [...sessions.keys()]);
-  const histories = await progressionService.xpHistories(userId, sessions, exercises, now());
-  return { items: [...histories].map(([exerciseId, history]) => ({ exerciseId, ...history })) };
+  const [histories, setXp, clientIds] = await Promise.all([
+    progressionService.xpHistories(userId, sessions, exercises, at),
+    progressionService.setXpOnDay(userId, today),
+    repo.findClientIdsStartedOn(userId, today, timeZone),
+  ]);
+  return {
+    items: [...histories].map(([exerciseId, history]) => ({ exerciseId, ...history })),
+    dailyCap: { limit: DAILY_XP_CAP.limit, bandRate: DAILY_XP_CAP.bandRate, ceilingMultiple: DAILY_XP_CAP.ceilingMultiple },
+    today: { date: today, setXp, clientIds },
+  };
 }
 
 async function usableExerciseOrThrow(userId: string, exerciseId: string): Promise<Exercise> {

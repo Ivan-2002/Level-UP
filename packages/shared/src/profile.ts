@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { LevelStatus } from "./levels.js";
-import { weightUnitSchema, type WeightUnit } from "./units.js";
+import { avatarStageSchema } from "./avatar.js";
+import { levelStatusSchema } from "./levels.js";
+import { weightUnitSchema } from "./units.js";
 import { timeZoneSchema } from "./weekly-goal.js";
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,14 @@ export const updateProfileSchema = z
   .refine((body) => Object.values(body).some((v) => v !== undefined), "Send at least one field to change.");
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
+/**
+ * Body of POST /profile/celebrated: the level-up screen for `level` was shown. The server
+ * keeps the highest level sent, never above the player's real level, so a repeat or a
+ * late, out-of-order request changes nothing.
+ */
+export const celebrateLevelSchema = z.object({ level: z.number().int().min(1) });
+export type CelebrateLevelInput = z.infer<typeof celebrateLevelSchema>;
+
 /** Body of POST /bodyweight. `measuredOn` is the player's LOCAL date; defaults to today. */
 export const recordBodyweightSchema = z.object({
   kg: z
@@ -60,22 +69,34 @@ export type BodyweightEntry = { kg: number; measuredOn: string /* YYYY-MM-DD */ 
 /** Body of POST /profile. */
 export type CreateProfileInput = z.infer<typeof createProfileSchema>;
 
-/** Response of GET /profile and POST /profile. */
-export type Profile = {
-  username: string;
-  bodyweightKg: number | null;
-  weightUnit: WeightUnit;
-  timeZone: string;
-  totalXp: number;
+/** Response of GET /profile and POST /profile. A schema (not only a type) so the app can check a copy saved on the phone. */
+export const profileSchema = z.object({
+  username: z.string(),
+  bodyweightKg: z.number().nullable(),
+  weightUnit: weightUnitSchema,
+  timeZone: z.string(),
+  totalXp: z.number().int(),
   /** The XP bar: worked out by the server, which owns the level curve (Milestone 5). */
-  level: LevelStatus;
+  level: levelStatusSchema,
+  /**
+   * The avatar stage of that level (from the avatar_stage table). Defaults to null so a
+   * profile saved on the phone before the field existed still reads.
+   */
+  stage: avatarStageSchema.nullable().default(null),
+  /**
+   * The highest level already celebrated (the level-up screen), on any phone: the app shows
+   * a level-up when level.level is above it. Null only in a copy saved on the phone before
+   * the field existed; the app then celebrates nothing until the server answers.
+   */
+  celebratedLevel: z.number().int().min(1).nullable().default(null),
   /**
    * The bodyweight XP uses today (xpBodyweightOnDate: limited at 2% a week, 40-200 kg), for
    * the app's offline XP preview. bodyweightKg above is what the player typed.
    */
-  xpBodyweightKg: number;
-  createdAt: string; // ISO 8601
-};
+  xpBodyweightKg: z.number(),
+  createdAt: z.string(), // ISO 8601
+});
+export type Profile = z.infer<typeof profileSchema>;
 
 // ---------------------------------------------------------------------------
 // Error responses

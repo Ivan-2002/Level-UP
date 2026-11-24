@@ -1,6 +1,6 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BODYWEIGHT_FALLBACK_KG, BODYWEIGHT_XP, levelStatus, localDate } from "@levelup/shared";
+import { BODYWEIGHT_FALLBACK_KG, BODYWEIGHT_XP, levelStatus, localDate, profileSchema } from "@levelup/shared";
 import { setNow } from "../../lib/clock.js";
 import { prisma } from "../../lib/prisma.js";
 import { app, signUpUser, type TestUser } from "../../test/helpers.js";
@@ -51,6 +51,8 @@ describe("POST /profile", () => {
       timeZone: "Africa/Johannesburg",
       totalXp: 0,
       level: { level: 1, xpIntoLevel: 0, xpForNextLevel: 400 },
+      stage: { key: "rookie", name: "Rookie", levelRequired: 1 },
+      celebratedLevel: 1,
       xpBodyweightKg: 75.5,
       createdAt: expect.any(String),
     });
@@ -265,6 +267,15 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
 
     expect(res.body.bodyweightKg).toBe(80);
     expect(res.body.xpBodyweightKg).toBe(80);
+  });
+
+  it("matches the shared profileSchema, which the app uses to check its saved copy", async () => {
+    const user = await signUpUser();
+    await createProfile(user, validCharacter);
+
+    const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
+
+    expect(profileSchema.safeParse(res.body).success).toBe(true);
   });
 
   it("uses the 75 kg fallback when no bodyweight was ever entered", async () => {

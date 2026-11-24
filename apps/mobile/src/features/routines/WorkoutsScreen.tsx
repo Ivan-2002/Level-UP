@@ -7,16 +7,19 @@ import { Card } from "@/components/Card";
 import { Icon } from "@/components/Icon";
 import { Text } from "@/components/Text";
 import { authClient } from "@/lib/auth-client";
+import { useActiveWorkout } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
 import { StartOrResumeWorkout } from "@/features/workouts/HomeWorkoutCards";
 import { formatLastDone, plural } from "@/features/workouts/format";
 import { useRoutines } from "./use-routines";
 
-// The Workouts tab: your saved routines, plus "Start empty workout".
+// The Workouts tab: "New routine" (the main action), your saved routines, and a quieter
+// "Start empty workout" next to their heading.
 export function WorkoutsScreen() {
   const { data: session } = authClient.useSession();
   const userId = session?.user.id ?? "";
   const routines = useRoutines(userId);
+  const inProgress = useActiveWorkout((s) => s.workout?.userId === userId);
   const styles = useStyles();
   const t = useTheme();
   const items = routines.data?.items;
@@ -31,16 +34,20 @@ export function WorkoutsScreen() {
           Workouts
         </Text>
 
-        {/* The one primary action: start (or resume) a workout. */}
-        <StartOrResumeWorkout userId={userId} label="Start empty workout" />
+        {/* A workout in progress comes first: getting back to it matters most. Otherwise the
+            one primary action is building a routine. */}
+        {inProgress ? <StartOrResumeWorkout userId={userId} /> : null}
+        <Button label="New routine" icon="plus" onPress={() => router.push("/routines/new")} />
 
         <View style={styles.sectionHeader}>
           <Text variant="labelStrong" tone="inkMuted">
             Routines
           </Text>
-          {items && items.length > 0 ? (
-            <Button label="New routine" icon="plus" variant="plain" tone="link" size="md" onPress={() => router.push("/routines/new")} />
-          ) : null}
+          {/* A workout without a routine: secondary, so a small link (hidden during a workout,
+              whose Resume card is above). Shown with or without routines. */}
+          {inProgress ? null : (
+            <StartOrResumeWorkout userId={userId} label="Start empty workout" look={{ variant: "plain", tone: "link", size: "md", icon: "play" }} />
+          )}
         </View>
 
         {items === undefined ? (
@@ -85,12 +92,14 @@ function RoutineRow({ routine }: { routine: RoutineSummary }) {
   );
 }
 
+// No button of its own: "New routine" above is the way to create one.
 function EmptyRoutines() {
   return (
     <Card>
       <Text variant="heading">No routines yet</Text>
-      <Text tone="inkMuted">Save the workouts you repeat, like a push day, and start them with one tap. Last time&apos;s numbers come with them.</Text>
-      <Button label="Create a routine" icon="plus" variant="outline" tone="link" size="md" onPress={() => router.push("/routines/new")} />
+      <Text tone="inkMuted">
+        Tap New routine to save the workouts you repeat, like a push day, and start them with one tap. Last time&apos;s numbers come with them.
+      </Text>
     </Card>
   );
 }

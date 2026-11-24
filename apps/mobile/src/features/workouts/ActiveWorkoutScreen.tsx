@@ -1,9 +1,9 @@
-import { useEffect } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { useEffect, useMemo } from "react";
+import { Alert, AppState, Keyboard, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { BODYWEIGHT_FALLBACK_KG } from "@levelup/shared";
+import { BODYWEIGHT_FALLBACK_KG, localDate } from "@levelup/shared";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { AddChip, Chip } from "@/components/Chip";
@@ -19,9 +19,10 @@ import { useProfile } from "@/features/profile/use-profile";
 import { currentExercise, setCounts, type ActiveWorkout } from "./active-workout";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
 import { ElapsedTimer } from "./ElapsedTimer";
-import { lastSessionText, liveXp, nextUp, workoutSegments } from "./live-workout";
+import { lastSessionText, nextUp, scoreLiveWorkout, scoringContext, snapshotToPin, workoutSegments } from "./live-workout";
 import { RestBar } from "./RestBar";
 import { exerciseSummaryQuery, useExerciseSummary } from "./use-exercise-summary";
+import { useXpHistory } from "./use-xp-history";
 
 function goHome() {
   if (router.canGoBack()) router.back();
@@ -63,6 +64,42 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
   const styles = useStyles();
   const t = useTheme();
   const bodyweightKg = profile?.bodyweightKg ?? BODYWEIGHT_FALLBACK_KG;
+  const xpHistory = useXpHistory(userId);
+
+  // Live XP with the server's pipeline. The context (history, bodyweights) is pinned once
+  // per workout and saved with it (see snapshotToPin), so the total only moves when a set
+  // is ticked or edited, also after leaving the screen or the app being killed.
+  // An effect, not a store update during render: React warns when a render updates a store.
+  // The cap's day is the local day the workout STARTED, in the profile's time zone
+  // (the server's rule), not the phone's zone or today's date.
+  const capDay = localDate(workout.startedAt, profile?.timeZone ?? "UTC");
+  const snapshot = snapshotToPin(workout, {
+    history: xpHistory?.history,
+    bodyweight: { xp: profile?.xpBodyweightKg ?? bodyweightKg, typed: bodyweightKg },
+    dailyCap: xpHistory?.dailyCap ? { config: xpHistory.dailyCap.config, xpBefore: xpHistory.dailyCap.xpBeforeOn(capDay) } : null,
+  });
+  useEffect(() => {
+    if (snapshot) activeWorkoutStore.getState().pinScoring(snapshot);
+  }, [snapshot]);
+  // workout.scoring keeps its identity across set edits (the store copies the workout, not it).
+  const context = useMemo(() => (workout.scoring ? scoringContext(workout.scoring) : null), [workout.scoring]);
+  const live = useMemo(() => (context ? scoreLiveWorkout(workout, context) : null), [workout, context]);
+
+  // Editing ends (see endEditing): when the workout is (re)opened, e.g. after the app was
+  // killed mid-edit; when the app goes to the background; when the keyboard is dismissed.
+  // Field blur and ticking another set are handled by the card and the store.
+  useEffect(() => {
+    const end = () => activeWorkoutStore.getState().endEditing();
+    end();
+    const app = AppState.addEventListener("change", (state) => {
+      if (state !== "active") end();
+    });
+    const keyboard = Keyboard.addListener("keyboardDidHide", end);
+    return () => {
+      app.remove();
+      keyboard.remove();
+    };
+  }, []);
 
   // Load every exercise's history up front (and save it on the phone), so switching
   // exercises at the gym doesn't wait for the network.
@@ -112,8 +149,13 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
         <View style={styles.tiles}>
           <StatTile label="Elapsed" icon="timer" value={<ElapsedTimer startedAt={workout.startedAt} />} accessibilityLabel="Elapsed time" />
           <StatTile label="Sets left" value={String(total - done)} suffix={` / ${total}`} accessibilityLabel={`${total - done} of ${total} sets left`} />
-          <StatTile label="XP earned" icon="xp" tone="progress" value={`+${liveXp(workout, bodyweightKg)}`} />
+          <StatTile label="XP earned" icon="xp" tone="progress" value={live ? `+${live.total}` : "…"} accessibilityLabel={live ? `XP earned, ${live.total}` : "XP earned, loading"} />
         </View>
+        {live?.dailyCapNote ? (
+          <Text variant="caption" tone="inkMuted" style={styles.capNote}>
+            {live.dailyCapNote}
+          </Text>
+        ) : null}
 
         {segments.length > 0 ? <ProgressSegments segments={segments} currentIndex={index} /> : null}
 
@@ -140,7 +182,7 @@ function Workout({ workout, userId }: { workout: ActiveWorkout; userId: string }
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {draft ? (
-            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} />
+            <CurrentExerciseCard workout={workout} draft={draft} summary={summary.data} bodyweightKg={bodyweightKg} live={live} context={context} />
           ) : (
             <Card>
               <Text variant="heading">Add your first exercise</Text>
@@ -190,6 +232,7 @@ const useStyles = createStyles((t) => ({
   header: { paddingTop: t.space[4], paddingHorizontal: t.space[4], paddingBottom: t.space[3], gap: t.space[3], borderBottomWidth: 1, borderBottomColor: t.colors.border },
   titleRow: { flexDirection: "row", alignItems: "center", gap: t.space[3] },
   tiles: { flexDirection: "row", gap: t.space[2] },
+  capNote: { marginTop: -t.space[1] },
   tabsScroll: { marginHorizontal: -t.space[4] },
   tabs: { paddingHorizontal: t.space[4], gap: t.space[2] },
   content: { padding: t.space[4], gap: t.space[4], paddingBottom: t.space[6] },

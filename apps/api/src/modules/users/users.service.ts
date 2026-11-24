@@ -1,8 +1,10 @@
 import {
+  levelFromXp,
   levelStatus,
   localDate,
   xpBodyweightOnDate,
   type BodyweightEntry,
+  type CelebrateLevelInput,
   type CreateProfileInput,
   type Profile,
   type RecordBodyweightInput,
@@ -12,6 +14,7 @@ import {
 import type { Db } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import { now } from "../../lib/clock.js";
+import * as avatarService from "../avatar/avatar.service.js";
 import * as repo from "./users.repository.js";
 
 // The service holds the business rules for a player's profile:
@@ -48,6 +51,20 @@ export async function updateProfile(userId: string, input: UpdateProfileInput): 
 }
 
 /** Logging workouts needs a character: XP is added to it. (The app's guard ensures one.) */
+/**
+ * The level-up screen for `input.level` was shown. Stores the highest level celebrated,
+ * capped at the real level FIRST: max(saved, min(sent, real)). Capping after the max
+ * would lower it when a correction (Milestone 7) lowers the level, and the player would
+ * be celebrated again on the way back up.
+ */
+export async function markLevelCelebrated(userId: string, input: CelebrateLevelInput): Promise<Profile> {
+  const current = await repo.findProfileByUserId(userId);
+  if (!current) throw new AppError("not_found", "ProfileNotFound", "You haven't created your character yet.");
+  const row = await repo.raiseCelebratedLevel(userId, Math.min(input.level, levelFromXp(current.totalXp)));
+  if (!row) throw new AppError("not_found", "ProfileNotFound", "You haven't created your character yet.");
+  return await toProfile(row);
+}
+
 export async function requireProfile(userId: string): Promise<void> {
   if (!(await repo.profileExists(userId))) {
     throw new AppError("conflict", "ProfileRequired", "Create your character before logging workouts.");
@@ -109,6 +126,11 @@ async function bodyweightReceipts(userId: string, db?: Db): Promise<BodyweightRe
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
+/** The user id for a sign-in email (ignoring case), or null. Used by dev scripts, not by routes. */
+export function userIdByEmail(email: string): Promise<string | null> {
+  return repo.findUserIdByEmail(email);
+}
+
 /** Adds to the cached total XP; returns the new total. The ledger stays the source of truth. */
 export function addTotalXp(db: Db, userId: string, amount: number): Promise<number> {
   return repo.incrementTotalXp(db, userId, amount);
@@ -131,6 +153,8 @@ async function toProfile(row: repo.ProfileRecord): Promise<Profile> {
     timeZone: row.timeZone,
     totalXp: row.totalXp,
     level: levelStatus(row.totalXp),
+    stage: await avatarService.stageAt(levelFromXp(row.totalXp)),
+    celebratedLevel: row.celebratedLevel,
     // As of the player's local today, like a workout started now.
     xpBodyweightKg: xpBodyweightOnDate(receipts, localDate(now(), row.timeZone), { signedUpAt: row.createdAt.toISOString() }),
     createdAt: row.createdAt.toISOString(),

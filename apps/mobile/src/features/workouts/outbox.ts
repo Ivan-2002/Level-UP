@@ -95,6 +95,8 @@ export type OutboxProcessorDeps = {
   clearTimer: (handle: unknown) => void;
   /** Called after each workout reaches the server, with its response (e.g. the summary to show). */
   onSynced?: (item: OutboxItem, response: unknown) => void;
+  /** Called when the server rejects a workout for good ("needs attention"), e.g. to refetch data that assumed it would be saved. */
+  onNeedsAttention?: (item: OutboxItem) => void;
 };
 
 export type OutboxProcessor = {
@@ -143,6 +145,7 @@ export function createOutboxProcessor(deps: OutboxProcessorDeps): OutboxProcesso
         if (classifyFailure(error) === "stop") {
           // This workout can't succeed as it is; don't let it block the ones behind it.
           deps.store.getState().markNeedsAttention(item.clientId, messageOf(error));
+          deps.onNeedsAttention?.(item);
           continue;
         }
         const attempts = item.attempts + 1;

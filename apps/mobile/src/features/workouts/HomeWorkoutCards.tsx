@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Alert, View } from "react-native";
 import { router } from "expo-router";
-import { Button } from "@/components/Button";
+import { Button, type ButtonLook } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Icon } from "@/components/Icon";
 import { Text } from "@/components/Text";
@@ -13,8 +13,8 @@ import { ElapsedTimer } from "./ElapsedTimer";
 import { plural } from "./format";
 import { syncOutboxNow } from "./outbox-sync";
 
-/** "Start workout", or "Resume workout" when this user has one in progress. */
-export function StartOrResumeWorkout({ userId, label = "Start workout" }: { userId: string; label?: string }) {
+/** "Start workout", or "Resume workout" when this user has one in progress. `look`: the start button's style (the big primary button on Home). */
+export function StartOrResumeWorkout({ userId, label = "Start workout", look }: { userId: string; label?: string; look?: ButtonLook }) {
   const workout = useActiveWorkout((s) => s.workout);
   const { data: profile } = useProfile(userId); // already cached by the (app) layout
   const styles = useStyles();
@@ -24,6 +24,7 @@ export function StartOrResumeWorkout({ userId, label = "Start workout" }: { user
     return (
       <Button
         label={label}
+        {...look}
         onPress={() => {
           activeWorkoutStore.getState().start(userId, profile?.weightUnit ?? "kg");
           router.push("/workout");

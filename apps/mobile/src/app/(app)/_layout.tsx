@@ -5,8 +5,10 @@ import { Stack } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
 import { useSyncTimeZone } from "@/features/profile/use-sync-time-zone";
+import { useCelebrationSync } from "@/features/progress/use-celebration";
 import { exercisesQuery } from "@/features/exercises/use-exercises";
 import { useOutboxSync } from "@/features/workouts/outbox-sync";
+import { xpHistoryQuery } from "@/features/workouts/use-xp-history";
 import { Button } from "@/components/Button";
 import { Text } from "@/components/Text";
 import { createStyles, useTheme } from "@/theme/use-theme";
@@ -27,11 +29,14 @@ export default function AppLayout() {
   // before any early return below: React needs the same hooks in the same order every render.
   useOutboxSync(session?.user.id);
   useSyncTimeZone(session?.user.id, profile);
+  useCelebrationSync(session?.user.id, profile); // a level-up shown offline reaches the server
 
-  // Load the exercise library as soon as we're signed in, so it's saved on the phone
-  // before the player is at the gym with no signal.
+  // Load the exercise library and the XP history (for the live XP preview) as soon as
+  // we're signed in, so they're saved on the phone before the player is at the gym with no signal.
   useEffect(() => {
-    if (session?.user.id) void queryClient.prefetchQuery(exercisesQuery);
+    if (!session?.user.id) return;
+    void queryClient.prefetchQuery(exercisesQuery(session.user.id));
+    void queryClient.prefetchQuery(xpHistoryQuery(session.user.id));
   }, [session?.user.id, queryClient]);
 
   async function signOut() {
@@ -69,6 +74,8 @@ export default function AppLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workout" />
         <Stack.Screen name="workout-summary" options={{ gestureEnabled: false }} />
+        {/* Closed with Continue only: a swipe could skip the moment by accident. */}
+        <Stack.Screen name="level-up" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
         <Stack.Screen name="exercises/[id]/history" />
         <Stack.Screen name="routines/new" />
         <Stack.Screen name="routines/[id]/index" />

@@ -18,7 +18,7 @@ export async function insertSetXpEvents(db: Db, events: NewXpEvent[]): Promise<v
 }
 
 /**
- * One bonus row (weekly goal, streak milestone). ON CONFLICT DO NOTHING on the unique
+ * One row with no body part (weekly goal, streak milestone, dev grant). ON CONFLICT DO NOTHING on the unique
  * (source, sourceId): paying the same bonus again is a no-op, not an error, so it is safe
  * inside a transaction (a failed INSERT would abort the whole transaction in Postgres).
  * True if it was recorded now.

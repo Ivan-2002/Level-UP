@@ -91,6 +91,30 @@ describe("XP at Finish", () => {
     expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(207);
   });
 
+  it("repeats XP and level exactly after another workout synced in between; only PRs and 'vs last time' may move", async () => {
+    const user = await signUpPlayer({ bodyweightKg: 75 });
+    await finish(user, workout(3, [["barbell-bench-press", times(3, { reps: 8, weightKg: 50 })]]));
+    const input = workout(1, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]);
+    const first = await finish(user, input, 201);
+
+    // A workout that STARTED earlier (a phone that was offline) syncs before the repeat.
+    // 62 kg stays under the jump line from the 50 kg baseline (capped sets are never records).
+    await finish(user, workout(2, [["barbell-bench-press", [{ reps: 8, weightKg: 62 }]]]));
+    const repeat = await finish(user, input, 200);
+
+    // The ledger and its order (created_at) fix XP, the level bar and the weekly goal.
+    expect(repeat.summary.xp).toEqual(first.summary.xp);
+    expect(repeat.summary.level).toEqual(first.summary.level);
+    expect(repeat.summary.sets).toEqual(first.summary.sets);
+    expect(repeat.summary.weeklyGoal).toEqual(first.summary.weeklyGoal);
+    // Records and "vs last time" compare with workouts that STARTED earlier, so the 62 kg
+    // set now counts: the 60 kg PR is gone and "last time" is the newer workout. The phone
+    // keeps the first answer; the history shows this one (decision log, 2026-11-20).
+    expect(first.summary.prs.length).toBeGreaterThan(0);
+    expect(repeat.summary.prs).toEqual([]);
+    expect(repeat.summary.stats.previous?.volumeKg).not.toEqual(first.summary.stats.previous?.volumeKg);
+  });
+
   it("awards XP once when two identical Finishes race", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
     const input = workout(0, [["barbell-bench-press", times(2, { reps: 8, weightKg: 60 })]]);
@@ -211,6 +235,8 @@ describe("routine link", () => {
       .post("/v1/routines")
       .set("Cookie", user.cookie)
       .send({ name: "Pull day", exercises: [{ exerciseId: ids["pull-up"], targetSets: 3, targetReps: 8 }] });
+    // Checked here, so a failure points at this step rather than at a later expectation.
+    expect(res.status, res.text).toBe(201);
     return res.body.id as string;
   }
 
@@ -242,7 +268,8 @@ describe("routine link", () => {
   it("drops a link to a routine deleted while you trained offline", async () => {
     const user = await signUpPlayer();
     const routineId = await createRoutine(user);
-    await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    const deleted = await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    expect(deleted.status, deleted.text).toBe(204);
 
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId }));
 
@@ -254,7 +281,8 @@ describe("routine link", () => {
     const routineId = await createRoutine(user);
     const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId }));
 
-    await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    const deleted = await request(app).delete(`/v1/routines/${routineId}`).set("Cookie", user.cookie);
+    expect(deleted.status, deleted.text).toBe(204);
 
     const res = await request(app).get(`/v1/workouts/${saved.workout.id}`).set("Cookie", user.cookie);
     expect(res.status).toBe(200);

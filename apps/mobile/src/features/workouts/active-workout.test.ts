@@ -4,11 +4,13 @@ import { createOutboxStore } from "@/stores/outbox-store";
 import { benchPress, lateralRaise, memoryStorage, plank, pullUp, sequentialIds, testUuid } from "@/test/fixtures";
 import {
   addExercise,
+  doneSetError,
   addSet,
   buildFinishPayload,
   currentExercise,
   lastSetsFrom,
   migrateV1,
+  migrateV2,
   removeExercise,
   startWorkout,
   stepRest,
@@ -17,6 +19,7 @@ import {
   type ActiveWorkout,
 } from "./active-workout";
 import { finishActiveWorkout } from "./finish-workout";
+import { scoreLiveWorkout, scoringContext, snapshotToPin } from "./live-workout";
 import { loggingConvention } from "./logging-conventions";
 
 const START = new Date("2026-11-10T06:00:00.000Z");
@@ -28,6 +31,13 @@ function setup(storage = memoryStorage()) {
   const store = createActiveWorkoutStore({ storage, newId: sequentialIds(), now: () => now });
   return { store, storage, setNow: (date: Date) => (now = date) };
 }
+
+/** A pinned context: best bench 100 x 8, and the day already at 3,090 XP, so the daily cap holds some back. */
+const PINNED_NEAR_CAP = {
+  history: [{ exerciseId: benchPress.id, recentBest: 126.7, jumpBaseline: 126.7 }],
+  bodyweight: { xp: 80, typed: 80 },
+  dailyCap: { config: { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 }, xpBefore: 3090 },
+};
 
 function onlySet(workout: ActiveWorkout, exerciseIndex = 0) {
   const exercise = workout.exercises[exerciseIndex]!;
@@ -129,6 +139,17 @@ describe("active workout", () => {
       expect(store.getState().workout!.exercises[0]!.sets[0]!.doneAt).toBe(minutesLater(5).toISOString());
     });
 
+    it("refuses an empty weight on a loaded lift (it's not 0 kg), but takes a typed 0", () => {
+      const w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), benchPress, sequentialIds());
+      const { exerciseKey, setKey } = onlySet(w);
+
+      const empty = updateSet(w, exerciseKey, setKey, { weight: "", reps: "8" });
+      expect(toggleSetDone(empty, exerciseKey, setKey, START)).toEqual({ ok: false, message: "Enter the weight." });
+
+      const zero = toggleSetDone(updateSet(w, exerciseKey, setKey, { weight: "0", reps: "8" }), exerciseKey, setKey, START);
+      expect(zero.ok).toBe(true);
+    });
+
     it("unticks a done set", () => {
       const { store } = setup();
       store.getState().start("u", "kg");
@@ -216,11 +237,45 @@ describe("finishActiveWorkout", () => {
 
     const result = finishActiveWorkout({ activeWorkout: store, outbox, now: minutesLater(40) });
 
-    expect(result).toEqual({ ok: true, value: { clientId: testUuid(1) } });
+    expect(result).toMatchObject({ ok: true, value: { clientId: testUuid(1), preview: null } }); // nothing pinned: no estimate
     expect(store.getState().workout).toBeNull();
     expect(outbox.getState().items).toEqual([
       expect.objectContaining({ clientId: testUuid(1), userId: "user-1", status: "pending", attempts: 0 }),
     ]);
+  });
+
+  describe("the preview saved for the summary", () => {
+    const scoring = PINNED_NEAR_CAP;
+
+    it("scores exactly the sets sent, so set n is the server's set n (an unticked set in between is left out)", () => {
+      const { store } = setup();
+      store.getState().start("user-1", "kg");
+      store.getState().addExercises([benchPress]);
+      store.getState().pinScoring(scoring);
+      const e = store.getState().workout!.exercises[0]!.id;
+      store.getState().addSet(e);
+      store.getState().addSet(e);
+      const [first, between, last] = store.getState().workout!.exercises[0]!.sets.map((x) => x.id);
+      store.getState().updateSet(e, first!, { weight: "60", reps: "8" }); // a warm-up
+      store.getState().updateSet(e, between!, { weight: "100", reps: "8" }); // never ticked
+      store.getState().updateSet(e, last!, { weight: "100", reps: "8" });
+      store.getState().toggleSetDone(e, first!);
+      store.getState().toggleSetDone(e, last!);
+      const live = scoreLiveWorkout(store.getState().workout!, scoringContext(scoring));
+
+      const result = finishActiveWorkout({ activeWorkout: store, outbox: createOutboxStore(memoryStorage()), now: minutesLater(40) });
+      if (!result.ok) throw new Error(result.message);
+      const { payload, preview } = result.value;
+
+      expect(payload.exercises[0]!.sets.map((x) => x.weightKg)).toEqual([60, 100]);
+      expect(preview!.sets).toEqual(
+        [live.bySet.get(first!)!, live.bySet.get(last!)!].map((x) => ({ xp: x.xp, tag: x.tag, isFlagged: x.isFlagged })),
+      );
+      expect(preview!.sets.map((x) => x.tag)).toEqual(["warm_up", null]);
+      // The number the player last saw on the active workout, after the daily cap.
+      expect(preview).toMatchObject({ setXp: live.total, heldBack: live.heldBack });
+      expect(preview!.heldBack).toBeGreaterThan(0);
+    });
   });
 
   it("leaves everything as it was when Finish is blocked", () => {
@@ -416,5 +471,157 @@ describe("a workout saved by the previous app version (store v1)", () => {
       exercises: [{ restSec: 180, restChanged: false, targetReps: null, sets: [{ weight: "62.5", reps: "8" }] }],
     });
     expect(migrateV1(null)).toBeNull();
+  });
+});
+
+describe("the app killed while a done set is being edited", () => {
+  /** A bench set ticked at 100 x 8, then edited (`changes`) without editing ending; then the app dies. */
+  function killedMidEdit(changes: { weight?: string; reps?: string }) {
+    const storage = memoryStorage();
+    const { store } = setup(storage);
+    store.getState().start("user-1", "kg");
+    store.getState().addExercises([benchPress]);
+    const w = store.getState().workout!;
+    const e = w.exercises[0]!.id;
+    const s = w.exercises[0]!.sets[0]!.id;
+    store.getState().updateSet(e, s, { weight: "100", reps: "8" });
+    expect(store.getState().toggleSetDone(e, s)).toBeNull();
+    store.getState().updateSet(e, s, changes); // saved on every keystroke...
+    return setup(storage).store; // ...and read back by a fresh store: the app reopened
+  }
+  const firstSet = (store: ReturnType<typeof killedMidEdit>) => store.getState().workout!.exercises[0]!.sets[0]!;
+
+  it("never scores a half-typed invalid value: the set keeps its ticked values and shows why", () => {
+    const reopened = killedMidEdit({ reps: "" }); // reps cleared, about to type new ones
+    expect(firstSet(reopened)).toMatchObject({ reps: "", scored: { weight: "100", reps: "8" } });
+
+    reopened.getState().endEditing(); // the screen ends editing when the workout opens
+    expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" });
+    expect(doneSetError(firstSet(reopened), benchPress, "kg")).not.toBeNull();
+  });
+
+  it("re-scores once with a valid value when the workout reopens", () => {
+    const reopened = killedMidEdit({ weight: "105" });
+    expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" }); // until editing ends
+
+    reopened.getState().endEditing();
+    expect(firstSet(reopened).scored).toEqual({ weight: "105", reps: "8" });
+  });
+
+  it("Finish refuses a done set whose weight was cleared, as the live view does (never sent as 0 kg)", () => {
+    const reopened = killedMidEdit({ weight: "" });
+    reopened.getState().endEditing();
+    expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" }); // the live view keeps its ticked values
+    expect(doneSetError(firstSet(reopened), benchPress, "kg")).toBe("Enter the weight. Until then it counts as it was when ticked.");
+
+    const outbox = createOutboxStore(memoryStorage());
+    const result = finishActiveWorkout({ activeWorkout: reopened, outbox, now: minutesLater(30) });
+    expect(result).toEqual({ ok: false, message: "Bench Press: Enter the weight." });
+    expect(outbox.getState().items).toHaveLength(0);
+    expect(reopened.getState().workout).not.toBeNull(); // nothing lost: fix it and finish again
+  });
+
+  it("scores the edit before Finish sends the workout", () => {
+    const reopened = killedMidEdit({ weight: "105" });
+    const outbox = createOutboxStore(memoryStorage());
+    const result = finishActiveWorkout({ activeWorkout: reopened, outbox, now: minutesLater(30) });
+    expect(result.ok).toBe(true);
+    expect(outbox.getState().items[0]!.payload.exercises[0]!.sets[0]).toMatchObject({ weightKg: 105, reps: 8 });
+  });
+
+  it("includes the edit in the summary's preview too: the workout as sent, scored after editing ended", () => {
+    const reopened = killedMidEdit({ weight: "105" });
+    reopened.getState().pinScoring(PINNED_NEAR_CAP);
+
+    const result = finishActiveWorkout({ activeWorkout: reopened, outbox: createOutboxStore(memoryStorage()), now: minutesLater(30) });
+    if (!result.ok) throw new Error(result.message);
+
+    expect(result.value.workout.exercises[0]!.sets[0]!.scored).toEqual({ weight: "105", reps: "8" });
+    expect(result.value.preview!.setXp).toBe(scoreLiveWorkout(result.value.workout, scoringContext(PINNED_NEAR_CAP)).total);
+  });
+});
+
+describe("the pinned scoring context (store v3)", () => {
+  const scoring = { history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }], bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
+
+  it("pins once per workout: a later pin doesn't replace it", () => {
+    const { store } = setup();
+    store.getState().start("user-1", "kg");
+    store.getState().pinScoring(scoring);
+    store.getState().pinScoring({ history: [], bodyweight: { xp: 70, typed: 70 }, dailyCap: null });
+    expect(store.getState().workout!.scoring).toEqual(scoring);
+  });
+
+  it("survives the app being killed: a new store reads the same pin", () => {
+    const storage = memoryStorage();
+    const before = setup(storage).store;
+    before.getState().start("user-1", "kg");
+    before.getState().addExercises([benchPress]);
+    before.getState().pinScoring(scoring);
+
+    const after = setup(storage).store;
+    expect(after.getState().workout!.scoring).toEqual(scoring);
+    expect(JSON.parse(storage.getItem("levelup.active-workout") as string).version).toBe(3);
+  });
+
+  it("upgrades a v2 save with a workout in progress: nothing lost, unpinned, then pins on next open", () => {
+    const storage = memoryStorage();
+    const v2Workout = {
+      userId: "user-1",
+      clientId: testUuid(1),
+      startedAt: START.toISOString(),
+      name: "Push",
+      weightUnit: "kg",
+      routineId: null,
+      currentExerciseKey: "e1",
+      exercises: [
+        {
+          id: "e1",
+          exercise: benchPress,
+          sets: [{ id: "s1", weight: "62.5", reps: "8", doneAt: minutesLater(5).toISOString() }],
+          targetReps: 8,
+          restSec: 120,
+          restChanged: false,
+        },
+      ],
+    };
+    storage.setItem("levelup.active-workout", JSON.stringify({ version: 2, state: { workout: v2Workout } }));
+
+    const { store } = setup(storage);
+    const upgraded = store.getState().workout!;
+    // Unchanged, except: nothing pinned, and the done set is scored with its typed values (as v2 scored it).
+    expect(upgraded).toEqual({
+      ...v2Workout,
+      scoring: null,
+      exercises: [{ ...v2Workout.exercises[0]!, sets: [{ ...v2Workout.exercises[0]!.sets[0]!, scored: { weight: "62.5", reps: "8" } }] }],
+    });
+
+    // On next open the screen pins: a set is done, so it pins even before the history arrives.
+    const snapshot = snapshotToPin(upgraded, { history: undefined, bodyweight: { xp: 80, typed: 80 }, dailyCap: null })!;
+    store.getState().pinScoring(snapshot);
+    expect(store.getState().workout!.scoring).toEqual({ history: [], bodyweight: { xp: 80, typed: 80 }, dailyCap: null });
+    expect(migrateV2(null)).toBeNull();
+  });
+
+  it("upgrades a v1 save all the way, unpinned", () => {
+    const storage = memoryStorage();
+    const v1Workout = { userId: "user-1", clientId: testUuid(1), startedAt: START.toISOString(), name: "", exercises: [] };
+    storage.setItem("levelup.active-workout", JSON.stringify({ version: 1, state: { workout: v1Workout } }));
+    expect(setup(storage).store.getState().workout).toMatchObject({ weightUnit: "kg", scoring: null });
+  });
+
+  it("never sends the pin to the API", () => {
+    const { store } = setup();
+    store.getState().start("user-1", "kg");
+    store.getState().addExercises([benchPress]);
+    store.getState().pinScoring(scoring);
+    const w = store.getState().workout!;
+    const set = w.exercises[0]!.sets[0]!;
+    store.getState().updateSet(w.exercises[0]!.id, set.id, { weight: "60", reps: "8" });
+    store.getState().toggleSetDone(w.exercises[0]!.id, set.id);
+
+    const payload = buildFinishPayload(store.getState().workout!, minutesLater(30));
+    if (!payload.ok) throw new Error(payload.message);
+    expect("scoring" in payload.value).toBe(false);
   });
 });

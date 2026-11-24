@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, View } from "react-native";
+import { AccessibilityInfo, Alert, View } from "react-native";
 import { router } from "expo-router";
 import { coachAdvice, coachHintText, formatWeight, REST_MAX_SEC, REST_MIN_SEC, type ExerciseSummary } from "@levelup/shared";
 import { Button } from "@/components/Button";
@@ -12,10 +12,26 @@ import { Stepper } from "@/components/Stepper";
 import { Text } from "@/components/Text";
 import { activeWorkoutStore, restTimerStore } from "@/stores/device-stores";
 import { createStyles, useTheme } from "@/theme/use-theme";
-import type { ActiveWorkout, DraftExercise } from "./active-workout";
+import { doneSetError, type ActiveWorkout, type DraftExercise } from "./active-workout";
 import { E1rmChart } from "./E1rmChart";
 import { capitalise, formatRest } from "./format";
-import { e1rmBars, lastSessionText, livePrs, nextUp, previousSetText, suggestedRestText, todayBestE1rm } from "./live-workout";
+import {
+  BASELINE_CAPTION,
+  e1rmBars,
+  lastSessionText,
+  livePrs,
+  nextUp,
+  previousSetText,
+  scoreLiveWorkout,
+  setXpNote,
+  showsBaselineCaption,
+  suggestedRestText,
+  tickFeedback,
+  tickLine,
+  todayBestE1rm,
+  type LiveScore,
+  type LiveScoringContext,
+} from "./live-workout";
 import { loggingConvention } from "./logging-conventions";
 
 type Props = {
@@ -24,11 +40,18 @@ type Props = {
   /** This exercise's history; undefined while loading or never fetched (offline). */
   summary: ExerciseSummary | undefined;
   bodyweightKg: number;
+  /** The live score (scoreLiveWorkout) and the pinned context it uses; null until pinned. */
+  live: LiveScore | null;
+  context: LiveScoringContext | null;
 };
 
 /** The exercise on screen: last time, the coach's target, rest, the sets, the trend. */
-export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: Props) {
+export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg, live, context }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The latest tick, while it re-scored earlier sets: its row says so ("· 3 earlier sets now warm-ups").
+  const [lastTick, setLastTick] = useState<{ setId: string; rescored: number } | null>(null);
+  // The set being typed in: its done-set error waits until editing ends.
+  const [editing, setEditing] = useState<string | null>(null);
   const styles = useStyles();
   const t = useTheme();
   const unit = workout.weightUnit;
@@ -48,13 +71,21 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
     unit,
   );
 
-  function toggle(setKey: string) {
+  function toggle(setKey: string, setNumber: number) {
     const wasDone = draft.sets.find((s) => s.id === setKey)?.doneAt !== null;
     const error = actions.toggleSetDone(draft.id, setKey);
     setErrors(({ [setKey]: _old, ...rest }) => (error ? { ...rest, [setKey]: error } : rest));
-    if (error || wasDone) return;
-    // Ticked done: rest starts now, unless that was the last set of the workout.
+    if (error) return;
+
+    // Earlier rows update quietly; the tick itself is announced with the new total, so a
+    // screen-reader user hears a drop too.
     const updated = activeWorkoutStore.getState().workout;
+    const after = updated && context ? scoreLiveWorkout(updated, context) : null;
+    const feedback = tickFeedback({ setId: setKey, setNumber, done: !wasDone, before: live, after });
+    AccessibilityInfo.announceForAccessibility(feedback.announcement);
+    setLastTick(!wasDone && feedback.rescoredAsWarmUps > 0 ? { setId: setKey, rescored: feedback.rescoredAsWarmUps } : null);
+    if (wasDone) return;
+    // Ticked done: rest starts now, unless that was the last set of the workout.
     const next = updated ? nextUp(updated) : null;
     if (next) restTimerStore.getState().start(draft.restSec, next);
     else restTimerStore.getState().skip();
@@ -112,9 +143,16 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
       />
 
       <View style={styles.table}>
+        {showsBaselineCaption(exercise, context) ? (
+          <Text variant="caption" tone="inkMuted">
+            {BASELINE_CAPTION}
+          </Text>
+        ) : null}
         <SetTableHeader weightUnit={unit} repsUnit={repsUnit} previousLabel="Last time" />
         {draft.sets.map((set, index) => {
           const pr = prs.get(set.id);
+          const score = set.doneAt !== null ? live?.bySet.get(set.id) : undefined;
+          const note = score ? setXpNote(score) : undefined;
           return (
             <SetRow
               key={set.id}
@@ -124,13 +162,23 @@ export function CurrentExerciseCard({ workout, draft, summary, bodyweightKg }: P
               reps={set.reps}
               onChangeWeight={(weight) => actions.updateSet(draft.id, set.id, { weight })}
               onChangeReps={(reps) => actions.updateSet(draft.id, set.id, { reps })}
+              onFocusInput={() => {
+                // Focusing another set ends editing the previous one (its blur does too).
+                actions.endEditing();
+                setEditing(set.id);
+              }}
+              onBlurInput={() => {
+                actions.endEditing();
+                setEditing((current) => (current === set.id ? null : current));
+              }}
               weightUnit={unit}
               repsUnit={repsUnit}
               bodyweight={exercise.equipment === "bodyweight"}
               done={set.doneAt !== null}
-              onToggleDone={() => toggle(set.id)}
+              onToggleDone={() => toggle(set.id, index + 1)}
+              xpNote={note && lastTick?.setId === set.id ? tickLine(note, lastTick.rescored) : note}
               prText={pr ? `New PR · est. 1RM ${formatWeight(pr, unit, { decimals: 0 })}` : undefined}
-              error={errors[set.id]}
+              error={errors[set.id] ?? (editing === set.id ? undefined : (doneSetError(set, exercise, unit) ?? undefined))}
               numberHint="Removes this set"
               onPressNumber={() =>
                 Alert.alert(`Remove set ${index + 1}?`, undefined, [

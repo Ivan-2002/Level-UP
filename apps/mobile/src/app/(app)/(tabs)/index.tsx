@@ -5,6 +5,8 @@ import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { useHealth } from "@/features/health/use-health";
 import { useProfile } from "@/features/profile/use-profile";
+import { LevelCard } from "@/features/progress/LevelCard";
+import { useLevelUpPrompt } from "@/features/progress/use-celebration";
 import { WeeklyGoalCard } from "@/features/progress/WeeklyGoalCard";
 import { StartOrResumeWorkout, SyncStatus } from "@/features/workouts/HomeWorkoutCards";
 import { Button } from "@/components/Button";
@@ -12,8 +14,9 @@ import { Card } from "@/components/Card";
 import { Text } from "@/components/Text";
 import { createStyles, useTheme } from "@/theme/use-theme";
 
-// Temporary home: start/resume a workout, sync status, and the system check.
-// The real Home screen (avatar, XP bar, body balance) replaces it in Milestone 5.
+// Temporary home: start/resume a workout, sync status, the level bar and the system check.
+// Milestone 6 adds the avatar (with the level bar, at the top); before the beta the system
+// check and Sign out move to a settings screen (docs/ARCHITECTURE.md, roadmap).
 export default function Home() {
   const { data: session } = authClient.useSession();
   const { data: profile } = useProfile(session?.user.id); // already cached by the layout
@@ -22,6 +25,7 @@ export default function Home() {
   const styles = useStyles();
   const t = useTheme();
   const userId = session?.user.id;
+  useLevelUpPrompt(userId, profile); // e.g. a workout synced while the app was closed
 
   async function signOut() {
     await authClient.signOut();
@@ -45,6 +49,8 @@ export default function Home() {
             <WeeklyGoalCard userId={userId} />
             <StartOrResumeWorkout userId={userId} />
             <SyncStatus userId={userId} />
+            {/* Milestone 6: the avatar and this bar move together to the top of Home. */}
+            {profile ? <LevelCard profile={profile} /> : null}
             <Button label="Log bodyweight" variant="secondary" icon="bodyweight" onPress={() => router.push("/log-bodyweight")} />
           </>
         ) : null}
