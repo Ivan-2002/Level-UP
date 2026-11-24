@@ -205,13 +205,31 @@ Level 2 at 400 XP, level 5 at about 7,900, level 10 at about 45,000, level 20 at
 
 ## Avatar prototype: a stickman that grows
 
-The first avatar is a stickman drawn in code with `react-native-svg`. No art assets are needed, and growth is just numbers: limb thickness, shoulder width and head size change with the stage. Later we can swap the renderer for layered 2D art (and possibly 3D after that) without changing the data model.
+The Milestone 6 avatar is a cartoon stickman drawn in code with `react-native-svg` (decided 2026-11-24). No art assets are needed, and growth is just numbers. Rive is the likely long-term renderer (poses and animation for leaderboards and avatar events; Ivan builds a Rive character in parallel), but it needs hand-rigging in the Rive editor and a development build instead of Expo Go, so it isn't used yet. Swapping later changes only the inside of `Avatar`: the contract below is the same set of inputs a Rive state machine will take.
+
+**The look:**
+
+- A big round head with a simple face (two eyes and a mouth). The head is the **same size at every stage and every development**; only the body changes.
+- Outline style: lines in `ink`. Muscle shapes are filled with the background colour, so a bulging arm covers the line behind it. Works in both themes with no extra colours.
+- **A body part at development 0 is a single line.** As development rises it gains outlined muscle shapes: shoulders (deltoid caps), arms (upper arm and forearm), chest and back (torso width and V-taper, front view), core (waist), legs (thigh and calf). A player who skips legs keeps stick legs under a big upper body; that contrast is intended.
+- Stage extras are a separate layer drawn on top: Regular wristbands, Athlete sports outfit, Champion headband, Legend cape. Tokens forbid glow, so Legend's planned glow needs a replacement (open; see the Milestone 6 plan).
+- It must read at about 40 px tall (future leaderboard rows, where the head and face carry it) and about 220 px (Home).
+
+**The avatar contract** (what `Avatar` takes, today and with Rive later):
+
+- `development`: one value from 0 to 1 for each body part (chest, back, shoulders, arms, core, legs).
+- `stage`: the stage key from `avatar_stage`, which picks the extras.
+- `lean`: reserved for the endurance look (a leaner, stamina build). Always 0 in Milestone 6: nothing draws from it yet, but the shape function accepts it.
+- `expression` (optional): e.g. neutral or proud, for the level-up screen.
+- **Never a level.** The screen-reader label comes from the stage name (not a fixed "Rookie stickman avatar").
+
+**Drawing is a pure function:** `avatarShape(development, lean)` returns plain numbers (widths, positions, radii) and is unit-tested: at 0 every part is lines only, each part grows independently of the others, each is monotonic in its own value, and the head never changes. The component only renders those numbers. The UI preview screen gets an "Avatar" section (a slider per body part, a stage picker, both themes, both sizes) so the shapes can be judged without logging workouts.
 
 **Each body part grows on its own.** Every exercise belongs to a body part (chest, back, shoulders, arms, core, legs), and its XP also counts toward that part. Skip leg day and the stickman's legs stay thin while the arms grow.
 
 **Level unlocks, body-part XP shapes** (decided 2026-11-16). The two never mix:
 
-- **Overall level** (from total XP) unlocks things: stages, titles, cosmetics, the headband, the cape, the glow. It never makes a limb bigger.
+- **Overall level** (from total XP) unlocks things: stages, titles, cosmetics, the wristbands, the outfit, the headband, the cape. It never makes a limb bigger.
 - **Body shape** comes only from body-part XP. A player who only trains upper body has a high level, a cape and thin legs.
 - **Untrained parts shrink slowly.** After a two-week grace period, a body part's development declines slowly, so a few weeks off cost a little and only about a year without training brings it back to the starting shape. XP and level are never lost; only the shape changes. Calculated on read from the ledger's dates (no scheduled job), like the weekly goal. The exact decay curve is set in Milestone 6 with the simulation.
 - **Starting shape (open, decided in Milestone 6):** an experienced lifter shouldn't start as a thin stickman. Proposal: calibrate the starting shape from the first two weeks of logged lifts relative to bodyweight, rather than a self-reported baseline, which anyone could exaggerate. Either way it sets the starting shape only; everyone starts at level 1.
@@ -226,13 +244,14 @@ The first avatar is a stickman drawn in code with `react-native-svg`. No art ass
 | Regular | Level 4 | Wristbands and a title |
 | Athlete | Level 10 | Sports outfit |
 | Champion | Level 15 | Headband |
-| Legend | Level 20 | Cape and a glow |
+| Legend | Level 20 | Cape (the glow is replaced: no glow in our tokens; open) |
 
 Stages add extras only; limb size, shoulder width and chest come from body-part development. Stage levels were rechecked against the level curve in Milestone 5 (decision log, 2026-11-20).
 
-- The `Avatar` component takes a stage config (extras) and one development value per body part, never a level, so the art and the rules stay separate.
+- The `Avatar` component takes the contract above (development per body part, stage key, lean, expression), never a level, so the art and the rules stay separate.
 - Stage thresholds live in the `avatar_stage` table and can be tuned without a release. Tune them **down, never up**: a stage is derived from the level, so raising a threshold takes the stage away from players who have it.
-- A small growth animation plays on the level-up screen when the stage changes.
+- **Level-up screen:** when the stage changes, it animates from the old look to the new one (the new extras appearing) instead of fading in the same figure. With reduce motion on, it draws the final state.
+- **Home:** the avatar and the level bar move to the top together as ONE hero element, not a Card (Home was a stack of identical cards with nothing leading). The username sits with the level; the "Welcome back," line goes. The rest of Home stays below.
 
 ## Production readiness plan
 
@@ -278,7 +297,8 @@ Each milestone ends in something that runs end to end on a phone, not a pile of 
    - Done when: finishing a workout shows XP gained and, when earned, a level-up; two Finishes sent at the same moment can't exceed the cap; an offline workout synced days later counts against the day it was done.
 6. **Stickman avatar.** Stage extras driven by level, body shape driven only by body-part XP, slow shrinking of untrained parts, and the starting-shape decision.
    - Done when: the avatar gains its extras at each stage level, untrained body parts stay thin whatever the level, and a part untrained for months visibly shrinks.
-   - Home: the avatar and the level bar (added below the workout cards in Phase 4e) move together to the top of Home.
+   - Home: the avatar and the level bar (added below the workout cards in Phase 4e) move together to the top of Home as one hero element (not a Card), with the username next to the level.
+   - The plan (development curve, shrinking, starting shape, API, phases) is in `docs/milestone-6-plan.md` until it's approved; then it moves into this document and that file is deleted.
    - Leave room for endurance: the avatar design must allow an endurance look (a stamina stat, a lean athletic build) next to muscle size, so a runner's or triathlete's avatar looks different from a lifter's rather than just weaker. No endurance code in this milestone; the design and data shapes just mustn't rule it out.
 7. **Beta readiness.** Hosting, Sentry, EAS builds, password reset and email verification, account deletion, rate limiting on our routes, privacy policy, minimum age at sign-up (13 or 16, to be decided) with an age check and the app store age rating, testers on TestFlight and Google Play internal testing. The XP and bodyweight rules are designed for adults and older teens. Review the daily cap against the testers' real days: in the simulation the biggest honest day with warm-ups logged is 3,086 against the 3,100 cap, a 14 XP margin.
    - A settings screen: Sign out moves there from Home (the system check is already development-only since 2026-11-24).
@@ -349,6 +369,9 @@ Newest first.
 
 | Date | Decision | Trade-off accepted |
 | --- | --- | --- |
+| 2026-11-24 | Milestone 6 avatar look and screens: a cartoon stickman with a big round head and a simple face, the head the same size at every stage and development (replaces "head size changes with the stage"); outline style, lines in `ink` and muscle shapes filled with the background so a bulging limb covers the line behind it; a body part at development 0 is a single line and gains outlined muscle shapes as it develops; stage extras (wristbands, outfit, headband, cape) are a separate layer on top; it must read at about 40 px and 220 px. `avatarShape(development, lean)` is a pure, unit-tested function returning numbers; the component only renders them. The UI preview gets an Avatar section (a slider per part, a stage picker, both themes and sizes). Home: the avatar and level bar become one hero element at the top (not a Card), the username with the level, no "Welcome back,". Level-up: a stage change animates the new extras in; reduce motion draws the final state | Stick legs under a big upper body look odd on purpose. Legend's glow needs a replacement (tokens: no glow). The outline style uses no new colours, so it carries no meaning beyond shape |
+| 2026-11-24 | The avatar contract, the same inputs a Rive file will take later: `development` (0 to 1 for each of the six body parts), `stage` (the `avatar_stage` key, which picks the extras), `lean` (reserved for the endurance look, always 0 in Milestone 6; the shape function accepts it) and an optional `expression` (neutral, proud). Never a level; the screen-reader label comes from the stage name | One more input (`lean`) with nothing behind it yet, so the endurance milestone doesn't change the contract |
+| 2026-11-24 | Milestone 6 art: the avatar stays code-drawn with `react-native-svg`. Rive was considered and is the likely long-term renderer (poses and animation for leaderboards and avatar events; Ivan builds a Rive character in parallel), but it needs hand-rigging in the Rive editor and a development build instead of Expo Go. Swapping later changes only the inside of `Avatar` | Simpler shapes and animation than Rive for now; in exchange no art pipeline, Expo Go keeps working, and the shapes stay plain numbers that unit tests can check |
 | 2026-11-24 | Design review: removed the one-word highlight in the wordmark and the all-caps eyebrow; the system check is dev-only. The sign-in/sign-up wordmark is one colour (ink), written "LEVEL UP" with a space now that colour no longer separates the words: purple means progress only. "NEW PLAYER" above "Create your character" repeated the heading, so it and its `eyebrow` style are gone. The "API ok · Database ok" card is its own component (`SystemCheckCard`) rendered only when `__DEV__`, so release builds neither show it nor call `/health` from Home. Audit of the rest of the app: no other all-caps letter-spaced labels or one-word colour highlights in headings | The wordmark keeps its letter spacing (it is the brand, not a label). A release build has no on-screen way to see whether the API is reachable; failures still show on the screens that need the API |
 | 2026-11-24 | Prettier is enforced, with `printWidth` 120 and every other option at Prettier's default (the code already used double quotes, semicolons and 2 spaces). Not formatted (`.prettierignore`): `pnpm-lock.yaml` (pnpm rewrites it), the Expo icon JSON (Icon Composer writes it) and Markdown (Prettier pads table columns, which turns each decision-log row into one very wide line). `EXERCISE_CATALOG` keeps one exercise per line (`// prettier-ignore`), so its values stay easy to compare. Measured before choosing, with those files excluded: width 100 changes 167 files (+7.3k lines), 120 changes 135 (+3.8k), 140 changes 114 (+2.1k), 160 changes 95 (+1.3k). The old note of "36 files" matched no setting | 120 wraps some of the long one-line test calls once; the format commit is hidden from `git blame`. The docs stay hand-formatted, so nothing checks their formatting |
 | 2026-11-23 | Milestone 5 closed (PR #7, after #5 and #6). Its "Done when" is met: finishing shows the XP the server awarded and, when earned, the level-up screen (checked on a phone in 4f); two Finishes sent at the same moment can't exceed the daily cap (the profile lock, tested with two concurrent requests against Postgres); a workout synced days later counts against the local day it started (tested, with both sides of the 14-day line). 781 tests (mobile 332, shared 214, API 235). Next: the format-only Prettier PR, then Milestone 6, starting with the avatar art decision (the code-drawn `react-native-svg` stickman planned under "Avatar prototype", or Rive) | Carried open: the baseline training-day gap (2026-11-18, before leaderboards), editing finished workouts (Milestone 7), and an unexplained routine-link test flake in `finish-progression.test.ts` (its create and delete steps now check their responses, 47d4191, so a repeat names the failing step) |
