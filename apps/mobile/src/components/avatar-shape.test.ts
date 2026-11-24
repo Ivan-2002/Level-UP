@@ -98,7 +98,7 @@ describe("avatarShape growth", () => {
     }
   });
 
-  it("the head is the same at every development and lean", () => {
+  it("the head is the same at every development and stamina", () => {
     for (let seed = 1; seed <= 20; seed++) {
       expect(avatarShape(randomDevelopment(seed), seed % 2).head).toEqual(HEAD);
     }
@@ -113,13 +113,13 @@ describe("avatarShape growth", () => {
   });
 });
 
-describe("lean (reserved for the endurance look)", () => {
+describe("stamina (reserved for the earned endurance look)", () => {
   it("is accepted, and 0 draws exactly the default figure", () => {
     const d = randomDevelopment(42);
     expect(avatarShape(d, 0)).toEqual(avatarShape(d));
   });
 
-  it("draws nothing yet: any lean gives today's figure (update this when the endurance look exists)", () => {
+  it("draws nothing yet: any stamina gives today's figure (update this when the endurance look exists)", () => {
     const d = randomDevelopment(43);
     expect(avatarShape(d, 1)).toEqual(avatarShape(d, 0));
   });

@@ -24,7 +24,7 @@ import {
 //   development  0 to 1 per body part (shape)
 //   extras       the stage's extras, e.g. ["wristbands", "outfit"] (unknown ones ignored)
 //   face         the player's chosen presets (identity)
-//   lean         reserved for the endurance look; always 0 for now
+//   stamina      the earned endurance stat; always 0 for now (nothing draws it yet)
 //   expression   chosen by the app (proud on the level-up), bends the chosen face
 // All geometry comes from pure functions (avatar-shape, avatar-face, avatar-extras); this
 // component only draws it: lines in ink, shapes filled with the background, so a bulging
@@ -34,7 +34,7 @@ export type AvatarLook = {
   development: Development;
   extras: readonly string[];
   face: Face;
-  lean: number;
+  stamina: number;
   expression?: Expression;
 };
 
@@ -43,7 +43,7 @@ export const ROOKIE_LOOK: AvatarLook = Object.freeze({
   development: ZERO_DEVELOPMENT,
   extras: [],
   face: DEFAULT_FACE,
-  lean: 0,
+  stamina: 0,
 });
 
 type Props = {
@@ -66,7 +66,7 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
   const current = useTheme().colors;
   const c = scheme ? palettes[scheme] : current;
 
-  const shape = avatarShape(look.development, look.lean);
+  const shape = avatarShape(look.development, look.stamina);
   const extras = extrasShape(shape, look.extras);
   const face = faceShape(look.face, look.expression);
   const skin = face.skinTone ? SKIN_TONES[face.skinTone] : null;

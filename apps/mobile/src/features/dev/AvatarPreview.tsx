@@ -63,7 +63,7 @@ export function AvatarPreview() {
   const [face, setFace] = useState<Face>(DEFAULT_FACE);
   const [expression, setExpression] = useState<Expression>("neutral");
 
-  const look: AvatarLook = { development, extras: PREVIEW_STAGES[stage]!.extras, face, lean: 0, expression };
+  const look: AvatarLook = { development, extras: PREVIEW_STAGES[stage]!.extras, face, stamina: 0, expression };
   const stageName = PREVIEW_STAGES[stage]!.name;
 
   // Each face slot toggles between its default and its one alternative (6b proves the slot; 6e is the picker).

@@ -2,7 +2,7 @@ import { BODY_PARTS, type BodyPart } from "@levelup/shared";
 
 // The stickman's body as plain numbers (docs/ARCHITECTURE.md, "Avatar prototype").
 //
-// `avatarShape(development, lean)` decides WHERE everything is and HOW BIG it is; the
+// `avatarShape(development, stamina)` decides WHERE everything is and HOW BIG it is; the
 // Avatar component only turns these numbers into SVG. Keeping the maths here, away from
 // React, means unit tests can check the rules directly (0 is lines only, parts grow
 // independently, sizes only go up, the head never changes), and a later renderer (Rive)
@@ -67,7 +67,7 @@ export const BUST_VIEWBOX = { y: 0, height: 104 } as const;
 
 const CX = VIEWBOX.width / 2;
 
-/** The head: the same circle at every development, stage, face and lean. */
+/** The head: the same circle at every development, stage, face and stamina. */
 export const HEAD: Circle = Object.freeze({ cx: CX, cy: 34, r: 24 });
 
 const NECK_TOP = HEAD.cy + HEAD.r;
@@ -115,11 +115,12 @@ const waistHalf = (core: number) => size("waistHalf", core) ?? SIZE.waistHalf[0]
 /**
  * The body for each part's development (0 to 1; outside values are clamped).
  *
- * `lean` is reserved for the endurance look (a leaner, stamina build) and is always 0 in
+ * `stamina` is the EARNED endurance stat (the competition plan's stamina; distinct from the
+ * player's CHOSEN `body` build). High stamina may later draw a leaner look. It is always 0 in
  * Milestone 6: it's accepted so the contract doesn't change later, and nothing reads it yet.
  */
-export function avatarShape(development: Development, lean = 0): AvatarShape {
-  void lean; // reserved (docs/ARCHITECTURE.md: the avatar contract)
+export function avatarShape(development: Development, stamina = 0): AvatarShape {
+  void stamina; // reserved (docs/ARCHITECTURE.md: the avatar contract)
   const d = Object.fromEntries(BODY_PARTS.map((p) => [p, clamp01(development[p])])) as Development;
 
   const torsoIsShape = d.chest > 0 || d.back > 0 || d.core > 0;
