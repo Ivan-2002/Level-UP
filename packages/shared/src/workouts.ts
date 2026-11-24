@@ -288,7 +288,10 @@ export const finishSummarySchema = z.object({
    * The avatar stage at the level before and after this workout; a new stage when they
    * differ. Defaults to null for responses from before the field existed (saved on the phone).
    */
-  stage: z.object({ before: avatarStageSchema.nullable(), after: avatarStageSchema.nullable() }).nullable().default(null),
+  stage: z
+    .object({ before: avatarStageSchema.nullable(), after: avatarStageSchema.nullable() })
+    .nullable()
+    .default(null),
   /**
    * Every set of the workout, in the order of `workout.exercises[].sets`: the XP the ledger
    * recorded for it (after the daily cap), its tag and why it was flagged or capped.
@@ -348,7 +351,6 @@ export type WorkoutPage = z.infer<typeof workoutPageSchema>;
 
 // --- Exercise history (GET /exercises/:id/summary, GET /exercises/recent) ---------
 
-
 /** One past workout's sets of an exercise. weightKg is as logged; loads include bodyweight. */
 export const exerciseSessionSchema = z.object({
   workoutId: z.uuid(),
@@ -391,8 +393,17 @@ export type ExerciseSummaryQuery = z.infer<typeof exerciseSummaryQuerySchema>;
 export const lastSessionsQuerySchema = z.object({
   ids: z
     .string()
-    .transform((value) => [...new Set(value.split(",").map((id) => id.trim()).filter(Boolean))])
-    .pipe(z.array(z.uuid("Unknown exercise.")).min(1, "Give at least one exercise id.").max(20, "At most 20 exercises.")),
+    .transform((value) => [
+      ...new Set(
+        value
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    ])
+    .pipe(
+      z.array(z.uuid("Unknown exercise.")).min(1, "Give at least one exercise id.").max(20, "At most 20 exercises."),
+    ),
 });
 export type LastSessionsQuery = z.infer<typeof lastSessionsQuerySchema>;
 
@@ -408,7 +419,9 @@ export type LastSessionList = z.infer<typeof lastSessionListSchema>;
 
 /** Response of GET /exercises/recent: "Recently used" in the Add exercise sheet. */
 export const recentExerciseListSchema = z.object({
-  items: z.array(z.object({ exercise: exerciseSchema, lastDoneAt: z.iso.datetime(), lastSets: z.array(loggedSetSchema) })),
+  items: z.array(
+    z.object({ exercise: exerciseSchema, lastDoneAt: z.iso.datetime(), lastSets: z.array(loggedSetSchema) }),
+  ),
 });
 export type RecentExerciseList = z.infer<typeof recentExerciseListSchema>;
 
@@ -445,7 +458,9 @@ export type DayXp = z.infer<typeof dayXpSchema>;
  * logged sets on each request; the app updates its copy after each Finish.
  */
 export const exerciseXpHistoryListSchema = z.object({
-  items: z.array(z.object({ exerciseId: z.uuid(), recentBest: z.number().nullable(), jumpBaseline: z.number().nullable() })),
+  items: z.array(
+    z.object({ exerciseId: z.uuid(), recentBest: z.number().nullable(), jumpBaseline: z.number().nullable() }),
+  ),
   // Both added for the live daily cap (Phase 4c). DEFAULT null, not required: a copy saved
   // on the phone by an older version has neither, and must still parse (keeping its
   // history), or every exercise would become a baseline session offline.
@@ -453,4 +468,3 @@ export const exerciseXpHistoryListSchema = z.object({
   today: dayXpSchema.nullable().default(null),
 });
 export type ExerciseXpHistoryList = z.infer<typeof exerciseXpHistoryListSchema>;
-

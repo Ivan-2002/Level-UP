@@ -2,7 +2,10 @@ import { Text as NativeText, type TextProps } from "react-native";
 import { useTheme } from "@/theme/use-theme";
 import type { Palette, TypeVariant } from "@/theme/tokens";
 
-export type TextTone = Extract<keyof Palette, "ink" | "inkMuted" | "onPrimary" | "purple" | "ice" | "success" | "warning" | "danger">;
+export type TextTone = Extract<
+  keyof Palette,
+  "ink" | "inkMuted" | "onPrimary" | "purple" | "ice" | "success" | "warning" | "danger"
+>;
 
 type Props = TextProps & {
   /** A step of the type scale (theme/tokens.ts). Picks the font file, size and line height. */

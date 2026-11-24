@@ -31,7 +31,11 @@ import * as repo from "./workouts.repository.js";
 
 const RECENT_LIMIT = 10;
 
-export async function exerciseSummary(userId: string, exerciseId: string, sessionLimit: number): Promise<ExerciseSummary> {
+export async function exerciseSummary(
+  userId: string,
+  exerciseId: string,
+  sessionLimit: number,
+): Promise<ExerciseSummary> {
   const exercise = await usableExerciseOrThrow(userId, exerciseId);
   const [history, bodyweights] = await Promise.all([
     repo.findExerciseHistory(userId, [exerciseId]),
@@ -42,14 +46,21 @@ export async function exerciseSummary(userId: string, exerciseId: string, sessio
   const byWorkout = new Map<string, repo.ExerciseHistoryRow[]>();
   for (const row of history) byWorkout.set(row.workout.id, [...(byWorkout.get(row.workout.id) ?? []), row]);
   const groups = [...byWorkout.values()];
-  const sessions = groups.map((rows) => toSession(rows, exercise, bodyweightOnDate(bodyweights, rows[0]!.workout.startedAt.toISOString())));
+  const sessions = groups.map((rows) =>
+    toSession(rows, exercise, bodyweightOnDate(bodyweights, rows[0]!.workout.startedAt.toISOString())),
+  );
 
   // Records leave out jump-capped sets (the session list still shows every set done).
   const stats = exerciseStats(
     groups.map((rows, i) => {
       const { startedAt, bodyweightKg } = sessions[i]!;
-      const sets = rows.flatMap((r) => r.sets.filter(canBeRecord)).map((set) => ({ reps: set.reps, weightKg: set.weightKg.toNumber() }));
-      return { date: startedAt, sets: sets.map((set) => ({ ...set, loadKg: liftedKg(set.weightKg, bodyweightKg, exercise.bodyweightRatio) })) };
+      const sets = rows
+        .flatMap((r) => r.sets.filter(canBeRecord))
+        .map((set) => ({ reps: set.reps, weightKg: set.weightKg.toNumber() }));
+      return {
+        date: startedAt,
+        sets: sets.map((set) => ({ ...set, loadKg: liftedKg(set.weightKg, bodyweightKg, exercise.bodyweightRatio) })),
+      };
     }),
   );
 
@@ -59,7 +70,12 @@ export async function exerciseSummary(userId: string, exerciseId: string, sessio
     bodyweightKg: bodyweights.at(-1)?.kg ?? BODYWEIGHT_FALLBACK_KG,
     previousSession: newestFirst[0] ?? null,
     records: {
-      bestE1rm: stats.bestE1rm && { value: stats.bestE1rm.e1rm, reps: stats.bestE1rm.reps, weightKg: stats.bestE1rm.weightKg, date: stats.bestE1rm.date },
+      bestE1rm: stats.bestE1rm && {
+        value: stats.bestE1rm.e1rm,
+        reps: stats.bestE1rm.reps,
+        weightKg: stats.bestE1rm.weightKg,
+        date: stats.bestE1rm.date,
+      },
       heaviestSet: stats.heaviestSet && {
         reps: stats.heaviestSet.reps,
         weightKg: stats.heaviestSet.weightKg,
@@ -67,7 +83,11 @@ export async function exerciseSummary(userId: string, exerciseId: string, sessio
         date: stats.heaviestSet.date,
       },
       bestSessionVolume: exercise.repsUnit === "seconds" ? null : stats.bestSessionVolume,
-      mostReps: stats.mostReps && { reps: stats.mostReps.reps, weightKg: stats.mostReps.weightKg, date: stats.mostReps.date },
+      mostReps: stats.mostReps && {
+        reps: stats.mostReps.reps,
+        weightKg: stats.mostReps.weightKg,
+        date: stats.mostReps.date,
+      },
     },
     sessions: newestFirst.slice(0, sessionLimit),
   };
@@ -112,7 +132,10 @@ export async function recentExercises(userId: string): Promise<RecentExerciseLis
   for (const row of appearances) if (!newest.has(row.exerciseId)) newest.set(row.exerciseId, row);
   const picked = [...newest.values()].slice(0, RECENT_LIMIT);
 
-  const exercises = await exercisesService.findUsableExercises(userId, picked.map((r) => r.exerciseId));
+  const exercises = await exercisesService.findUsableExercises(
+    userId,
+    picked.map((r) => r.exerciseId),
+  );
   return {
     items: picked.flatMap((row) => {
       const exercise = exercises.get(row.exerciseId);
@@ -173,13 +196,19 @@ export async function exerciseXpHistories(userId: string): Promise<ExerciseXpHis
   ]);
   return {
     items: [...histories].map(([exerciseId, history]) => ({ exerciseId, ...history })),
-    dailyCap: { limit: DAILY_XP_CAP.limit, bandRate: DAILY_XP_CAP.bandRate, ceilingMultiple: DAILY_XP_CAP.ceilingMultiple },
+    dailyCap: {
+      limit: DAILY_XP_CAP.limit,
+      bandRate: DAILY_XP_CAP.bandRate,
+      ceilingMultiple: DAILY_XP_CAP.ceilingMultiple,
+    },
     today: { date: today, setXp, clientIds },
   };
 }
 
 async function usableExerciseOrThrow(userId: string, exerciseId: string): Promise<Exercise> {
-  const exercise = isUuid(exerciseId) ? (await exercisesService.findUsableExercises(userId, [exerciseId])).get(exerciseId) : undefined;
+  const exercise = isUuid(exerciseId)
+    ? (await exercisesService.findUsableExercises(userId, [exerciseId])).get(exerciseId)
+    : undefined;
   if (!exercise) throw new AppError("not_found", "ExerciseNotFound", "Exercise not found.");
   return exercise;
 }

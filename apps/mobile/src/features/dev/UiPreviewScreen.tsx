@@ -11,7 +11,14 @@ import { ProgressSegments } from "@/components/ProgressSegments";
 import { SetRow, SetTableHeader } from "@/components/SetRow";
 import { StatTile } from "@/components/StatTile";
 import { Text } from "@/components/Text";
-import { addExercise, addSet, startWorkout, toggleSetDone, updateSet, type ActiveWorkout } from "@/features/workouts/active-workout";
+import {
+  addExercise,
+  addSet,
+  startWorkout,
+  toggleSetDone,
+  updateSet,
+  type ActiveWorkout,
+} from "@/features/workouts/active-workout";
 import { ElapsedTimer } from "@/features/workouts/ElapsedTimer";
 import { scoreLiveWorkout, setXpNote } from "@/features/workouts/live-workout";
 import { settingsStore, useSettings } from "@/stores/device-stores";
@@ -24,7 +31,21 @@ import type { Palette, TypeVariant } from "@/theme/tokens";
 
 const THEMES: ThemePreference[] = ["dark", "light", "system"];
 const TYPE_STEPS: TypeVariant[] = ["display", "stat", "title", "heading", "value", "body", "label", "caption"];
-const SWATCHES: (keyof Palette)[] = ["bg", "surface", "surfaceRaised", "border", "ink", "inkMuted", "primary", "purple", "purpleSoft", "ice", "success", "warning", "danger"];
+const SWATCHES: (keyof Palette)[] = [
+  "bg",
+  "surface",
+  "surfaceRaised",
+  "border",
+  "ink",
+  "inkMuted",
+  "primary",
+  "purple",
+  "purpleSoft",
+  "ice",
+  "success",
+  "warning",
+  "danger",
+];
 
 type DemoSet = { weight: string; reps: string; done: boolean };
 
@@ -50,7 +71,11 @@ const DEMO_BENCH: Exercise = {
 function demoWorkout(second: boolean): ActiveWorkout {
   const start = new Date("2026-11-18T06:00:00Z");
   let n = 0;
-  let w = addExercise(startWorkout({ userId: "demo", clientId: "demo", now: start, weightUnit: "kg" }), DEMO_BENCH, () => `demo-${n++}`);
+  let w = addExercise(
+    startWorkout({ userId: "demo", clientId: "demo", now: start, weightUnit: "kg" }),
+    DEMO_BENCH,
+    () => `demo-${n++}`,
+  );
   while (w.exercises[0]!.sets.length < 3) w = addSet(w, w.exercises[0]!.id, () => `demo-${n++}`);
   const tick = (index: number, weight: string, reps: string) => {
     const draft = w.exercises[0]!;
@@ -111,7 +136,8 @@ export function UiPreviewScreen() {
     { weight: "62.5", reps: "7", done: false },
   ]);
 
-  const update = (i: number, change: Partial<DemoSet>) => setSets((all) => all.map((s, j) => (j === i ? { ...s, ...change } : s)));
+  const update = (i: number, change: Partial<DemoSet>) =>
+    setSets((all) => all.map((s, j) => (j === i ? { ...s, ...change } : s)));
   const done = sets.filter((s) => s.done).length;
   const exercises = [
     { name: "Incline DB press", total: 4, done: 4 },
@@ -131,7 +157,13 @@ export function UiPreviewScreen() {
 
         <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel="Theme">
           {THEMES.map((p) => (
-            <Chip key={p} label={p} role="radio" selected={p === preference} onPress={() => settingsStore.getState().setThemePreference(p)} />
+            <Chip
+              key={p}
+              label={p}
+              role="radio"
+              selected={p === preference}
+              onPress={() => settingsStore.getState().setThemePreference(p)}
+            />
           ))}
         </View>
 
@@ -170,7 +202,15 @@ export function UiPreviewScreen() {
           <ProgressSegments segments={exercises} currentIndex={tab} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             {exercises.map((e, i) => (
-              <Chip key={e.name} label={e.name} role="tab" selected={i === tab} count={`${e.done}/${e.total}`} done={e.done === e.total} onPress={() => setTab(i)} />
+              <Chip
+                key={e.name}
+                label={e.name}
+                role="tab"
+                selected={i === tab}
+                count={`${e.done}/${e.total}`}
+                done={e.done === e.total}
+                onPress={() => setTab(i)}
+              />
             ))}
             <AddChip onPress={() => {}} accessibilityLabel="Add exercise to this workout" />
           </ScrollView>
@@ -220,7 +260,8 @@ export function UiPreviewScreen() {
             />
           </Card>
           <Text variant="caption" tone="inkMuted">
-            In lb: {formatWeight(fromInputWeight(135, "lb"), "lb")} · bodyweight {formatWeight(fromInputWeight(25, "lb"), "lb", { bodyweight: true })}
+            In lb: {formatWeight(fromInputWeight(135, "lb"), "lb")} · bodyweight{" "}
+            {formatWeight(fromInputWeight(25, "lb"), "lb", { bodyweight: true })}
           </Text>
         </Section>
 
@@ -263,7 +304,13 @@ const useStyles = createStyles((t) => ({
   content: { padding: t.space[4], gap: t.space[6], paddingBottom: t.space[8] },
   section: { gap: t.space[3] },
   row: { flexDirection: "row", alignItems: "center", gap: t.space[2] },
-  moment: { gap: t.space[1], padding: t.space[3], borderRadius: t.radius.lg, borderWidth: 1, borderColor: t.colors.border },
+  moment: {
+    gap: t.space[1],
+    padding: t.space[3],
+    borderRadius: t.radius.lg,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+  },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: t.space[2] },
   flex: { flex: 1 },
   swatchItem: { width: 72, gap: t.space[1] },

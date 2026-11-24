@@ -50,12 +50,20 @@ export function historyFromList(list: Pick<ExerciseXpHistoryList, "items">): XpH
  * replay would move it (scoreSessionSets' jumpBaselineAfter), and its session best joins
  * the 12-week best. Exercises missing from the library are skipped.
  */
-export function historyAfterWorkout(history: XpHistory, payload: FinishWorkoutInput, context: ReplayContext): XpHistory {
+export function historyAfterWorkout(
+  history: XpHistory,
+  payload: FinishWorkoutInput,
+  context: ReplayContext,
+): XpHistory {
   return replayWorkout(history, payload, context).history;
 }
 
 /** One queued workout through the shared scoring: the history after it, and its set XP (before the daily cap). */
-function replayWorkout(history: XpHistory, payload: FinishWorkoutInput, context: ReplayContext): { history: XpHistory; setXp: number[] } {
+function replayWorkout(
+  history: XpHistory,
+  payload: FinishWorkoutInput,
+  context: ReplayContext,
+): { history: XpHistory; setXp: number[] } {
   const known = payload.exercises.filter((e) => context.exercises.has(e.exerciseId));
   const sets = known.flatMap((e) =>
     e.sets.map((s) => ({ exerciseId: e.exerciseId, reps: s.reps, weightKg: s.weightKg, completedAt: s.completedAt })),

@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { finishWorkoutResponseSchema, fromInputWeight, toDisplayWeight, xpForLevel, type FinishWorkoutInput } from "@levelup/shared";
+import {
+  finishWorkoutResponseSchema,
+  fromInputWeight,
+  toDisplayWeight,
+  xpForLevel,
+  type FinishWorkoutInput,
+} from "@levelup/shared";
 import { prisma } from "../../lib/prisma.js";
 import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/helpers.js";
 
@@ -22,7 +28,11 @@ beforeEach(async () => {
 type SetInput = { reps: number; weightKg: number };
 
 /** A one-hour workout that started `daysAgo` days ago, with completedAt on every set. */
-function workout(daysAgo: number, exercises: [slug: string, sets: SetInput[]][], extra: Partial<FinishWorkoutInput> = {}): FinishWorkoutInput {
+function workout(
+  daysAgo: number,
+  exercises: [slug: string, sets: SetInput[]][],
+  extra: Partial<FinishWorkoutInput> = {},
+): FinishWorkoutInput {
   const startedAt = Date.now() - daysAgo * DAY - 2 * 60 * MINUTE;
   return {
     clientId: randomUUID(),
@@ -50,10 +60,15 @@ describe("XP at Finish", () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
 
     // Bench (loadFactor 1.25): 8 x 60 kg -> load 75 kg, estimated 1RM 95 kg, x 0.73 = 69 XP per set.
-    const { workout: saved, summary } = await finish(user, workout(0, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]));
+    const { workout: saved, summary } = await finish(
+      user,
+      workout(0, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]]),
+    );
 
     const events = await prisma.xpEvent.findMany({ where: { userId: user.userId } });
-    expect(events.map((e) => [e.amount, e.source, e.bodyPart])).toEqual(times(3, [69, "workout_set", "chest"] as never));
+    expect(events.map((e) => [e.amount, e.source, e.bodyPart])).toEqual(
+      times(3, [69, "workout_set", "chest"] as never),
+    );
     expect(events.map((e) => e.sourceId).sort()).toEqual(saved.exercises[0]!.sets.map((s) => s.id).sort());
     expect(summary.xp).toEqual({ sets: 207, weeklyGoal: 0, streakMilestone: 0, total: 207, heldBack: null });
     // Level 2 starts at 400, so level 1 spans 400 XP.
@@ -65,7 +80,9 @@ describe("XP at Finish", () => {
       statusBefore: { level: 1, xpIntoLevel: 0, xpForNextLevel: 400 },
       statusAfter: { level: 1, xpIntoLevel: 207, xpForNextLevel: 400 },
     });
-    expect(summary.sets).toEqual(saved.exercises[0]!.sets.map((s) => ({ setId: s.id, xp: 69, tag: null, flagReason: null })));
+    expect(summary.sets).toEqual(
+      saved.exercises[0]!.sets.map((s) => ({ setId: s.id, xp: 69, tag: null, flagReason: null })),
+    );
     expect((await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp).toBe(207);
   });
 
@@ -130,7 +147,10 @@ describe("XP at Finish", () => {
 
   it("uses the bodyweight in effect on the workout's date, and XP is relative to it", async () => {
     const user = await signUpPlayer(); // no bodyweight at sign-up
-    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 70, measuredOn: isoDate(Date.now() - 10 * DAY) });
+    await request(app)
+      .post("/v1/bodyweight")
+      .set("Cookie", user.cookie)
+      .send({ kg: 70, measuredOn: isoDate(Date.now() - 10 * DAY) });
     await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 90 });
 
     // 5 days ago the 70 kg entry was in effect: load 75 kg x sqrt(75 / 70), estimated 1RM
@@ -159,7 +179,15 @@ describe("personal records in the summary", () => {
     // 62.5 x 7 (e1RM 77.1) and then 65 x 6 (78): one line, best new value vs the old best (76).
     const second = await finish(
       user,
-      workout(1, [["barbell-bench-press", [{ reps: 7, weightKg: 62.5 }, { reps: 6, weightKg: 65 }]]]),
+      workout(1, [
+        [
+          "barbell-bench-press",
+          [
+            { reps: 7, weightKg: 62.5 },
+            { reps: 6, weightKg: 65 },
+          ],
+        ],
+      ]),
     );
 
     expect(first.summary.prs).toEqual([]);
@@ -181,7 +209,9 @@ describe("personal records in the summary", () => {
     await finish(user, workout(2, [["pull-up", [{ reps: 8, weightKg: 0 }]]])); // 80 x (1 + 8/30) = 101.3
     const { summary } = await finish(user, workout(1, [["pull-up", [{ reps: 8, weightKg: 10 }]]])); // 90 -> 114
 
-    expect(summary.prs).toEqual([expect.objectContaining({ kind: "e1rm", value: 114, previousValue: 101.3, set: { reps: 8, weightKg: 10 } })]);
+    expect(summary.prs).toEqual([
+      expect.objectContaining({ kind: "e1rm", value: 114, previousValue: 101.3, set: { reps: 8, weightKg: 10 } }),
+    ]);
   });
 
   it("only compares with workouts that started EARLIER, even when synced later", async () => {
@@ -201,12 +231,18 @@ describe("summary stats", () => {
     const routine = await request(app)
       .post("/v1/routines")
       .set("Cookie", user.cookie)
-      .send({ name: "Push day", exercises: [{ exerciseId: ids["barbell-bench-press"], targetSets: 3, targetReps: 8 }] });
+      .send({
+        name: "Push day",
+        exercises: [{ exerciseId: ids["barbell-bench-press"], targetSets: 3, targetReps: 8 }],
+      });
     const routineId = routine.body.id as string;
 
     await finish(user, workout(3, [["barbell-bench-press", times(3, { reps: 8, weightKg: 60 })]], { routineId }));
     await finish(user, workout(2, [["deadlift", [{ reps: 5, weightKg: 140 }]]])); // not this routine
-    const { summary } = await finish(user, workout(1, [["barbell-bench-press", times(4, { reps: 8, weightKg: 60 })]], { routineId }));
+    const { summary } = await finish(
+      user,
+      workout(1, [["barbell-bench-press", times(4, { reps: 8, weightKg: 60 })]], { routineId }),
+    );
 
     expect(summary.stats).toEqual({
       durationSec: 3600,
@@ -259,10 +295,15 @@ describe("routine link", () => {
     const user = await signUpPlayer();
     const othersRoutine = await createRoutine(owner);
 
-    const saved = await finish(user, workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId: othersRoutine }));
+    const saved = await finish(
+      user,
+      workout(0, [["pull-up", [{ reps: 8, weightKg: 0 }]]], { routineId: othersRoutine }),
+    );
 
     expect(saved.workout.routineId).toBeNull();
-    expect((await request(app).get(`/v1/routines/${othersRoutine}`).set("Cookie", owner.cookie)).body.lastDoneAt).toBeNull();
+    expect(
+      (await request(app).get(`/v1/routines/${othersRoutine}`).set("Cookie", owner.cookie)).body.lastDoneAt,
+    ).toBeNull();
   });
 
   it("drops a link to a routine deleted while you trained offline", async () => {
@@ -358,7 +399,10 @@ describe("weights stay exact for lb players (stored in kg, 3 decimals)", () => {
   it("keeps a lb bodyweight exact too", async () => {
     const user = await signUpPlayer();
 
-    const res = await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: fromInputWeight(180, "lb") });
+    const res = await request(app)
+      .post("/v1/bodyweight")
+      .set("Cookie", user.cookie)
+      .send({ kg: fromInputWeight(180, "lb") });
 
     expect(res.body.kg).toBe(81.647);
     expect(toDisplayWeight(res.body.kg, "lb")).toBe(180);

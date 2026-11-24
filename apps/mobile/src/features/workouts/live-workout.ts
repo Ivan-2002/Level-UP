@@ -79,7 +79,9 @@ export type LiveScore = {
  * date (another phone trained today) or the cached copy has no cap data.
  */
 export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringContext): LiveScore {
-  const done = workout.exercises.flatMap((draft) => doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })));
+  const done = workout.exercises.flatMap((draft) =>
+    doneSets(draft, workout.weightUnit).map((d) => ({ exerciseId: draft.exercise.id, ...d })),
+  );
   const scored = scoreWithCap(
     done.map((d) => ({ exerciseId: d.exerciseId, reps: d.reps, weightKg: d.weightKg, completedAt: d.set.doneAt })),
     exercisesOf(workout),
@@ -99,9 +101,20 @@ export function scoreLiveWorkout(workout: ActiveWorkout, context: LiveScoringCon
 function scoreWithCap(sets: SessionSet[], exercises: Map<string, Exercise>, context: LiveScoringContext) {
   const score = scoreSessionSets({ sets, exercises, history: context.history, bodyweight: context.bodyweight });
   const cap = context.dailyCap;
-  const capped = cap ? applyDailyCap(cap.xpBefore, score.sets.map((s) => s.xp), cap.config) : null;
+  const capped = cap
+    ? applyDailyCap(
+        cap.xpBefore,
+        score.sets.map((s) => s.xp),
+        cap.config,
+      )
+    : null;
   const scoredSets = capped ? score.sets.map((s, i) => ({ ...s, xp: capped.awarded[i]! })) : score.sets;
-  return { sets: scoredSets, total: scoredSets.reduce((sum, s) => sum + s.xp, 0), heldBack: capped?.heldBack ?? 0, exercises: score.exercises };
+  return {
+    sets: scoredSets,
+    total: scoredSets.reduce((sum, s) => sum + s.xp, 0),
+    heldBack: capped?.heldBack ?? 0,
+    exercises: score.exercises,
+  };
 }
 
 /** Each exercise of the workout by id, as scoring takes them. */
@@ -126,12 +139,25 @@ export type SavedPreview = {
  * as the live view, on the same values, so the total is the one the player last saw;
  * built from the payload so its sets line up with the server's one for one.
  */
-export function previewFromPayload(payload: FinishWorkoutInput, exercises: Map<string, Exercise>, context: LiveScoringContext): SavedPreview {
+export function previewFromPayload(
+  payload: FinishWorkoutInput,
+  exercises: Map<string, Exercise>,
+  context: LiveScoringContext,
+): SavedPreview {
   const sent = payload.exercises.flatMap((e) =>
-    e.sets.map((s) => ({ exerciseId: e.exerciseId, reps: s.reps, weightKg: s.weightKg, completedAt: s.completedAt ?? null })),
+    e.sets.map((s) => ({
+      exerciseId: e.exerciseId,
+      reps: s.reps,
+      weightKg: s.weightKg,
+      completedAt: s.completedAt ?? null,
+    })),
   );
   const scored = scoreWithCap(sent, exercises, context);
-  return { setXp: scored.total, heldBack: scored.heldBack, sets: scored.sets.map((s) => ({ xp: s.xp, tag: s.tag, isFlagged: s.isFlagged })) };
+  return {
+    setXp: scored.total,
+    heldBack: scored.heldBack,
+    sets: scored.sets.map((s) => ({ xp: s.xp, tag: s.tag, isFlagged: s.isFlagged })),
+  };
 }
 
 /** The line under the tiles once the daily cap holds XP back. */
@@ -162,14 +188,23 @@ export function snapshotToPin(
   if (workout.scoring !== null) return null;
   const anyDone = workout.exercises.some((e) => e.sets.some((s) => s.doneAt !== null));
   if (available.history === undefined && !anyDone) return null; // wait a little for the history
-  const history = [...(available.history ?? new Map<string, ExerciseXpHistory>())].map(([exerciseId, h]) => ({ exerciseId, ...h }));
-  return { history, bodyweight: available.bodyweight, dailyCap: available.history === undefined ? null : available.dailyCap };
+  const history = [...(available.history ?? new Map<string, ExerciseXpHistory>())].map(([exerciseId, h]) => ({
+    exerciseId,
+    ...h,
+  }));
+  return {
+    history,
+    bodyweight: available.bodyweight,
+    dailyCap: available.history === undefined ? null : available.dailyCap,
+  };
 }
 
 /** The saved snapshot as the context scoreLiveWorkout takes. */
 export function scoringContext(scoring: PinnedScoring): LiveScoringContext {
   return {
-    history: new Map(scoring.history.map((h) => [h.exerciseId, { recentBest: h.recentBest, jumpBaseline: h.jumpBaseline }])),
+    history: new Map(
+      scoring.history.map((h) => [h.exerciseId, { recentBest: h.recentBest, jumpBaseline: h.jumpBaseline }]),
+    ),
     bodyweight: scoring.bodyweight,
     dailyCap: scoring.dailyCap,
   };
@@ -212,7 +247,8 @@ export function tickFeedback(input: {
 }): TickFeedback {
   const { setId, setNumber, done, before, after } = input;
   const score = after?.bySet.get(setId);
-  if (!before || !after) return { announcement: `Set ${setNumber} ${done ? "done" : "not done"}`, rescoredAsWarmUps: 0 };
+  if (!before || !after)
+    return { announcement: `Set ${setNumber} ${done ? "done" : "not done"}`, rescoredAsWarmUps: 0 };
   if (!done || !score) return { announcement: `Set ${setNumber} not done, ${after.total} total`, rescoredAsWarmUps: 0 };
 
   let rescored = 0;
@@ -234,7 +270,10 @@ export function tickLine(note: SetXpNote, rescoredAsWarmUps: number): SetXpNote 
 export const BASELINE_CAPTION = "First session: this sets your baseline. Earlier sets may be re-scored as warm-ups.";
 
 /** Whether the exercise on screen gets the baseline caption: a reps exercise with no 12-week best in the pinned history. */
-export function showsBaselineCaption(exercise: Pick<Exercise, "id" | "repsUnit">, context: LiveScoringContext | null): boolean {
+export function showsBaselineCaption(
+  exercise: Pick<Exercise, "id" | "repsUnit">,
+  context: LiveScoringContext | null,
+): boolean {
   if (!context || exercise.repsUnit !== "reps") return false; // timed sets have no warm-ups
   return isBaselineSession(context.history.get(exercise.id)?.recentBest ?? null);
 }
@@ -242,7 +281,10 @@ export function showsBaselineCaption(exercise: Pick<Exercise, "id" | "repsUnit">
 /** One progress segment per exercise, plus which one is on screen. */
 export function workoutSegments(workout: ActiveWorkout): { segments: Segment[]; currentIndex: number } {
   return {
-    segments: workout.exercises.map((e) => ({ total: e.sets.length, done: e.sets.filter((s) => s.doneAt !== null).length })),
+    segments: workout.exercises.map((e) => ({
+      total: e.sets.length,
+      done: e.sets.filter((s) => s.doneAt !== null).length,
+    })),
     currentIndex: workout.exercises.findIndex((e) => e.id === workout.currentExerciseKey),
   };
 }
@@ -258,7 +300,12 @@ function e1rmOf(done: Done, exercise: Exercise, bodyweightKg: number): number | 
  * compared with history AND the earlier sets today, so two sets can both be PRs.
  * With no history (bestBefore null) the first session sets the baseline: no PRs, as on the server.
  */
-export function livePrs(draft: DraftExercise, unit: WeightUnit, bodyweightKg: number, bestBefore: number | null): Map<string, number> {
+export function livePrs(
+  draft: DraftExercise,
+  unit: WeightUnit,
+  bodyweightKg: number,
+  bestBefore: number | null,
+): Map<string, number> {
   const prs = new Map<string, number>();
   if (bestBefore === null) return prs;
   let best = bestBefore;
@@ -275,7 +322,9 @@ export function livePrs(draft: DraftExercise, unit: WeightUnit, bodyweightKg: nu
 
 /** Today's best estimated 1RM for this exercise, or null before a set is done. */
 export function todayBestE1rm(draft: DraftExercise, unit: WeightUnit, bodyweightKg: number): number | null {
-  const values = doneSets(draft, unit).map((d) => e1rmOf(d, draft.exercise, bodyweightKg)).filter((v): v is number => v !== null);
+  const values = doneSets(draft, unit)
+    .map((d) => e1rmOf(d, draft.exercise, bodyweightKg))
+    .filter((v): v is number => v !== null);
   return values.length ? Math.max(...values) : null;
 }
 
@@ -289,10 +338,16 @@ function bareWeight(weightKg: number, exercise: Exercise, unit: WeightUnit): str
 }
 
 /** The "Last time" cell for set n: "60 × 8", "BW × 9", "60 s"; a dash if there was no such set. */
-export function previousSetText(previous: LoggedSet[] | undefined, index: number, exercise: Exercise, unit: WeightUnit): string {
+export function previousSetText(
+  previous: LoggedSet[] | undefined,
+  index: number,
+  exercise: Exercise,
+  unit: WeightUnit,
+): string {
   const set = previous?.[index];
   if (!set) return "—";
-  if (exercise.repsUnit === "seconds") return set.weightKg > 0 ? `${bareWeight(set.weightKg, exercise, unit)} × ${set.reps} s` : `${set.reps} s`;
+  if (exercise.repsUnit === "seconds")
+    return set.weightKg > 0 ? `${bareWeight(set.weightKg, exercise, unit)} × ${set.reps} s` : `${set.reps} s`;
   return `${bareWeight(set.weightKg, exercise, unit)} × ${set.reps}`;
 }
 
@@ -303,7 +358,12 @@ export function lastSessionText(previous: LoggedSet[], exercise: Exercise, unit:
   const weights = new Set(previous.map((p) => p.weightKg));
   if (weights.size === 1) {
     const w = previous[0]!.weightKg;
-    const weight = exercise.equipment === "bodyweight" ? (w === 0 ? "BW" : `BW + ${toDisplayWeight(w, unit)} ${unit}`) : `${toDisplayWeight(w, unit)} ${unit}`;
+    const weight =
+      exercise.equipment === "bodyweight"
+        ? w === 0
+          ? "BW"
+          : `BW + ${toDisplayWeight(w, unit)} ${unit}`
+        : `${toDisplayWeight(w, unit)} ${unit}`;
     return `${weight} × ${previous.map((p) => `${p.reps}${s}`).join(", ")}`;
   }
   return previous.map((p) => `${bareWeight(p.weightKg, exercise, unit)} × ${p.reps}${s}`).join(", ");
@@ -314,7 +374,8 @@ function plannedText(set: DraftSet, exercise: Exercise, unit: WeightUnit): strin
   const reps = set.reps.trim() || "?";
   const s = exercise.repsUnit === "seconds" ? " s" : "";
   const weight = set.weight.trim();
-  if (exercise.equipment === "bodyweight") return `${weight && weight !== "0" ? `BW + ${weight} ${unit}` : "BW"} × ${reps}${s}`;
+  if (exercise.equipment === "bodyweight")
+    return `${weight && weight !== "0" ? `BW + ${weight} ${unit}` : "BW"} × ${reps}${s}`;
   return `${weight || "0"} ${unit} × ${reps}${s}`;
 }
 
@@ -325,7 +386,10 @@ function plannedText(set: DraftSet, exercise: Exercise, unit: WeightUnit): strin
  */
 export function nextUp(workout: ActiveWorkout): string | null {
   const exercises = workout.exercises;
-  const start = Math.max(0, exercises.findIndex((e) => e.id === workout.currentExerciseKey));
+  const start = Math.max(
+    0,
+    exercises.findIndex((e) => e.id === workout.currentExerciseKey),
+  );
   for (let i = 0; i < exercises.length; i++) {
     const draft = exercises[(start + i) % exercises.length]!;
     const index = draft.sets.findIndex((s) => s.doneAt === null);

@@ -53,7 +53,8 @@ export function Button({
   const styles = useStyles();
   const t = useTheme();
   const inactive = disabled || loading;
-  const textTone: TextTone = variant === "primary" ? "onPrimary" : tone === "link" ? "ice" : tone === "danger" ? "danger" : "ink";
+  const textTone: TextTone =
+    variant === "primary" ? "onPrimary" : tone === "link" ? "ice" : tone === "danger" ? "danger" : "ink";
   const color = t.colors[textTone];
 
   return (

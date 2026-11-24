@@ -36,6 +36,13 @@ export function ScreenHeader({ title, subtitle, onBack, backLabel = "Back", righ
 }
 
 const useStyles = createStyles((t) => ({
-  row: { flexDirection: "row", alignItems: "center", gap: t.space[3], paddingHorizontal: t.space[4], paddingTop: t.space[4], paddingBottom: t.space[3] },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: t.space[3],
+    paddingHorizontal: t.space[4],
+    paddingTop: t.space[4],
+    paddingBottom: t.space[3],
+  },
   titles: { flex: 1, minWidth: 0 },
 }));

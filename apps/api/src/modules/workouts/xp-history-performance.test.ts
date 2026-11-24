@@ -47,12 +47,24 @@ async function seedTwoYears(user: TestUser, exerciseIds: string[]) {
   for (let n = 0; n < WEEKS * SESSIONS_PER_WEEK; n++) {
     const startedAt = new Date(start + Math.floor(n / SESSIONS_PER_WEEK) * 7 * DAY + (n % SESSIONS_PER_WEEK) * 2 * DAY);
     const workoutId = randomUUID();
-    workouts.push({ id: workoutId, userId: user.userId, clientId: randomUUID(), startedAt, finishedAt: new Date(startedAt.getTime() + 3600_000) });
+    workouts.push({
+      id: workoutId,
+      userId: user.userId,
+      clientId: randomUUID(),
+      startedAt,
+      finishedAt: new Date(startedAt.getTime() + 3600_000),
+    });
     for (let order = 0; order < EXERCISES_PER_SESSION; order++) {
       const id = randomUUID();
-      workoutExercises.push({ id, workoutId, exerciseId: exerciseIds[(n * EXERCISES_PER_SESSION + order) % EXERCISES]!, order });
+      workoutExercises.push({
+        id,
+        workoutId,
+        exerciseId: exerciseIds[(n * EXERCISES_PER_SESSION + order) % EXERCISES]!,
+        order,
+      });
       const weightKg = 20 + Math.floor(n / 20) * 0.5; // +0.5 kg every 5 weeks: plausible on any equipment
-      for (let setOrder = 0; setOrder < SETS_PER_EXERCISE; setOrder++) sets.push({ workoutExerciseId: id, setOrder, reps: 8, weightKg });
+      for (let setOrder = 0; setOrder < SETS_PER_EXERCISE; setOrder++)
+        sets.push({ workoutExerciseId: id, setOrder, reps: 8, weightKg });
     }
   }
 
@@ -85,7 +97,13 @@ async function bestOf3(run: () => Promise<void>): Promise<number> {
 describe("XP history cost after two years of training", () => {
   it("keeps GET /exercises/xp-history, GET /exercises and Finish within budget", { timeout: 60_000 }, async () => {
     const user = await signUpPlayer({ bodyweightKg: 80 });
-    const exerciseIds = (await prisma.exercise.findMany({ where: { repsUnit: "reps", isCustom: false }, orderBy: { slug: "asc" }, take: EXERCISES })).map((e) => e.id);
+    const exerciseIds = (
+      await prisma.exercise.findMany({
+        where: { repsUnit: "reps", isCustom: false },
+        orderBy: { slug: "asc" },
+        take: EXERCISES,
+      })
+    ).map((e) => e.id);
     expect(exerciseIds).toHaveLength(EXERCISES);
     const seeded = await seedTwoYears(user, exerciseIds);
     expect(seeded).toEqual({ workouts: 416, sets: 416 * EXERCISES_PER_SESSION * SETS_PER_EXERCISE });
@@ -104,7 +122,9 @@ describe("XP history cost after two years of training", () => {
         clientId: randomUUID(),
         startedAt: new Date(startedAt).toISOString(),
         finishedAt: new Date(startedAt + 3600_000).toISOString(),
-        exercises: exerciseIds.slice(0, EXERCISES_PER_SESSION).map((exerciseId) => ({ exerciseId, sets: Array.from({ length: 4 }, () => ({ reps: 8, weightKg: 42 })) })),
+        exercises: exerciseIds
+          .slice(0, EXERCISES_PER_SESSION)
+          .map((exerciseId) => ({ exerciseId, sets: Array.from({ length: 4 }, () => ({ reps: 8, weightKg: 42 })) })),
       };
       expect((await request(app).post("/v1/workouts").set("Cookie", user.cookie).send(body)).status).toBe(201);
     });

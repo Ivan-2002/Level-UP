@@ -37,10 +37,6 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
 
 function isClientHttpError(err: unknown): err is Error & { status: number } {
   return (
-    err instanceof Error &&
-    "status" in err &&
-    typeof err.status === "number" &&
-    err.status >= 400 &&
-    err.status < 500
+    err instanceof Error && "status" in err && typeof err.status === "number" && err.status >= 400 && err.status < 500
   );
 }

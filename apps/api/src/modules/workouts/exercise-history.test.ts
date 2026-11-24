@@ -25,7 +25,10 @@ async function log(as: TestUser, daysAgo: number, exercises: [string, [reps: num
       clientId: randomUUID(),
       startedAt: iso(startedAt),
       finishedAt: iso(startedAt + 3_600_000),
-      exercises: exercises.map(([slug, sets]) => ({ exerciseId: ids[slug], sets: sets.map(([reps, weightKg]) => ({ reps, weightKg })) })),
+      exercises: exercises.map(([slug, sets]) => ({
+        exerciseId: ids[slug],
+        sets: sets.map(([reps, weightKg]) => ({ reps, weightKg })),
+      })),
     });
   expect(res.status, res.text).toBe(201);
   return iso(startedAt);
@@ -55,14 +58,37 @@ describe("GET /exercises/:id/summary", () => {
   });
 
   it("returns the previous session, all-time records and the trend, newest first", async () => {
-    const day3 = await log(user, 3, [["barbell-bench-press", [[8, 60], [8, 60], [8, 60]]]]); // volume 1440
+    const day3 = await log(user, 3, [
+      [
+        "barbell-bench-press",
+        [
+          [8, 60],
+          [8, 60],
+          [8, 60],
+        ],
+      ],
+    ]); // volume 1440
     const day2 = await log(user, 2, [["barbell-bench-press", [[3, 80]]]]); // e1RM 80 x 1.1 = 88
-    const day1 = await log(user, 1, [["barbell-bench-press", [[15, 40], [8, 62.5]]]]);
+    const day1 = await log(user, 1, [
+      [
+        "barbell-bench-press",
+        [
+          [15, 40],
+          [8, 62.5],
+        ],
+      ],
+    ]);
 
     const { body } = await summary(ids["barbell-bench-press"]!);
     const parsed = exerciseSummarySchema.parse(body);
 
-    expect(parsed.previousSession).toMatchObject({ startedAt: day1, sets: [{ reps: 15, weightKg: 40 }, { reps: 8, weightKg: 62.5 }] });
+    expect(parsed.previousSession).toMatchObject({
+      startedAt: day1,
+      sets: [
+        { reps: 15, weightKg: 40 },
+        { reps: 8, weightKg: 62.5 },
+      ],
+    });
     expect(parsed.records).toEqual({
       bestE1rm: { value: 88, reps: 3, weightKg: 80, date: day2 },
       heaviestSet: { reps: 3, weightKg: 80, loadKg: 80, date: day2 },
@@ -110,8 +136,14 @@ describe("GET /exercises/:id/summary", () => {
 
 describe("GET /exercises/recent", () => {
   it("lists distinct exercises by last use, with that session's sets", async () => {
-    await log(user, 3, [["deadlift", [[5, 120]]], ["pull-up", [[8, 0]]]]);
-    await log(user, 1, [["barbell-bench-press", [[8, 60]]], ["deadlift", [[5, 125]]]]);
+    await log(user, 3, [
+      ["deadlift", [[5, 120]]],
+      ["pull-up", [[8, 0]]],
+    ]);
+    await log(user, 1, [
+      ["barbell-bench-press", [[8, 60]]],
+      ["deadlift", [[5, 125]]],
+    ]);
     await log(await signUpPlayer(), 0, [["plank", [[60, 0]]]]); // someone else's
 
     const res = await request(app).get("/v1/exercises/recent").set("Cookie", user.cookie);
@@ -130,17 +162,29 @@ describe("GET /exercises/recent", () => {
 });
 
 describe("GET /exercises/last-sessions", () => {
-  const last = (query: string, as = user) => request(app).get(`/v1/exercises/last-sessions${query}`).set("Cookie", as.cookie);
+  const last = (query: string, as = user) =>
+    request(app).get(`/v1/exercises/last-sessions${query}`).set("Cookie", as.cookie);
 
   it("returns each exercise's most recent session in one request, in the order asked", async () => {
     await log(user, 3, [["deadlift", [[5, 120]]]]);
-    const day1 = await log(user, 1, [["deadlift", [[5, 125], [3, 135]]], ["barbell-bench-press", [[8, 60]]]]);
+    const day1 = await log(user, 1, [
+      [
+        "deadlift",
+        [
+          [5, 125],
+          [3, 135],
+        ],
+      ],
+      ["barbell-bench-press", [[8, 60]]],
+    ]);
     await log(await signUpPlayer(), 0, [["deadlift", [[1, 300]]]]); // someone else's
 
     const res = await last(`?ids=${ids["barbell-bench-press"]},${ids["deadlift"]},${ids["plank"]}`);
 
     expect(res.status).toBe(200);
-    expect(lastSessionListSchema.parse(res.body).items.map((i) => [i.exerciseId, i.session.startedAt, i.session.topSet])).toEqual([
+    expect(
+      lastSessionListSchema.parse(res.body).items.map((i) => [i.exerciseId, i.session.startedAt, i.session.topSet]),
+    ).toEqual([
       [ids["barbell-bench-press"], day1, { reps: 8, weightKg: 60 }],
       [ids["deadlift"], day1, { reps: 3, weightKg: 135 }], // the heaviest set of that session
       // plank: never done, so left out
@@ -148,11 +192,17 @@ describe("GET /exercises/last-sessions", () => {
   });
 
   it("merges an exercise done twice in its last workout", async () => {
-    await log(user, 1, [["deadlift", [[5, 100]]], ["deadlift", [[5, 110]]]]);
+    await log(user, 1, [
+      ["deadlift", [[5, 100]]],
+      ["deadlift", [[5, 110]]],
+    ]);
 
     const res = await last(`?ids=${ids["deadlift"]}`);
 
-    expect(res.body.items[0].session.sets).toEqual([{ reps: 5, weightKg: 100 }, { reps: 5, weightKg: 110 }]);
+    expect(res.body.items[0].session.sets).toEqual([
+      { reps: 5, weightKg: 100 },
+      { reps: 5, weightKg: 110 },
+    ]);
   });
 
   it("validates the ids and needs a session", async () => {

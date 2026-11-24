@@ -31,7 +31,16 @@ const row = (p: SimPlayer) => {
   ].join(" | ");
 };
 
-const header = ["Player", "Session XP, week 1", "Biggest day (% of cap)", ...SIM_LEVELS.map((l) => `Level ${l}`), "Longest streak", "From bonuses", "Flagged / jump-capped / beyond 10", "Capped days"];
+const header = [
+  "Player",
+  "Session XP, week 1",
+  "Biggest day (% of cap)",
+  ...SIM_LEVELS.map((l) => `Level ${l}`),
+  "Longest streak",
+  "From bonuses",
+  "Flagged / jump-capped / beyond 10",
+  "Capped days",
+];
 
 function table(players: SimPlayer[]) {
   console.log(`| ${header.join(" | ")} |`);

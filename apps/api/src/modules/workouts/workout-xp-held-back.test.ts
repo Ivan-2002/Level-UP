@@ -31,7 +31,10 @@ const holdBack = (xpHeldBack: number, xpHeldBackReason: "daily_cap" | "too_old" 
 
 describe("workout XP held back", () => {
   it("starts at nothing held back, and no reason", async () => {
-    expect(await prisma.workout.findUniqueOrThrow({ where: { id: workoutId } })).toMatchObject({ xpHeldBack: 0, xpHeldBackReason: null });
+    expect(await prisma.workout.findUniqueOrThrow({ where: { id: workoutId } })).toMatchObject({
+      xpHeldBack: 0,
+      xpHeldBackReason: null,
+    });
   });
 
   it("accepts an amount WITH its reason", async () => {

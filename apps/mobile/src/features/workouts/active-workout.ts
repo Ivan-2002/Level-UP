@@ -112,7 +112,12 @@ export function lastSetsFrom(list: LastSessionList | undefined): LastSets {
 
 // --- Building the workout ------------------------------------------------------
 
-export function startWorkout(args: { userId: string; clientId: string; now: Date; weightUnit: WeightUnit }): ActiveWorkout {
+export function startWorkout(args: {
+  userId: string;
+  clientId: string;
+  now: Date;
+  weightUnit: WeightUnit;
+}): ActiveWorkout {
   return {
     userId: args.userId,
     clientId: args.clientId,
@@ -156,14 +161,24 @@ export function startFromRoutine(args: {
     ...startWorkout(args),
     name: args.routine.name,
     routineId: args.routine.id,
-    plan: args.routine.exercises.map((e) => ({ exerciseId: e.exercise.id, targetSets: e.targetSets, targetReps: e.targetReps, restSec: e.restSec })),
+    plan: args.routine.exercises.map((e) => ({
+      exerciseId: e.exercise.id,
+      targetSets: e.targetSets,
+      targetReps: e.targetReps,
+      restSec: e.restSec,
+    })),
     exercises,
     currentExerciseKey: exercises[0]?.id ?? null,
   };
 }
 
 /** Adds exercises at the end, pre-filled from last time when known, and opens the first one added. */
-export function addExercises(workout: ActiveWorkout, exercises: Exercise[], newId: () => string, lastSets?: LastSets): ActiveWorkout {
+export function addExercises(
+  workout: ActiveWorkout,
+  exercises: Exercise[],
+  newId: () => string,
+  lastSets?: LastSets,
+): ActiveWorkout {
   if (exercises.length === 0) return workout;
   const added = exercises.map((exercise) =>
     newDraftExercise(exercise, workout.weightUnit, newId, { lastSets: lastSets?.get(exercise.id) }),
@@ -171,7 +186,12 @@ export function addExercises(workout: ActiveWorkout, exercises: Exercise[], newI
   return { ...workout, exercises: [...workout.exercises, ...added], currentExerciseKey: added[0]!.id };
 }
 
-export function addExercise(workout: ActiveWorkout, exercise: Exercise, newId: () => string, lastSets?: LastSets): ActiveWorkout {
+export function addExercise(
+  workout: ActiveWorkout,
+  exercise: Exercise,
+  newId: () => string,
+  lastSets?: LastSets,
+): ActiveWorkout {
   return addExercises(workout, [exercise], newId, lastSets);
 }
 
@@ -180,7 +200,9 @@ export function removeExercise(workout: ActiveWorkout, exerciseKey: string): Act
   const index = workout.exercises.findIndex((e) => e.id === exerciseKey);
   const exercises = workout.exercises.filter((e) => e.id !== exerciseKey);
   const current =
-    workout.currentExerciseKey === exerciseKey ? (exercises[index] ?? exercises[index - 1] ?? null)?.id ?? null : workout.currentExerciseKey;
+    workout.currentExerciseKey === exerciseKey
+      ? ((exercises[index] ?? exercises[index - 1] ?? null)?.id ?? null)
+      : workout.currentExerciseKey;
   return { ...workout, exercises, currentExerciseKey: current };
 }
 
@@ -190,7 +212,9 @@ export function linkRoutine(workout: ActiveWorkout, routineId: string): ActiveWo
 }
 
 export function selectExercise(workout: ActiveWorkout, exerciseKey: string): ActiveWorkout {
-  return workout.exercises.some((e) => e.id === exerciseKey) ? { ...workout, currentExerciseKey: exerciseKey } : workout;
+  return workout.exercises.some((e) => e.id === exerciseKey)
+    ? { ...workout, currentExerciseKey: exerciseKey }
+    : workout;
 }
 
 /** The exercise on screen: the stored one, or the first (e.g. for a workout saved by an older version). */
@@ -200,20 +224,29 @@ export function currentExercise(workout: ActiveWorkout): DraftExercise | null {
 
 /** 15 s more or less rest (15 s - 10 min). Remembered as the player's own choice. */
 export function stepRest(workout: ActiveWorkout, exerciseKey: string, direction: -1 | 1): ActiveWorkout {
-  return mapExercise(workout, exerciseKey, (e) => ({ ...e, restSec: clampRestSec(e.restSec + direction * REST_STEP_SEC), restChanged: true }));
+  return mapExercise(workout, exerciseKey, (e) => ({
+    ...e,
+    restSec: clampRestSec(e.restSec + direction * REST_STEP_SEC),
+    restChanged: true,
+  }));
 }
 
 /** Adds a set pre-filled from the previous one: most sets repeat the last weight and reps. */
 export function addSet(workout: ActiveWorkout, exerciseKey: string, newId: () => string): ActiveWorkout {
   return mapExercise(workout, exerciseKey, (exercise) => {
     const previous = exercise.sets.at(-1);
-    const set: DraftSet = previous ? { id: newId(), weight: previous.weight, reps: previous.reps, doneAt: null, scored: null } : emptySet(newId());
+    const set: DraftSet = previous
+      ? { id: newId(), weight: previous.weight, reps: previous.reps, doneAt: null, scored: null }
+      : emptySet(newId());
     return { ...exercise, sets: [...exercise.sets, set] };
   });
 }
 
 export function removeSet(workout: ActiveWorkout, exerciseKey: string, setKey: string): ActiveWorkout {
-  return mapExercise(workout, exerciseKey, (exercise) => ({ ...exercise, sets: exercise.sets.filter((s) => s.id !== setKey) }));
+  return mapExercise(workout, exerciseKey, (exercise) => ({
+    ...exercise,
+    sets: exercise.sets.filter((s) => s.id !== setKey),
+  }));
 }
 
 export function updateSet(
@@ -230,7 +263,12 @@ export function updateSet(
  * ends editing (endEditing), so another set's pending edit is scored first.
  * Validating here means Finish never meets an invalid completed set.
  */
-export function toggleSetDone(current: ActiveWorkout, exerciseKey: string, setKey: string, now: Date): Result<ActiveWorkout> {
+export function toggleSetDone(
+  current: ActiveWorkout,
+  exerciseKey: string,
+  setKey: string,
+  now: Date,
+): Result<ActiveWorkout> {
   const workout = endEditing(current);
   const exercise = workout.exercises.find((e) => e.id === exerciseKey);
   const set = exercise?.sets.find((s) => s.id === setKey);
@@ -243,7 +281,11 @@ export function toggleSetDone(current: ActiveWorkout, exerciseKey: string, setKe
   if (!parsed.ok) return parsed;
   return {
     ok: true,
-    value: mapSet(workout, exerciseKey, setKey, (s) => ({ ...s, doneAt: now.toISOString(), scored: { weight: s.weight, reps: s.reps } })),
+    value: mapSet(workout, exerciseKey, setKey, (s) => ({
+      ...s,
+      doneAt: now.toISOString(),
+      scored: { weight: s.weight, reps: s.reps },
+    })),
   };
 }
 
@@ -292,7 +334,11 @@ function parseDecimal(text: string): number {
 }
 
 /** A set's typed values as numbers, with the weight converted to kg (what the API stores). */
-export function parseSet(set: DraftSet, exercise: Exercise, unit: WeightUnit): Result<{ reps: number; weightKg: number }> {
+export function parseSet(
+  set: DraftSet,
+  exercise: Exercise,
+  unit: WeightUnit,
+): Result<{ reps: number; weightKg: number }> {
   const label = exercise.repsUnit === "seconds" ? "Seconds" : "Reps";
   const reps = parseDecimal(set.reps);
   const max = repsMaxFor(exercise.repsUnit); // 100 reps, or 600 s for a timed exercise
@@ -340,7 +386,12 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
       doneTimes.push(Date.parse(set.doneAt));
     }
     if (sets.length > 0) {
-      exercises.push({ exerciseId: draft.exercise.id, restSec: draft.restSec, ...(draft.restChanged ? { saveRestAsPreference: true } : {}), sets });
+      exercises.push({
+        exerciseId: draft.exercise.id,
+        restSec: draft.restSec,
+        ...(draft.restChanged ? { saveRestAsPreference: true } : {}),
+        sets,
+      });
     }
   }
 
@@ -364,7 +415,8 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
 
   // Same schema the API uses: catch anything left (e.g. 101 sets) now, not after syncing.
   const checked = finishWorkoutSchema.safeParse(payload);
-  if (!checked.success) return { ok: false, message: checked.error.issues[0]?.message ?? "This workout can't be saved." };
+  if (!checked.success)
+    return { ok: false, message: checked.error.issues[0]?.message ?? "This workout can't be saved." };
   return { ok: true, value: checked.data };
 }
 
@@ -377,9 +429,16 @@ export function buildFinishPayload(workout: ActiveWorkout, now: Date): Result<Fi
  */
 export function migrateV1(saved: unknown): ActiveWorkout | null {
   if (!saved || typeof saved !== "object") return null;
-  const old = saved as Omit<ActiveWorkout, "weightUnit" | "exercises" | "routineId" | "currentExerciseKey" | "scoring"> & {
+  const old = saved as Omit<
+    ActiveWorkout,
+    "weightUnit" | "exercises" | "routineId" | "currentExerciseKey" | "scoring"
+  > & {
     routineId?: string | null;
-    exercises: { id: string; exercise: Exercise; sets: { id: string; weightKg: string; reps: string; doneAt: string | null }[] }[];
+    exercises: {
+      id: string;
+      exercise: Exercise;
+      sets: { id: string; weightKg: string; reps: string; doneAt: string | null }[];
+    }[];
   };
   return {
     ...old,
@@ -392,7 +451,10 @@ export function migrateV1(saved: unknown): ActiveWorkout | null {
       exercise: e.exercise,
       sets: e.sets.map((s) => ({ id: s.id, weight: s.weightKg, reps: s.reps, doneAt: s.doneAt, scored: null })),
       targetReps: null,
-      restSec: resolveRestSec({ preferenceSec: e.exercise.restPreferenceSec, suggestedSec: e.exercise.suggestedRestSec }),
+      restSec: resolveRestSec({
+        preferenceSec: e.exercise.restPreferenceSec,
+        suggestedSec: e.exercise.suggestedRestSec,
+      }),
       restChanged: false,
     })),
   };
@@ -449,7 +511,11 @@ function newDraftExercise(
     id: newId(),
     exercise,
     targetReps: plan.targetReps ?? null,
-    restSec: resolveRestSec({ preferenceSec: exercise.restPreferenceSec, routineSec: plan.routineRestSec, suggestedSec: exercise.suggestedRestSec }),
+    restSec: resolveRestSec({
+      preferenceSec: exercise.restPreferenceSec,
+      routineSec: plan.routineRestSec,
+      suggestedSec: exercise.suggestedRestSec,
+    }),
     restChanged: false,
     sets: Array.from({ length: count }, () => ({
       id: newId(),
@@ -466,11 +532,20 @@ function emptySet(id: string): DraftSet {
   return { id, weight: "", reps: "", doneAt: null, scored: null };
 }
 
-function mapExercise(workout: ActiveWorkout, exerciseKey: string, change: (exercise: DraftExercise) => DraftExercise): ActiveWorkout {
+function mapExercise(
+  workout: ActiveWorkout,
+  exerciseKey: string,
+  change: (exercise: DraftExercise) => DraftExercise,
+): ActiveWorkout {
   return { ...workout, exercises: workout.exercises.map((e) => (e.id === exerciseKey ? change(e) : e)) };
 }
 
-function mapSet(workout: ActiveWorkout, exerciseKey: string, setKey: string, change: (set: DraftSet) => DraftSet): ActiveWorkout {
+function mapSet(
+  workout: ActiveWorkout,
+  exerciseKey: string,
+  setKey: string,
+  change: (set: DraftSet) => DraftSet,
+): ActiveWorkout {
   return mapExercise(workout, exerciseKey, (exercise) => ({
     ...exercise,
     sets: exercise.sets.map((s) => (s.id === setKey ? change(s) : s)),

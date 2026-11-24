@@ -27,7 +27,11 @@ describe("grantDevXp", () => {
       ["dev_grant", 10, null, "2026-11-24"],
     ]);
     const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
-    expect(res.body).toMatchObject({ totalXp: xpForLevel(4) + 10, level: levelStatus(xpForLevel(4) + 10), celebratedLevel: 1 });
+    expect(res.body).toMatchObject({
+      totalXp: xpForLevel(4) + 10,
+      level: levelStatus(xpForLevel(4) + 10),
+      celebratedLevel: 1,
+    });
   });
 
   it("doesn't count toward the daily cap", async () => {

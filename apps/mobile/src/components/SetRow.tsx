@@ -30,7 +30,11 @@ export function SetTableHeader({
   const flexible = previousLabel === undefined;
   return (
     // Hidden from screen readers: each input already says "Set 2 weight in kg".
-    <View style={[styles.grid, styles.header]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+    <View
+      style={[styles.grid, styles.header]}
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+    >
       <Text variant="caption" tone="inkMuted" style={styles.setColumn}>
         Set
       </Text>
@@ -39,10 +43,18 @@ export function SetTableHeader({
           {previousLabel}
         </Text>
       ) : null}
-      <Text variant="caption" tone="inkMuted" style={[flexible ? styles.flexColumn : styles.weightColumn, styles.centered]}>
+      <Text
+        variant="caption"
+        tone="inkMuted"
+        style={[flexible ? styles.flexColumn : styles.weightColumn, styles.centered]}
+      >
         {weightUnit}
       </Text>
-      <Text variant="caption" tone="inkMuted" style={[flexible ? styles.flexColumn : styles.repsColumn, styles.centered]}>
+      <Text
+        variant="caption"
+        tone="inkMuted"
+        style={[flexible ? styles.flexColumn : styles.repsColumn, styles.centered]}
+      >
         {repsUnit === "seconds" ? "Sec" : "Reps"}
       </Text>
       <View style={styles.doneColumn} />
@@ -85,7 +97,19 @@ type SetRowProps = {
 };
 
 export function SetRow(props: SetRowProps) {
-  const { number, previous, weight, reps, weightUnit, repsUnit, bodyweight = false, done, xpNote, prText, error } = props;
+  const {
+    number,
+    previous,
+    weight,
+    reps,
+    weightUnit,
+    repsUnit,
+    bodyweight = false,
+    done,
+    xpNote,
+    prText,
+    error,
+  } = props;
   const styles = useStyles();
   const t = useTheme();
   const flexible = previous === undefined;
@@ -118,7 +142,14 @@ export function SetRow(props: SetRowProps) {
         )}
 
         {previous !== undefined ? (
-          <Text variant="label" tone="inkMuted" tabular numberOfLines={1} style={styles.previousColumn} accessibilityLabel={`Last time ${previous}`}>
+          <Text
+            variant="label"
+            tone="inkMuted"
+            tabular
+            numberOfLines={1}
+            style={styles.previousColumn}
+            accessibilityLabel={`Last time ${previous}`}
+          >
             {previous}
           </Text>
         ) : null}
@@ -241,7 +272,14 @@ const useStyles = createStyles((t) => ({
     paddingVertical: 0, // Android adds vertical padding by default, clipping the digits
   },
   inputFocused: { borderColor: t.colors.ice }, // ice = focus ring
-  tick: { width: TAP_TARGET, height: TAP_TARGET, borderRadius: t.radius.pill, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  tick: {
+    width: TAP_TARGET,
+    height: TAP_TARGET,
+    borderRadius: t.radius.pill,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   tickOn: { backgroundColor: t.colors.success, borderColor: t.colors.success },
   // The design draws the empty circle in `border` (1.4:1), too faint to find in a bright
   // gym; inkMuted passes the 3:1 rule for controls (see theme/contrast.test.ts).

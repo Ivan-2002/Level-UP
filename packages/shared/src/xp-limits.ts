@@ -86,7 +86,10 @@ export function canBeRecord(set: { isFlagged?: boolean; flagReason: string | nul
  * Why this set is implausible, or null if it isn't. A set over both limits reports the
  * weight (one reason per set; the weight is the likelier typo).
  */
-export function plausibilityFlag(set: { reps: number; weightKg: number }, limits: PlausibilityLimits): PlausibilityFlagReason | null {
+export function plausibilityFlag(
+  set: { reps: number; weightKg: number },
+  limits: PlausibilityLimits,
+): PlausibilityFlagReason | null {
   if (set.weightKg > limits.maxWeightKg) return "weight_above_range";
   if (set.reps > limits.maxReps) return "reps_above_range";
   return null;
@@ -155,7 +158,11 @@ export type JumpJudgement = {
 export function judgeSession(baseline: number | null, values: number[]): JumpJudgement {
   const sessionBest = values.length > 0 ? Math.max(...values) : null;
   if (baseline === null || baseline <= 0) {
-    return { factors: values.map(() => 1), aboveHistory: values.map(() => false), baselineAfter: sessionBest ?? baseline };
+    return {
+      factors: values.map(() => 1),
+      aboveHistory: values.map(() => false),
+      baselineAfter: sessionBest ?? baseline,
+    };
   }
   const line = baseline * (1 + JUMP_CAP.maxJump);
   return {

@@ -11,7 +11,8 @@
     "test": "pnpm -r --no-bail --no-sort --if-present run test",
     "lint": "pnpm -r --no-bail --no-sort --if-present run lint",
     "check": "pnpm typecheck && pnpm test && pnpm lint",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "format": "prettier . --write"
   },
   "engines": {
     "node": ">=22"
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "eslint": "^9.39.5",
+    "prettier": "3.9.10",
     "simple-git-hooks": "^2.14.0",
     "typescript-eslint": "^8.73.0"
   },

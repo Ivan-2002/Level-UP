@@ -54,5 +54,9 @@ export function formatSet(
 
 /** The set to show as "last time": the heaviest, then the most reps. */
 export function topSet<T extends { reps: number; weightKg: number }>(sets: T[]): T | null {
-  return sets.reduce<T | null>((best, s) => (!best || s.weightKg > best.weightKg || (s.weightKg === best.weightKg && s.reps > best.reps) ? s : best), null);
+  return sets.reduce<T | null>(
+    (best, s) =>
+      !best || s.weightKg > best.weightKg || (s.weightKg === best.weightKg && s.reps > best.reps) ? s : best,
+    null,
+  );
 }

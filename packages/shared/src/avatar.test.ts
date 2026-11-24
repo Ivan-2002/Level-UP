@@ -3,7 +3,13 @@ import { stageForLevel, type AvatarStage } from "./avatar.js";
 
 const stage = (key: string, levelRequired: number): AvatarStage => ({ key, name: key, levelRequired });
 // Out of order on purpose: the rule mustn't depend on how the rows come back.
-const STAGES = [stage("athlete", 10), stage("rookie", 1), stage("legend", 20), stage("regular", 4), stage("champion", 15)];
+const STAGES = [
+  stage("athlete", 10),
+  stage("rookie", 1),
+  stage("legend", 20),
+  stage("regular", 4),
+  stage("champion", 15),
+];
 
 describe("stageForLevel", () => {
   it("gives each level the highest stage it has reached", () => {

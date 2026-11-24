@@ -29,7 +29,12 @@ describe("rest timer rules", () => {
   });
 
   it("rounds the countdown up, so it never shows 0:00 while still resting", () => {
-    expect([remainingText(90_000), remainingText(59_001), remainingText(400), remainingText(0)]).toEqual(["1:30", "1:00", "0:01", "0:00"]);
+    expect([remainingText(90_000), remainingText(59_001), remainingText(400), remainingText(0)]).toEqual([
+      "1:30",
+      "1:00",
+      "0:01",
+      "0:00",
+    ]);
   });
 });
 
@@ -99,7 +104,11 @@ describe("rest timer store and its notification", () => {
     const { store, storage } = setup();
     store.getState().start(90, "next");
 
-    const restarted = createRestTimerStore({ storage, now: () => s(30), notifier: { schedule: async () => null, cancel: async () => {} } });
+    const restarted = createRestTimerStore({
+      storage,
+      now: () => s(30),
+      notifier: { schedule: async () => null, cancel: async () => {} },
+    });
 
     expect(viewRest(restarted.getState().timer, s(30))).toMatchObject({ phase: "resting", remainingMs: 60_000 });
   });

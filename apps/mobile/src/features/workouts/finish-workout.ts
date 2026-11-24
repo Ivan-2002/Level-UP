@@ -41,6 +41,8 @@ export function finishActiveWorkout(deps: {
     queuedAt: deps.now.toISOString(),
   });
   deps.activeWorkout.getState().clear();
-  const preview = workout.scoring ? previewFromPayload(built.value, exercisesOf(workout), scoringContext(workout.scoring)) : null;
+  const preview = workout.scoring
+    ? previewFromPayload(built.value, exercisesOf(workout), scoringContext(workout.scoring))
+    : null;
   return { ok: true, value: { clientId: workout.clientId, workout, payload: built.value, preview } };
 }

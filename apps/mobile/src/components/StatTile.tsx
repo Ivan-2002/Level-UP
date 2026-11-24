@@ -21,7 +21,16 @@ type Props = {
 };
 
 /** A small labelled number: "Elapsed 42:18", "Sets left 12 / 18", "XP earned +181". */
-export function StatTile({ label, value, suffix, icon, tone = "neutral", accessibilityLabel, note, noteGood = false }: Props) {
+export function StatTile({
+  label,
+  value,
+  suffix,
+  icon,
+  tone = "neutral",
+  accessibilityLabel,
+  note,
+  noteGood = false,
+}: Props) {
   const styles = useStyles();
   const t = useTheme();
   const progress = tone === "progress";
@@ -30,7 +39,10 @@ export function StatTile({ label, value, suffix, icon, tone = "neutral", accessi
     <View
       style={styles.tile}
       accessible
-      accessibilityLabel={(accessibilityLabel ?? (typeof value === "string" ? `${label}, ${value}${suffix ?? ""}` : label)) + (note ? `, ${note}` : "")}
+      accessibilityLabel={
+        (accessibilityLabel ?? (typeof value === "string" ? `${label}, ${value}${suffix ?? ""}` : label)) +
+        (note ? `, ${note}` : "")
+      }
     >
       <View style={styles.labelRow}>
         {icon ? <Icon name={icon} size={14} color={progress ? t.colors.purple : t.colors.inkMuted} /> : null}

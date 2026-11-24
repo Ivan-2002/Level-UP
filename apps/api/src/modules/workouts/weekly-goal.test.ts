@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { finishWorkoutResponseSchema, WEEKLY_GOAL, weeklyGoalStatusSchema, type WeeklyGoalStatus } from "@levelup/shared";
+import {
+  finishWorkoutResponseSchema,
+  WEEKLY_GOAL,
+  weeklyGoalStatusSchema,
+  type WeeklyGoalStatus,
+} from "@levelup/shared";
 import { setNow } from "../../lib/clock.js";
 import { prisma } from "../../lib/prisma.js";
 import { app, seedExercises, signUpPlayer, signUpUser, type TestUser } from "../../test/helpers.js";
@@ -38,7 +43,12 @@ async function train(user: TestUser, local: string, options: { sets?: number; kg
       clientId: options.clientId ?? randomUUID(),
       startedAt: startedAt.toISOString(),
       finishedAt: finishedAt.toISOString(),
-      exercises: [{ exerciseId: ids["barbell-bench-press"], sets: Array.from({ length: options.sets ?? 3 }, () => ({ reps: 8, weightKg: options.kg ?? 60 })) }],
+      exercises: [
+        {
+          exerciseId: ids["barbell-bench-press"],
+          sets: Array.from({ length: options.sets ?? 3 }, () => ({ reps: 8, weightKg: options.kg ?? 60 })),
+        },
+      ],
     });
   expect(res.status, res.text).toBeLessThan(300);
   return finishWorkoutResponseSchema.parse(res.body);
@@ -53,26 +63,47 @@ async function openApp(user: TestUser, local: string): Promise<WeeklyGoalStatus>
 }
 
 const weeks = (user: TestUser) =>
-  prisma.weeklyGoal
-    .findMany({ where: { userId: user.userId }, orderBy: { weekStart: "asc" } })
-    .then((rows) => rows.map((w) => ({ weekStart: w.weekStart.toISOString().slice(0, 10), kind: w.kind, target: w.target, daysTrained: w.daysTrained, met: w.met, streak: w.streakAfter, closed: w.closedAt !== null })));
+  prisma.weeklyGoal.findMany({ where: { userId: user.userId }, orderBy: { weekStart: "asc" } }).then((rows) =>
+    rows.map((w) => ({
+      weekStart: w.weekStart.toISOString().slice(0, 10),
+      kind: w.kind,
+      target: w.target,
+      daysTrained: w.daysTrained,
+      met: w.met,
+      streak: w.streakAfter,
+      closed: w.closedAt !== null,
+    })),
+  );
 
 const bonusRows = (user: TestUser) =>
-  prisma.xpEvent.findMany({ where: { userId: user.userId, source: { in: ["weekly_goal", "streak_milestone"] } }, select: { source: true, amount: true } });
+  prisma.xpEvent.findMany({
+    where: { userId: user.userId, source: { in: ["weekly_goal", "streak_milestone"] } },
+    select: { source: true, amount: true },
+  });
 
-const totalXp = async (user: TestUser) => (await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp;
+const totalXp = async (user: TestUser) =>
+  (await prisma.profile.findUniqueOrThrow({ where: { userId: user.userId } })).totalXp;
 
 describe("GET /weekly-goal", () => {
   it("needs a session and a character", async () => {
     expect((await request(app).get("/v1/weekly-goal")).status).toBe(401);
-    const res = await request(app).get("/v1/weekly-goal").set("Cookie", (await signUpUser()).cookie);
+    const res = await request(app)
+      .get("/v1/weekly-goal")
+      .set("Cookie", (await signUpUser()).cookie);
     expect([res.status, res.body.error]).toEqual([409, "ProfileRequired"]);
   });
 
   it("starts everyone at 2 days a week", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00"); // a Monday: a full first week
 
-    expect(await openApp(user, "2026-10-05T09:00:00")).toEqual({ weekStart: "2026-10-05", kind: "goal", target: 2, daysTrained: 0, met: false, streak: 0 });
+    expect(await openApp(user, "2026-10-05T09:00:00")).toEqual({
+      weekStart: "2026-10-05",
+      kind: "goal",
+      target: 2,
+      daysTrained: 0,
+      met: false,
+      streak: 0,
+    });
   });
 
   it("handles two requests at once (opening the app while a Finish is saving)", async () => {
@@ -108,7 +139,14 @@ describe("a mid-week sign-up", () => {
     expect(sunday.summary.weeklyGoal).toMatchObject({ kind: "warm_up", daysTrained: 2, met: false, streak: 0 });
 
     // Week 1 starts the following Monday, at 2 days.
-    expect(await openApp(user, "2026-10-12T06:00:00")).toEqual({ weekStart: "2026-10-12", kind: "goal", target: 2, daysTrained: 0, met: false, streak: 0 });
+    expect(await openApp(user, "2026-10-12T06:00:00")).toEqual({
+      weekStart: "2026-10-12",
+      kind: "goal",
+      target: 2,
+      daysTrained: 0,
+      met: false,
+      streak: 0,
+    });
     expect(await bonusRows(user)).toEqual([]);
   });
 });
@@ -237,7 +275,16 @@ describe("streak milestones", () => {
     const previous = new Date(`${monday}T00:00:00Z`);
     previous.setUTCDate(previous.getUTCDate() - 7);
     await prisma.weeklyGoal.create({
-      data: { userId: user.userId, weekStart: previous, kind: "goal", target: 2, daysTrained: 3, met: true, streakAfter: streak, closedAt: new Date() },
+      data: {
+        userId: user.userId,
+        weekStart: previous,
+        kind: "goal",
+        target: 2,
+        daysTrained: 3,
+        met: true,
+        streakAfter: streak,
+        closedAt: new Date(),
+      },
     });
   }
 
@@ -261,7 +308,9 @@ describe("streak milestones", () => {
     expect(again.summary.xp).toMatchObject({ weeklyGoal: BONUS, streakMilestone: TWELVE_WEEKS });
 
     expect((await bonusRows(user)).filter((b) => b.source === "streak_milestone")).toHaveLength(2);
-    expect(await prisma.userAchievement.findMany({ where: { userId: user.userId }, select: { key: true } })).toEqual([{ key: "streak_12" }]);
+    expect(await prisma.userAchievement.findMany({ where: { userId: user.userId }, select: { key: true } })).toEqual([
+      { key: "streak_12" },
+    ]);
     expect(await totalXp(user)).toBe(6 * twelve.summary.xp.sets + 2 * (BONUS + TWELVE_WEEKS)); // the cached total includes every bonus
   });
 });
@@ -284,7 +333,10 @@ describe("edge cases", () => {
   it("follows the phone to a new time zone (PATCH /profile)", async () => {
     const user = await playerSignedUpAt("2026-10-05T08:00:00");
 
-    const res = await request(app).patch("/v1/profile").set("Cookie", user.cookie).send({ timeZone: "America/New_York" });
+    const res = await request(app)
+      .patch("/v1/profile")
+      .set("Cookie", user.cookie)
+      .send({ timeZone: "America/New_York" });
 
     expect([res.status, res.body.timeZone]).toEqual([200, "America/New_York"]);
   });

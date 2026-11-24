@@ -44,7 +44,9 @@ export function RoutineDetailScreen({ routineId }: { routineId: string }) {
               <Text tone="inkMuted" style={styles.centeredText}>
                 {gone ? "This routine was deleted." : "Couldn't load this routine. Check your connection."}
               </Text>
-              {gone ? null : <Button label="Try again" variant="secondary" size="md" onPress={() => routine.refetch()} />}
+              {gone ? null : (
+                <Button label="Try again" variant="secondary" size="md" onPress={() => routine.refetch()} />
+              )}
             </>
           ) : (
             <ActivityIndicator />
@@ -65,13 +67,18 @@ export function RoutineDetailScreen({ routineId }: { routineId: string }) {
       ]);
       return;
     }
-    activeWorkoutStore.getState().startFromRoutine(userId, profile?.weightUnit ?? "kg", current, lastSetsFrom(lastSessions.data));
+    activeWorkoutStore
+      .getState()
+      .startFromRoutine(userId, profile?.weightUnit ?? "kg", current, lastSetsFrom(lastSessions.data));
     router.push("/workout");
   }
 
   function showOptions() {
     Alert.alert(current.name, undefined, [
-      { text: "Edit routine", onPress: () => router.push({ pathname: "/routines/[id]/edit", params: { id: current.id } }) },
+      {
+        text: "Edit routine",
+        onPress: () => router.push({ pathname: "/routines/[id]/edit", params: { id: current.id } }),
+      },
       { text: "Delete routine", style: "destructive", onPress: confirmDelete },
       { text: "Cancel", style: "cancel" },
     ]);
@@ -98,28 +105,55 @@ export function RoutineDetailScreen({ routineId }: { routineId: string }) {
         title={current.name}
         subtitle={`${plural(current.exercises.length, "exercise")} · ${formatLastDone(current.lastDoneAt, new Date())}`}
         onBack={goBack}
-        right={<IconButton icon="more" variant="plain" onPress={showOptions} accessibilityLabel={`${current.name} options`} />}
+        right={
+          <IconButton
+            icon="more"
+            variant="plain"
+            onPress={showOptions}
+            accessibilityLabel={`${current.name} options`}
+          />
+        }
       />
       <ScrollView contentContainerStyle={styles.content}>
         {current.exercises.map((planned, index) => (
-          <PlannedExercise key={planned.id} index={index} planned={planned} lastSessions={lastSessions.data} unit={profile?.weightUnit ?? "kg"} />
+          <PlannedExercise
+            key={planned.id}
+            index={index}
+            planned={planned}
+            lastSessions={lastSessions.data}
+            unit={profile?.weightUnit ?? "kg"}
+          />
         ))}
       </ScrollView>
       <SafeAreaView edges={["bottom"]} style={styles.footer}>
-        <Button label="Edit" icon="edit" variant="secondary" onPress={() => router.push({ pathname: "/routines/[id]/edit", params: { id: current.id } })} style={styles.edit} />
+        <Button
+          label="Edit"
+          icon="edit"
+          variant="secondary"
+          onPress={() => router.push({ pathname: "/routines/[id]/edit", params: { id: current.id } })}
+          style={styles.edit}
+        />
         <Button label={hasWorkout ? "Workout in progress" : "Start"} icon="play" onPress={start} style={styles.start} />
       </SafeAreaView>
     </SafeAreaView>
   );
 }
 
-function PlannedExercise(props: { index: number; planned: Routine["exercises"][number]; lastSessions?: LastSessionList; unit: WeightUnit }) {
+function PlannedExercise(props: {
+  index: number;
+  planned: Routine["exercises"][number];
+  lastSessions?: LastSessionList;
+  unit: WeightUnit;
+}) {
   const { planned, unit } = props;
   const styles = useStyles();
   const { exercise } = planned;
   const last = props.lastSessions?.items.find((i) => i.exerciseId === exercise.id)?.session.topSet;
   const rest = planned.restSec ?? inheritedRestSec(exercise);
-  const target = exercise.repsUnit === "seconds" ? `${planned.targetSets} × ${planned.targetReps} s` : `${planned.targetSets} × ${planned.targetReps}`;
+  const target =
+    exercise.repsUnit === "seconds"
+      ? `${planned.targetSets} × ${planned.targetReps} s`
+      : `${planned.targetSets} × ${planned.targetReps}`;
 
   return (
     <Card style={styles.exercise}>

@@ -1,4 +1,11 @@
-import { BODYWEIGHT_MAX_KG, BODYWEIGHT_MIN_KG, formatWeight, fromInputWeight, toDisplayWeight, type WeightUnit } from "@levelup/shared";
+import {
+  BODYWEIGHT_MAX_KG,
+  BODYWEIGHT_MIN_KG,
+  formatWeight,
+  fromInputWeight,
+  toDisplayWeight,
+  type WeightUnit,
+} from "@levelup/shared";
 
 // The rules for typing a bodyweight in the player's own unit (Create character, Log bodyweight). Plain
 // functions (no React), so they're unit-tested.

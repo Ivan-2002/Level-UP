@@ -193,7 +193,12 @@ export function evaluateWeek(week: {
   const met = week.daysTrained >= week.target;
   if (!met) return { met, streakAfter: week.closed ? 0 : week.streakBefore, bonusXp: 0, milestones: [] };
   const streakAfter = nextStreak(week.streakBefore, true);
-  return { met, streakAfter, bonusXp: WEEKLY_GOAL.weeklyBonusXp, milestones: milestonesReached(week.streakBefore, streakAfter) };
+  return {
+    met,
+    streakAfter,
+    bonusXp: WEEKLY_GOAL.weeklyBonusXp,
+    milestones: milestonesReached(week.streakBefore, streakAfter),
+  };
 }
 
 // --- The contract and the text the app shows ---------------------------------------------
@@ -229,5 +234,7 @@ export function streakText(status: Pick<WeeklyGoalStatus, "kind" | "met" | "stre
   const next = WEEKLY_GOAL.streakMilestones.find((m) => m.weeks > status.streak);
   if (!next) return `Week ${week}`;
   const toGo = next.weeks - week;
-  return toGo === 0 ? `Week ${week} · hit your goal for ${next.weeks} weeks` : `Week ${week} · ${toGo} to go for ${next.weeks} weeks`;
+  return toGo === 0
+    ? `Week ${week} · hit your goal for ${next.weeks} weeks`
+    : `Week ${week} · ${toGo} to go for ${next.weeks} weeks`;
 }

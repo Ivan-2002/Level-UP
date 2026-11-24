@@ -112,7 +112,10 @@ describe("saving", () => {
   });
 
   it("explains what's missing", () => {
-    expect(toRoutineInput(addExercises(emptyDraft(), [benchPress], keys()))).toEqual({ ok: false, message: "Give the routine a name." });
+    expect(toRoutineInput(addExercises(emptyDraft(), [benchPress], keys()))).toEqual({
+      ok: false,
+      message: "Give the routine a name.",
+    });
     expect(toRoutineInput(rename(emptyDraft(), "Legs"))).toEqual({ ok: false, message: "Add at least one exercise." });
   });
 });
@@ -124,7 +127,16 @@ describe("unsaved changes", () => {
     lastDoneAt: null,
     createdAt: "2026-11-01T10:00:00.000Z",
     updatedAt: "2026-11-01T10:00:00.000Z",
-    exercises: [{ id: "00000000-0000-4000-8000-000000000098", order: 1, exercise: benchPress, targetSets: 3, targetReps: 8, restSec: null }],
+    exercises: [
+      {
+        id: "00000000-0000-4000-8000-000000000098",
+        order: 1,
+        exercise: benchPress,
+        targetSets: 3,
+        targetReps: 8,
+        restSec: null,
+      },
+    ],
   };
 
   it("ignores local keys and spaces around the name", () => {

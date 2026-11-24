@@ -31,11 +31,7 @@ export function TextField({ label, error, hint, ...inputProps }: Props) {
           setFocused(false);
           inputProps.onBlur?.(e);
         }}
-        style={[
-          styles.input,
-          focused && styles.focused,
-          error ? styles.invalid : null,
-        ]}
+        style={[styles.input, focused && styles.focused, error ? styles.invalid : null]}
       />
       {error ? (
         <Text variant="caption" tone="danger" accessibilityRole="alert">

@@ -38,7 +38,11 @@ type Store = ReturnType<typeof createCelebrationStore>;
  *   whenever the profile reloads (reconnecting, a synced workout), until it succeeds.
  * One request at a time per player; the server keeps the highest level, so a repeat is harmless.
  */
-export function createCelebrationSync(deps: { store: Store; send: (level: number) => Promise<Profile>; onSaved: (userId: string, profile: Profile) => void }) {
+export function createCelebrationSync(deps: {
+  store: Store;
+  send: (level: number) => Promise<Profile>;
+  onSaved: (userId: string, profile: Profile) => void;
+}) {
   const inFlight = new Set<string>();
 
   async function flush(userId: string): Promise<void> {

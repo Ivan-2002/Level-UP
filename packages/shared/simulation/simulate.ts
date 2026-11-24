@@ -1,6 +1,12 @@
 import { bodyweightOnDate, xpBodyweightOnDate, type BodyweightReceipt } from "../src/progression.js";
 import { recentBest, scoreSessionSets, type ExerciseXpHistory, type SessionSet } from "../src/set-scoring.js";
-import { evaluateWeek, firstWeekKind, nextWeeklyTarget, qualifiesAsTrainingDay, type WeekKind } from "../src/weekly-goal.js";
+import {
+  evaluateWeek,
+  firstWeekKind,
+  nextWeeklyTarget,
+  qualifiesAsTrainingDay,
+  type WeekKind,
+} from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
 import { applyDailyCap, type DailyCapResult } from "../src/xp-limits.js";
 import { SIM_EXERCISES } from "./exercises.js";
@@ -48,7 +54,8 @@ const SIGN_UP = new Date("2026-01-05T07:00:00Z");
 const TIME_ZONE = "UTC";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const atDay = (day: number, hourUtc: number) => new Date(SIGN_UP.getTime() + day * DAY_MS + (hourUtc - 7) * 60 * 60 * 1000);
+const atDay = (day: number, hourUtc: number) =>
+  new Date(SIGN_UP.getTime() + day * DAY_MS + (hourUtc - 7) * 60 * 60 * 1000);
 
 /** Everything a simulation carries from one session and week to the next. */
 type SimState = {
@@ -76,7 +83,21 @@ export function simulate(
     levelXp: options.xpForLevel ?? xpForLevel,
     bodyweights: [],
     reached: Object.fromEntries(SIM_LEVELS.map((l) => [l, null])) as Record<SimLevel, LevelReached | null>,
-    totals: { setXp: 0, bonusXp: 0, biggestDayXp: 0, longestStreak: 0, sessions: 0, flaggedSets: 0, jumpCappedSets: 0, beyondLimitSets: 0, cappedDays: 0, heldBackXp: 0, notTrainingDays: 0, firstWeekSessionXp: [], days: [] },
+    totals: {
+      setXp: 0,
+      bonusXp: 0,
+      biggestDayXp: 0,
+      longestStreak: 0,
+      sessions: 0,
+      flaggedSets: 0,
+      jumpCappedSets: 0,
+      beyondLimitSets: 0,
+      cappedDays: 0,
+      heldBackXp: 0,
+      notTrainingDays: 0,
+      firstWeekSessionXp: [],
+      days: [],
+    },
     baselines: new Map(),
     histories: new Map(),
     week: { kind: firstWeekKind(SIGN_UP, TIME_ZONE), target: 2, streak: 0 },
@@ -100,7 +121,8 @@ function playWeek(state: SimState, week: number): void {
   const typed = typedBodyweight(player, week);
   // Typed on Monday morning; the server receives it right away.
   const typedAt = atDay(week * 7, 7);
-  if (typed !== null) state.bodyweights.push({ kg: typed, measuredOn: isoDate(typedAt), receivedAt: typedAt.toISOString() });
+  if (typed !== null)
+    state.bodyweights.push({ kg: typed, measuredOn: isoDate(typedAt), receivedAt: typedAt.toISOString() });
 
   let daysTrained = 0;
   let bonusPaid = false;
@@ -129,8 +151,16 @@ function playSession(state: SimState, week: number, day: number, strength: numbe
   const startedAt = atDay(day, 18).toISOString();
   const session = player.sessions[totals.sessions % player.sessions.length]!;
 
-  const bodyweight = { xp: xpBodyweightOnDate(state.bodyweights, startedAt, { signedUpAt: SIGN_UP.toISOString() }), typed: bodyweightOnDate(state.bodyweights, startedAt) };
-  const { setXps, flagged, jumpCapped, beyondLimit, qualifies } = scoreSession(session, strength, bodyweight, { baselines: state.baselines, histories: state.histories, today: startedAt, warmUps: state.player.logsWarmUps === true });
+  const bodyweight = {
+    xp: xpBodyweightOnDate(state.bodyweights, startedAt, { signedUpAt: SIGN_UP.toISOString() }),
+    typed: bodyweightOnDate(state.bodyweights, startedAt),
+  };
+  const { setXps, flagged, jumpCapped, beyondLimit, qualifies } = scoreSession(session, strength, bodyweight, {
+    baselines: state.baselines,
+    histories: state.histories,
+    today: startedAt,
+    warmUps: state.player.logsWarmUps === true,
+  });
   const dayXp = setXps.reduce((a, b) => a + b, 0);
   totals.days.push({ day, xp: dayXp });
   // One session a day, so nothing was awarded earlier that day.
@@ -159,7 +189,8 @@ function payGoalIfMet(state: SimState, daysTrained: number, bonusPaid: boolean):
 function checkLevels(state: SimState, day: number): void {
   const { totals, reached } = state;
   for (const level of SIM_LEVELS) {
-    if (reached[level] === null && totals.setXp + totals.bonusXp >= state.levelXp(level)) reached[level] = { session: totals.sessions - 1, day };
+    if (reached[level] === null && totals.setXp + totals.bonusXp >= state.levelXp(level))
+      reached[level] = { session: totals.sessions - 1, day };
   }
 }
 
@@ -174,7 +205,10 @@ function closeWeek(state: SimState, daysTrained: number): void {
 /** Set XP of one session on its own (no history), at `strength` x the starting loads. */
 export function sessionSetXp(session: Session, strength: number, bodyweightKg: number): number {
   const fresh = { baselines: new Map(), histories: new Map(), today: SIGN_UP.toISOString() };
-  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, fresh).setXps.reduce((a, b) => a + b, 0);
+  return scoreSession(session, strength, { xp: bodyweightKg, typed: bodyweightKg }, fresh).setXps.reduce(
+    (a, b) => a + b,
+    0,
+  );
 }
 
 /**
@@ -186,7 +220,12 @@ function scoreSession(
   session: Session,
   strength: number,
   bodyweight: { xp: number; typed: number },
-  state: { baselines: Map<string, number | null>; histories: Map<string, { date: string; value: number }[]>; today: string; warmUps?: boolean },
+  state: {
+    baselines: Map<string, number | null>;
+    histories: Map<string, { date: string; value: number }[]>;
+    today: string;
+    warmUps?: boolean;
+  },
 ): { setXps: number[]; flagged: number; jumpCapped: number; beyondLimit: number; qualifies: boolean } {
   const sets: SessionSet[] = session.flatMap((planned) => {
     const set = setAtStrength(planned, strength);
@@ -194,14 +233,24 @@ function scoreSession(
     return [...(state.warmUps ? warmUpSets(planned.slug, set.weightKg) : []), ...working];
   });
   const history = new Map<string, ExerciseXpHistory>(
-    session.map((p) => [p.slug, { recentBest: recentBest(state.histories.get(p.slug) ?? [], state.today), jumpBaseline: state.baselines.get(p.slug) ?? null }]),
+    session.map((p) => [
+      p.slug,
+      {
+        recentBest: recentBest(state.histories.get(p.slug) ?? [], state.today),
+        jumpBaseline: state.baselines.get(p.slug) ?? null,
+      },
+    ]),
   );
   const exercises = new Map(session.map((p) => [p.slug, SIM_EXERCISES[p.slug]]));
   const score = scoreSessionSets({ sets, exercises, history, bodyweight });
 
   for (const [slug, after] of score.exercises) {
     state.baselines.set(slug, after.jumpBaselineAfter);
-    if (after.sessionBest !== null) state.histories.set(slug, [...(state.histories.get(slug) ?? []), { date: state.today, value: after.sessionBest }]);
+    if (after.sessionBest !== null)
+      state.histories.set(slug, [
+        ...(state.histories.get(slug) ?? []),
+        { date: state.today, value: after.sessionBest },
+      ]);
   }
   return {
     setXps: score.sets.map((s) => s.xp),
@@ -215,7 +264,11 @@ function scoreSession(
 /** The warm-up ramp before a barbell lift's working sets (none for other equipment). */
 function warmUpSets(slug: PlannedExercise["slug"], workingKg: number): SessionSet[] {
   if (SIM_EXERCISES[slug].equipment !== "barbell" || workingKg <= 20) return [];
-  return WARM_UP_RAMP.map((step) => ({ exerciseId: slug, reps: step.reps, weightKg: Math.max(20, Math.round(workingKg * step.share * 2) / 2) }));
+  return WARM_UP_RAMP.map((step) => ({
+    exerciseId: slug,
+    reps: step.reps,
+    weightKg: Math.max(20, Math.round(workingKg * step.share * 2) / 2),
+  }));
 }
 
 function setAtStrength(planned: PlannedExercise, strength: number): { reps: number; weightKg: number } {

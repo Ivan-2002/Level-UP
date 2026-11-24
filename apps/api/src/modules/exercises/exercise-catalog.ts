@@ -52,6 +52,8 @@ export type CatalogExercise = {
 };
 
 //  Comment = the "typical hard set" the factor was derived from.
+//  One exercise per line, like a table, so the values are easy to compare: Prettier leaves it as is.
+// prettier-ignore
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   // --- Legs ---------------------------------------------------------------
   { slug: "barbell-back-squat", name: "Back Squat", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "barbell", loadFactor: 1.0, bodyweightRatio: 0, mechanic: "compound", suggestedRestSec: 180, maxPlausibleWeightKg: 450 }, // 100 x 8 (benchmark)

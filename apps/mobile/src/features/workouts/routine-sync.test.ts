@@ -1,6 +1,15 @@
 import type { Routine } from "@levelup/shared";
 import { benchPress, lateralRaise, plank, pullUp, sequentialIds, testUuid } from "@/test/fixtures";
-import { addExercise, addSet, removeExercise, removeSet, startFromRoutine, startWorkout, updateSet, type ActiveWorkout } from "./active-workout";
+import {
+  addExercise,
+  addSet,
+  removeExercise,
+  removeSet,
+  startFromRoutine,
+  startWorkout,
+  updateSet,
+  type ActiveWorkout,
+} from "./active-workout";
 import { routineChanges, routineFromWorkout } from "./routine-sync";
 
 const START = new Date("2026-11-10T06:00:00.000Z");
@@ -18,13 +27,29 @@ const routine: Routine = {
 const names = new Map([benchPress, pullUp, plank, lateralRaise].map((e) => [e.id, e.name]));
 
 function fromRoutine(): ActiveWorkout {
-  return startFromRoutine({ userId: "u", clientId: "c", now: START, weightUnit: "kg", routine, newId: sequentialIds() });
+  return startFromRoutine({
+    userId: "u",
+    clientId: "c",
+    now: START,
+    weightUnit: "kg",
+    routine,
+    newId: sequentialIds(),
+  });
 }
 
 describe("routineChanges", () => {
   it("is empty for an unchanged routine workout, and for an empty workout", () => {
     expect(routineChanges(fromRoutine(), names)).toEqual([]);
-    expect(routineChanges(addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), benchPress, sequentialIds()), names)).toEqual([]);
+    expect(
+      routineChanges(
+        addExercise(
+          startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }),
+          benchPress,
+          sequentialIds(),
+        ),
+        names,
+      ),
+    ).toEqual([]);
   });
 
   it("lists added and removed exercises and changed set counts", () => {
@@ -39,7 +64,9 @@ describe("routineChanges", () => {
 
   it("notices fewer sets", () => {
     const w = fromRoutine();
-    expect(routineChanges(removeSet(w, w.exercises[1]!.id, w.exercises[1]!.sets[0]!.id), names)).toEqual(["Pull-up: 1 set (was 2)"]);
+    expect(routineChanges(removeSet(w, w.exercises[1]!.id, w.exercises[1]!.sets[0]!.id), names)).toEqual([
+      "Pull-up: 1 set (was 2)",
+    ]);
   });
 
   it("notices a new order of the same exercises", () => {
@@ -74,7 +101,12 @@ describe("routineFromWorkout", () => {
 
     expect(routineFromWorkout(w, "Shoulders")).toMatchObject({
       ok: true,
-      value: { exercises: [{ exerciseId: lateralRaise.id, targetSets: 2, targetReps: 12, restSec: null }, { exerciseId: plank.id, targetReps: 30 }] },
+      value: {
+        exercises: [
+          { exerciseId: lateralRaise.id, targetSets: 2, targetReps: 12, restSec: null },
+          { exerciseId: plank.id, targetReps: 30 },
+        ],
+      },
     });
   });
 

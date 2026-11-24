@@ -58,14 +58,31 @@ export function AddExerciseSheet({ target }: { target: AddExerciseTarget }) {
     [library.data, recent.data, search, bodyPart],
   );
   const sections = [
-    ...(groups.recent.length ? [{ title: "Recently used", data: groups.recent.map((r): Row => ({ exercise: r.exercise, lastSets: r.lastSets })) }] : []),
-    ...(groups.all.length ? [{ title: bodyPart ? capitalise(bodyPart) : "All exercises", data: groups.all.map((exercise): Row => ({ exercise })) }] : []),
+    ...(groups.recent.length
+      ? [
+          {
+            title: "Recently used",
+            data: groups.recent.map((r): Row => ({ exercise: r.exercise, lastSets: r.lastSets })),
+          },
+        ]
+      : []),
+    ...(groups.all.length
+      ? [
+          {
+            title: bodyPart ? capitalise(bodyPart) : "All exercises",
+            data: groups.all.map((exercise): Row => ({ exercise })),
+          },
+        ]
+      : []),
   ];
 
   function add() {
     const byId = new Map((library.data ?? []).map((e) => [e.id, e]));
     const lastSets: LastSets = new Map((recent.data?.items ?? []).map((r) => [r.exercise.id, r.lastSets]));
-    addTo[target](selected.flatMap((id) => byId.get(id) ?? []), lastSets);
+    addTo[target](
+      selected.flatMap((id) => byId.get(id) ?? []),
+      lastSets,
+    );
     router.back();
   }
 
@@ -107,9 +124,21 @@ export function AddExerciseSheet({ target }: { target: AddExerciseTarget }) {
       </View>
 
       <View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityRole="radiogroup" accessibilityLabel="Muscle group">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Muscle group"
+        >
           {[null, ...BODY_PARTS].map((part) => (
-            <Chip key={part ?? "all"} label={part ? capitalise(part) : "All"} role="radio" selected={part === bodyPart} onPress={() => setBodyPart(part)} />
+            <Chip
+              key={part ?? "all"}
+              label={part ? capitalise(part) : "All"}
+              role="radio"
+              selected={part === bodyPart}
+              onPress={() => setBodyPart(part)}
+            />
           ))}
         </ScrollView>
       </View>
@@ -145,7 +174,9 @@ export function AddExerciseSheet({ target }: { target: AddExerciseTarget }) {
           )}
           ListEmptyComponent={
             <Text variant="label" tone="inkMuted" style={[styles.centeredText, styles.empty]}>
-              {search.trim() ? `No exercise called “${search.trim()}” yet. Create it as a custom exercise.` : "No exercises match."}
+              {search.trim()
+                ? `No exercise called “${search.trim()}” yet. Create it as a custom exercise.`
+                : "No exercises match."}
             </Text>
           }
           ListFooterComponent={createCustom}
@@ -159,12 +190,24 @@ export function AddExerciseSheet({ target }: { target: AddExerciseTarget }) {
   );
 }
 
-function ExerciseRow({ row, selected, unit, onToggle }: { row: Row; selected: boolean; unit: "kg" | "lb"; onToggle: () => void }) {
+function ExerciseRow({
+  row,
+  selected,
+  unit,
+  onToggle,
+}: {
+  row: Row;
+  selected: boolean;
+  unit: "kg" | "lb";
+  onToggle: () => void;
+}) {
   const styles = useStyles();
   const t = useTheme();
   const { exercise } = row;
   const last = row.lastSets ? topSet(row.lastSets) : null;
-  const meta = [exercise.muscleGroup, exercise.equipment, last ? `Last: ${formatSet(last, exercise, unit)}` : null].filter(Boolean).join(" · ");
+  const meta = [exercise.muscleGroup, exercise.equipment, last ? `Last: ${formatSet(last, exercise, unit)}` : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Pressable
@@ -231,11 +274,32 @@ const useStyles = createStyles((t) => ({
   },
   rowSelected: { backgroundColor: t.colors.surfaceRaised, borderColor: t.colors.primary },
   rowPressed: { backgroundColor: t.colors.surfaceRaised },
-  tile: { width: 40, height: 40, borderRadius: 10, backgroundColor: t.colors.surfaceRaised, alignItems: "center", justifyContent: "center" },
+  tile: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: t.colors.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   rowText: { flex: 1, minWidth: 0 },
   // The check circle's edge uses inkMuted, like the set tick: `border` is too faint (1.4:1).
-  check: { width: 24, height: 24, borderRadius: t.radius.pill, borderWidth: 2, borderColor: t.colors.inkMuted, alignItems: "center", justifyContent: "center" },
+  check: {
+    width: 24,
+    height: 24,
+    borderRadius: t.radius.pill,
+    borderWidth: 2,
+    borderColor: t.colors.inkMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   checkOn: { backgroundColor: t.colors.primary, borderColor: t.colors.primary },
   create: { marginTop: t.space[2] },
-  footer: { paddingTop: t.space[3], paddingHorizontal: t.space[4], paddingBottom: t.space[3], borderTopWidth: 1, borderTopColor: t.colors.border },
+  footer: {
+    paddingTop: t.space[3],
+    paddingHorizontal: t.space[4],
+    paddingBottom: t.space[3],
+    borderTopWidth: 1,
+    borderTopColor: t.colors.border,
+  },
 }));

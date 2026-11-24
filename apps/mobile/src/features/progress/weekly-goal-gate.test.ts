@@ -6,7 +6,15 @@ describe("canLoadWeeklyGoal", () => {
   });
 
   it("doesn't wait for workouts that need attention, or for another player's", () => {
-    expect(canLoadWeeklyGoal([{ userId: "me", status: "needs_attention" }, { userId: "other", status: "pending" }], "me")).toBe(true);
+    expect(
+      canLoadWeeklyGoal(
+        [
+          { userId: "me", status: "needs_attention" },
+          { userId: "other", status: "pending" },
+        ],
+        "me",
+      ),
+    ).toBe(true);
     expect(canLoadWeeklyGoal([], "me")).toBe(true);
   });
 });

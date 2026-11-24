@@ -14,7 +14,15 @@ import { plural } from "./format";
 import { syncOutboxNow } from "./outbox-sync";
 
 /** "Start workout", or "Resume workout" when this user has one in progress. `look`: the start button's style (the big primary button on Home). */
-export function StartOrResumeWorkout({ userId, label = "Start workout", look }: { userId: string; label?: string; look?: ButtonLook }) {
+export function StartOrResumeWorkout({
+  userId,
+  label = "Start workout",
+  look,
+}: {
+  userId: string;
+  label?: string;
+  look?: ButtonLook;
+}) {
   const workout = useActiveWorkout((s) => s.workout);
   const { data: profile } = useProfile(userId); // already cached by the (app) layout
   const styles = useStyles();
@@ -42,7 +50,8 @@ export function StartOrResumeWorkout({ userId, label = "Start workout", look }: 
       <View style={styles.flex}>
         <Text variant="bodyStrong">Resume workout</Text>
         <Text variant="caption" tone="inkMuted">
-          {workout.name.trim() || "Workout"} · <ElapsedTimer startedAt={workout.startedAt} /> · {plural(done, "set")} done
+          {workout.name.trim() || "Workout"} · <ElapsedTimer startedAt={workout.startedAt} /> · {plural(done, "set")}{" "}
+          done
         </Text>
       </View>
       <Icon name="forward" color={t.colors.inkMuted} size={18} />
@@ -82,9 +91,7 @@ export function SyncStatus({ userId }: { userId: string }) {
           <View style={styles.row}>
             <Icon name="alert" color={t.colors.danger} size={18} />
             <View style={styles.flex}>
-              <Text variant="bodyStrong">
-                {item.payload.name ?? "Workout"} needs attention
-              </Text>
+              <Text variant="bodyStrong">{item.payload.name ?? "Workout"} needs attention</Text>
               <Text variant="caption" tone="inkMuted">
                 {new Date(item.payload.startedAt).toLocaleString()} · {item.lastError ?? "The server rejected it."}
               </Text>
@@ -111,7 +118,11 @@ export function SyncStatus({ userId }: { userId: string }) {
                 onPress={() =>
                   Alert.alert("Delete this workout?", "It hasn't reached the server and will be lost for good.", [
                     { text: "Keep", style: "cancel" },
-                    { text: "Delete", style: "destructive", onPress: () => outboxStore.getState().remove(item.clientId) },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: () => outboxStore.getState().remove(item.clientId),
+                    },
                   ])
                 }
               />

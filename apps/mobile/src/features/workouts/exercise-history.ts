@@ -29,7 +29,11 @@ type Point = { at: number; value: number };
  * grouped by week (each week's best), so a year still reads as a chart, not 100 slivers.
  * The latest bar is highlighted: purple when it's the best in the range.
  */
-export function trend(sessionsNewestFirst: ExerciseSession[], range: Range, now: Date): { bars: ChartBar[]; changeKg: number | null; weeks: number } {
+export function trend(
+  sessionsNewestFirst: ExerciseSession[],
+  range: Range,
+  now: Date,
+): { bars: ChartBar[]; changeKg: number | null; weeks: number } {
   const from = now.getTime() - RANGE_DAYS[range] * DAY;
   let points: Point[] = sessionsNewestFirst
     .filter((s) => s.bestE1rm !== null && Date.parse(s.startedAt) >= from)
@@ -74,13 +78,22 @@ export function changeText(changeKg: number, weeks: number, unit: WeightUnit): s
  * first through the SAME shared record rules the server uses, with each session's own
  * bodyweight. The first session only sets the baseline.
  */
-export function prSets(sessionsNewestFirst: ExerciseSession[], exercise: Pick<Exercise, "repsUnit" | "bodyweightRatio">): Map<string, boolean[]> {
+export function prSets(
+  sessionsNewestFirst: ExerciseSession[],
+  exercise: Pick<Exercise, "repsUnit" | "bodyweightRatio">,
+): Map<string, boolean[]> {
   const flags = new Map<string, boolean[]>();
   let book: RecordBook = emptyRecordBook();
   for (const session of [...sessionsNewestFirst].reverse()) {
-    const sets = session.sets.map((s) => ({ reps: s.reps, loadKg: liftedKg(s.weightKg, session.bodyweightKg, exercise.bodyweightRatio) }));
+    const sets = session.sets.map((s) => ({
+      reps: s.reps,
+      loadKg: liftedKg(s.weightKg, session.bodyweightKg, exercise.bodyweightRatio),
+    }));
     const records = new Set(findNewRecords(book, sets, exercise.repsUnit).map((r) => r.index));
-    flags.set(session.workoutId, sets.map((_, i) => records.has(i)));
+    flags.set(
+      session.workoutId,
+      sets.map((_, i) => records.has(i)),
+    );
     book = addToRecordBook(book, sets, exercise.repsUnit);
   }
   return flags;
@@ -90,6 +103,7 @@ export function prSets(sessionsNewestFirst: ExerciseSession[], exercise: Pick<Ex
 export function sessionLine(session: ExerciseSession, exercise: Pick<Exercise, "repsUnit">, unit: WeightUnit): string {
   if (exercise.repsUnit === "seconds") return `Best hold ${Math.max(0, ...session.sets.map((s) => s.reps))} s`;
   const parts = [`${volumeText(session.volumeKg, unit)} ${unit}`];
-  if (session.bestE1rm !== null) parts.push(`est. 1RM ${formatWeight(session.bestE1rm, unit, { decimals: 0 }).replace(` ${unit}`, "")}`);
+  if (session.bestE1rm !== null)
+    parts.push(`est. 1RM ${formatWeight(session.bestE1rm, unit, { decimals: 0 }).replace(` ${unit}`, "")}`);
   return parts.join(" · ");
 }

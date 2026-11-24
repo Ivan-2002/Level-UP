@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { exerciseSummaryQuerySchema, finishWorkoutSchema, lastSessionsQuerySchema, listWorkoutsQuerySchema } from "@levelup/shared";
+import {
+  exerciseSummaryQuerySchema,
+  finishWorkoutSchema,
+  lastSessionsQuerySchema,
+  listWorkoutsQuerySchema,
+} from "@levelup/shared";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { validateBody, validateQuery } from "../../middleware/validate.js";
 import * as controller from "./workouts.controller.js";
@@ -25,7 +30,12 @@ workoutsRouter.get("/exercises/recent", requireAuth, controller.recentExercises)
 // ?ids=a,b,c -> each exercise's most recent session (routine detail, active workout pre-fill).
 // Each exercise's 12-week best and jump baseline, for the app's offline XP preview.
 workoutsRouter.get("/exercises/xp-history", requireAuth, controller.exerciseXpHistory);
-workoutsRouter.get("/exercises/last-sessions", requireAuth, validateQuery(lastSessionsQuerySchema), controller.lastSessions);
+workoutsRouter.get(
+  "/exercises/last-sessions",
+  requireAuth,
+  validateQuery(lastSessionsQuerySchema),
+  controller.lastSessions,
+);
 workoutsRouter.get(
   "/exercises/:id/summary",
   requireAuth,

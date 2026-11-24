@@ -37,7 +37,8 @@ describe("lb round trip: what you type is what you see", () => {
   });
 
   it("would NOT be exact with only 2 decimals: why the columns are DECIMAL(7,3)", () => {
-    const twoDecimalRoundTrip = (lb: number) => Math.round((Math.round(lb * KG_PER_LB * 100) / 100 / KG_PER_LB) * 100) / 100;
+    const twoDecimalRoundTrip = (lb: number) =>
+      Math.round((Math.round(lb * KG_PER_LB * 100) / 100 / KG_PER_LB) * 100) / 100;
     const wrong: number[] = [];
     for (let quarters = 0; quarters <= 400; quarters++) {
       const lb = quarters / 4;
@@ -97,19 +98,40 @@ describe("coach increments follow the player's unit", () => {
     });
 
     expect(toDisplayWeight(advice.kind === "increase_weight" ? advice.weightKg : 0, "lb")).toBe(140);
-    expect(coachHintText(advice, "reps", "lb")).toBe("You hit 8, 8, 8 at 135 lb last time, so today's target is 140 lb.");
+    expect(coachHintText(advice, "reps", "lb")).toBe(
+      "You hit 8, 8, 8 at 135 lb last time, so today's target is 140 lb.",
+    );
   });
 
   it("adds 5 lb per dumbbell for lb players, 1 kg for kg players", () => {
-    const lb = coachAdvice({ equipment: "dumbbell", repsUnit: "reps", weightUnit: "lb", lastSets: eightsAt(fromInputWeight(50, "lb")), targetReps: 8 });
-    const kg = coachAdvice({ equipment: "dumbbell", repsUnit: "reps", weightUnit: "kg", lastSets: eightsAt(22), targetReps: 8 });
+    const lb = coachAdvice({
+      equipment: "dumbbell",
+      repsUnit: "reps",
+      weightUnit: "lb",
+      lastSets: eightsAt(fromInputWeight(50, "lb")),
+      targetReps: 8,
+    });
+    const kg = coachAdvice({
+      equipment: "dumbbell",
+      repsUnit: "reps",
+      weightUnit: "kg",
+      lastSets: eightsAt(22),
+      targetReps: 8,
+    });
 
     expect(coachHintText(lb, "reps", "lb")).toContain("today's target is 55 lb");
     expect(coachHintText(kg, "reps", "kg")).toContain("today's target is 23 kg");
   });
 
   it("keeps kg players on the Phase 2 defaults", () => {
-    expect(coachIncrementsKg("kg")).toEqual({ barbell: 2.5, machine: 2.5, cable: 2.5, dumbbell: 1, kettlebell: 4, bodyweight: null });
+    expect(coachIncrementsKg("kg")).toEqual({
+      barbell: 2.5,
+      machine: 2.5,
+      cable: 2.5,
+      dumbbell: 1,
+      kettlebell: 4,
+      bodyweight: null,
+    });
     expect(coachIncrementsKg("lb").barbell).toBe(2.268); // 5 lb in kg, 3 decimals
   });
 });

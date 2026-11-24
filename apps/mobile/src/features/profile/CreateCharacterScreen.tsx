@@ -26,7 +26,9 @@ export function CreateCharacterScreen() {
   const [username, setUsername] = useState("");
   const [bodyweight, setBodyweight] = useState(""); // raw text, in weightUnit; parsed on submit
   // A first guess from the phone's region (US -> lb); the player can change it below.
-  const [weightUnit, setWeightUnit] = useState<WeightUnit>(() => weightUnitForMeasurementSystem(getLocales()[0]?.measurementSystem));
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(() =>
+    weightUnitForMeasurementSystem(getLocales()[0]?.measurementSystem),
+  );
   const styles = useStyles();
   const timeZone = useDeviceTimeZone(); // weeks run Monday to Sunday in this zone
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -48,7 +50,8 @@ export function CreateCharacterScreen() {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0] as keyof FieldErrors;
         // First problem per field is enough. Bodyweight ranges are restated in the player's unit.
-        errors[field] ??= field === "bodyweightKg" ? bodyweightMessage(issue.code, issue.message, weightUnit) : issue.message;
+        errors[field] ??=
+          field === "bodyweightKg" ? bodyweightMessage(issue.code, issue.message, weightUnit) : issue.message;
       }
       setFieldErrors(errors);
       return;
@@ -80,9 +83,7 @@ export function CreateCharacterScreen() {
             <Text variant="display" accessibilityRole="header">
               Create your character
             </Text>
-            <Text tone="inkMuted">
-              Everyone starts as a Rookie. Your avatar grows with every workout you log.
-            </Text>
+            <Text tone="inkMuted">Everyone starts as a Rookie. Your avatar grows with every workout you log.</Text>
           </View>
 
           <View style={styles.avatarCard}>
@@ -123,7 +124,13 @@ export function CreateCharacterScreen() {
                 Weigh in
               </Text>
               {WEIGHT_UNITS.map((unit) => (
-                <Chip key={unit} label={unit} role="radio" selected={unit === weightUnit} onPress={() => setWeightUnit(unit)} />
+                <Chip
+                  key={unit}
+                  label={unit}
+                  role="radio"
+                  selected={unit === weightUnit}
+                  onPress={() => setWeightUnit(unit)}
+                />
               ))}
             </View>
             <TextField

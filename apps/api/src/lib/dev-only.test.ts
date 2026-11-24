@@ -11,12 +11,21 @@ describe("devToolRefusal", () => {
   });
 
   it("refuses a hosted database even when NODE_ENV says development", () => {
-    for (const host of ["levelup.abc123.eu-west-1.rds.amazonaws.com", "10.0.0.5", "db.example.com", "localhost.example.com"]) {
-      expect(devToolRefusal({ NODE_ENV: "development", DATABASE_URL: url(host) })).toMatch(`"${host}", not a local database`);
+    for (const host of [
+      "levelup.abc123.eu-west-1.rds.amazonaws.com",
+      "10.0.0.5",
+      "db.example.com",
+      "localhost.example.com",
+    ]) {
+      expect(devToolRefusal({ NODE_ENV: "development", DATABASE_URL: url(host) })).toMatch(
+        `"${host}", not a local database`,
+      );
     }
   });
 
   it("refuses production, whatever the host", () => {
-    expect(devToolRefusal({ NODE_ENV: "production", DATABASE_URL: url("localhost") })).toBe("Refused: NODE_ENV is production.");
+    expect(devToolRefusal({ NODE_ENV: "production", DATABASE_URL: url("localhost") })).toBe(
+      "Refused: NODE_ENV is production.",
+    );
   });
 });

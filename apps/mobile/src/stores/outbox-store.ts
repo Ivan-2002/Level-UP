@@ -37,7 +37,12 @@ export function createOutboxStore(storage: StateStorage) {
           })),
         retry: (clientId) =>
           set((state) => ({
-            items: change(state.items, clientId, (i) => ({ ...i, status: "pending", attempts: 0, nextAttemptAt: null })),
+            items: change(state.items, clientId, (i) => ({
+              ...i,
+              status: "pending",
+              attempts: 0,
+              nextAttemptAt: null,
+            })),
           })),
         remove: (clientId) => set((state) => ({ items: state.items.filter((i) => i.clientId !== clientId) })),
       }),

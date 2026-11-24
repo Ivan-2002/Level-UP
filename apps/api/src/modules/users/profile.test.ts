@@ -179,7 +179,12 @@ describe("weight unit (kg / lb)", () => {
     const res = await request(app).patch("/v1/profile").set("Cookie", user.cookie).send({ weightUnit: "lb" });
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ username: "IvanLifts", timeZone: "Africa/Johannesburg", bodyweightKg: 75.5, weightUnit: "lb" });
+    expect(res.body).toMatchObject({
+      username: "IvanLifts",
+      timeZone: "Africa/Johannesburg",
+      bodyweightKg: 75.5,
+      weightUnit: "lb",
+    });
     expect((await request(app).get("/v1/profile").set("Cookie", user.cookie)).body.weightUnit).toBe("lb");
   });
 
@@ -219,8 +224,14 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
     await createProfile(user, { username: "Dropper", timeZone: "UTC" });
     setNow(null);
     const day = (daysAgo: number) => localDate(new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000), "UTC");
-    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 80, measuredOn: day(3) });
-    await request(app).post("/v1/bodyweight").set("Cookie", user.cookie).send({ kg: 40, measuredOn: day(0) });
+    await request(app)
+      .post("/v1/bodyweight")
+      .set("Cookie", user.cookie)
+      .send({ kg: 80, measuredOn: day(3) });
+    await request(app)
+      .post("/v1/bodyweight")
+      .set("Cookie", user.cookie)
+      .send({ kg: 40, measuredOn: day(0) });
 
     const res = await request(app).get("/v1/profile").set("Cookie", user.cookie);
 
@@ -251,7 +262,7 @@ describe("GET /profile: what the XP bar and the offline preview need", () => {
 
     expect(res.body.bodyweightKg).toBe(40); // what the player typed is still shown
     // One day's allowance since the last 80 kg receipt: about 79.8, not 40.
-    expect(res.body.xpBodyweightKg).toBeCloseTo(80 - 80 * BODYWEIGHT_XP.maxChangePerWeek / 7, 1);
+    expect(res.body.xpBodyweightKg).toBeCloseTo(80 - (80 * BODYWEIGHT_XP.maxChangePerWeek) / 7, 1);
   });
 
   it("lets a new player correct a mistyped first weight in the first week: 120 -> 80 kg on day 2", async () => {

@@ -30,8 +30,11 @@ export function E1rmChart({ bars, unit, title = "Estimated 1RM trend", divider =
   const hi = Math.max(...values);
   const height = (v: number) => MIN_BAR + Math.round(((v - lo) / Math.max(1, hi - lo)) * (MAX_BAR - MIN_BAR));
   const show = (v: number) => formatWeight(v, unit, { decimals: 0 }).replace(` ${unit}`, "");
-  const fill = (b: ChartBar) => (b.tone === "today_pr" ? t.colors.purple : b.tone === "today" ? t.colors.primary : t.colors.border);
-  const summary = bars.map((b) => `${b.label} ${b.value === null ? "none yet" : formatWeight(b.value, unit, { decimals: 0 })}`).join(", ");
+  const fill = (b: ChartBar) =>
+    b.tone === "today_pr" ? t.colors.purple : b.tone === "today" ? t.colors.primary : t.colors.border;
+  const summary = bars
+    .map((b) => `${b.label} ${b.value === null ? "none yet" : formatWeight(b.value, unit, { decimals: 0 })}`)
+    .join(", ");
 
   return (
     <View style={[styles.wrap, divider && styles.divider]}>
@@ -41,13 +44,30 @@ export function E1rmChart({ bars, unit, title = "Estimated 1RM trend", divider =
           {action}
         </View>
       ) : null}
-      <View style={styles.row} accessible accessibilityRole="image" accessibilityLabel={`Estimated one-rep max: ${summary}`}>
+      <View
+        style={styles.row}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={`Estimated one-rep max: ${summary}`}
+      >
         {bars.map((bar, index) => (
           <View key={index} style={styles.column}>
-            <Text variant="captionStrong" tone={bar.tone === "today_pr" ? "purple" : bar.tone === "today" ? "ink" : "inkMuted"} tabular>
+            <Text
+              variant="captionStrong"
+              tone={bar.tone === "today_pr" ? "purple" : bar.tone === "today" ? "ink" : "inkMuted"}
+              tabular
+            >
               {bar.value === null ? "—" : show(bar.value)}
             </Text>
-            <View style={[styles.bar, { height: bar.value === null ? 4 : height(bar.value), backgroundColor: bar.value === null ? t.colors.surfaceRaised : fill(bar) }]} />
+            <View
+              style={[
+                styles.bar,
+                {
+                  height: bar.value === null ? 4 : height(bar.value),
+                  backgroundColor: bar.value === null ? t.colors.surfaceRaised : fill(bar),
+                },
+              ]}
+            />
             <Text variant="caption" tone="inkMuted" numberOfLines={1}>
               {bar.label}
             </Text>

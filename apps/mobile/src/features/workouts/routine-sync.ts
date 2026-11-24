@@ -33,7 +33,8 @@ export function routineChanges(workout: ActiveWorkout, exerciseNames: Map<string
   for (const { draft } of paired.filter((p) => !p.planned)) changes.push(`Added ${draft.exercise.name}`);
 
   const usedCounts = new Map<string, number>();
-  for (const p of paired) if (p.planned) usedCounts.set(p.planned.exerciseId, (usedCounts.get(p.planned.exerciseId) ?? 0) + 1);
+  for (const p of paired)
+    if (p.planned) usedCounts.set(p.planned.exerciseId, (usedCounts.get(p.planned.exerciseId) ?? 0) + 1);
   const leftover = new Map(usedCounts);
   for (const planned of plan) {
     const left = leftover.get(planned.exerciseId) ?? 0;
@@ -43,7 +44,9 @@ export function routineChanges(workout: ActiveWorkout, exerciseNames: Map<string
 
   for (const { draft, planned } of paired) {
     if (planned && draft.sets.length !== planned.targetSets) {
-      changes.push(`${draft.exercise.name}: ${draft.sets.length} ${draft.sets.length === 1 ? "set" : "sets"} (was ${planned.targetSets})`);
+      changes.push(
+        `${draft.exercise.name}: ${draft.sets.length} ${draft.sets.length === 1 ? "set" : "sets"} (was ${planned.targetSets})`,
+      );
     }
   }
 
@@ -71,7 +74,9 @@ export function routineFromWorkout(workout: ActiveWorkout, name: string): Result
         restSec: planned?.restSec ?? null,
       })),
   });
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false, message: parsed.error.issues[0]?.message ?? "Check the routine." };
+  return parsed.success
+    ? { ok: true, value: parsed.data }
+    : { ok: false, message: parsed.error.issues[0]?.message ?? "Check the routine." };
 }
 
 /** The most reps typed in any set (what the player aimed for), else a sensible default. */

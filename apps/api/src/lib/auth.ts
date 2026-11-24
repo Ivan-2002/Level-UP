@@ -21,10 +21,7 @@ export const auth = betterAuth({
 
   // Origins allowed to call the auth endpoints. "levelup://" is the app's scheme (app.json).
   // Expo Go uses "exp://" addresses, so those are allowed in development only.
-  trustedOrigins: [
-    "levelup://",
-    ...(env.NODE_ENV === "development" ? ["exp://", "exp://**"] : []),
-  ],
+  trustedOrigins: ["levelup://", ...(env.NODE_ENV === "development" ? ["exp://", "exp://**"] : [])],
 });
 
 export type Session = typeof auth.$Infer.Session;

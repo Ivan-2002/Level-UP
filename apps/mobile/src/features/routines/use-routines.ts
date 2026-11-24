@@ -30,7 +30,8 @@ const cacheKey = {
 export function useRoutines(userId: string) {
   return useQuery({
     queryKey: keys.list(userId),
-    queryFn: () => fetchWithDeviceCache(cacheKey.list(userId), routineListSchema, () => apiGet<RoutineList>("/routines")),
+    queryFn: () =>
+      fetchWithDeviceCache(cacheKey.list(userId), routineListSchema, () => apiGet<RoutineList>("/routines")),
     initialData: () => readCached(cacheKey.list(userId), routineListSchema),
     initialDataUpdatedAt: 0,
   });
@@ -41,7 +42,8 @@ export function useRoutine(userId: string, id: string | null) {
   return useQuery({
     queryKey: keys.detail(userId, id ?? "new"),
     enabled: id !== null,
-    queryFn: () => fetchWithDeviceCache(cacheKey.detail(userId, id!), routineSchema, () => apiGet<Routine>(`/routines/${id}`)),
+    queryFn: () =>
+      fetchWithDeviceCache(cacheKey.detail(userId, id!), routineSchema, () => apiGet<Routine>(`/routines/${id}`)),
     initialData: () => (id === null ? undefined : readCached(cacheKey.detail(userId, id), routineSchema)),
     initialDataUpdatedAt: 0,
   });
@@ -87,4 +89,3 @@ export function useDeleteRoutine(userId: string) {
     },
   });
 }
-

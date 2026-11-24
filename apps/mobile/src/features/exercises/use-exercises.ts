@@ -1,5 +1,11 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { exerciseListSchema, type CreateExerciseInput, type Exercise, type ExerciseList, type RecentExerciseList } from "@levelup/shared";
+import {
+  exerciseListSchema,
+  type CreateExerciseInput,
+  type Exercise,
+  type ExerciseList,
+  type RecentExerciseList,
+} from "@levelup/shared";
 import { apiGet, apiPost } from "@/lib/api";
 import { fetchWithDeviceCache, readCached, removeCached, writeCached } from "@/lib/device-cache";
 
@@ -19,7 +25,9 @@ export function exercisesQuery(userId: string) {
     queryKey: ["exercises", "library", userId],
     queryFn: async (): Promise<Exercise[]> => {
       removeCached(LEGACY_CACHE_KEY);
-      return (await fetchWithDeviceCache(cacheKey(userId), exerciseListSchema, () => apiGet<ExerciseList>("/exercises"))).items;
+      return (
+        await fetchWithDeviceCache(cacheKey(userId), exerciseListSchema, () => apiGet<ExerciseList>("/exercises"))
+      ).items;
     },
     initialData: () => readCached(cacheKey(userId), exerciseListSchema)?.items,
     initialDataUpdatedAt: 0,

@@ -50,7 +50,11 @@ describe("active workout", () => {
 
     store.getState().start("user-1", "kg");
 
-    expect(store.getState().workout).toMatchObject({ userId: "user-1", clientId: testUuid(1), startedAt: START.toISOString() });
+    expect(store.getState().workout).toMatchObject({
+      userId: "user-1",
+      clientId: testUuid(1),
+      startedAt: START.toISOString(),
+    });
   });
 
   it("doesn't replace an unfinished workout when Start is tapped again", () => {
@@ -77,7 +81,11 @@ describe("active workout", () => {
   });
 
   it("pre-fills a new set from the previous one", () => {
-    let w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), benchPress, sequentialIds());
+    let w = addExercise(
+      startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }),
+      benchPress,
+      sequentialIds(),
+    );
     const { exerciseKey, setKey } = onlySet(w);
     w = updateSet(w, exerciseKey, setKey, { weight: "60", reps: "10" });
 
@@ -109,7 +117,11 @@ describe("active workout", () => {
     });
 
     it("says 'Seconds' for a timed exercise like plank", () => {
-      let w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), plank, sequentialIds());
+      let w = addExercise(
+        startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }),
+        plank,
+        sequentialIds(),
+      );
       const { exerciseKey, setKey } = onlySet(w);
       w = updateSet(w, exerciseKey, setKey, { reps: "" });
 
@@ -119,12 +131,21 @@ describe("active workout", () => {
     });
 
     it("gives timed exercises their own limit: a 5-minute plank is fine, 601 s isn't", () => {
-      let w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), plank, sequentialIds());
+      let w = addExercise(
+        startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }),
+        plank,
+        sequentialIds(),
+      );
       const { exerciseKey, setKey } = onlySet(w);
 
-      expect(toggleSetDone(updateSet(w, exerciseKey, setKey, { reps: "300" }), exerciseKey, setKey, START).ok).toBe(true);
+      expect(toggleSetDone(updateSet(w, exerciseKey, setKey, { reps: "300" }), exerciseKey, setKey, START).ok).toBe(
+        true,
+      );
       w = updateSet(w, exerciseKey, setKey, { reps: "601" });
-      expect(toggleSetDone(w, exerciseKey, setKey, START)).toEqual({ ok: false, message: "Seconds must be a whole number from 1 to 600." });
+      expect(toggleSetDone(w, exerciseKey, setKey, START)).toEqual({
+        ok: false,
+        message: "Seconds must be a whole number from 1 to 600.",
+      });
     });
 
     it("accepts empty kg as bodyweight (0) and a comma as the decimal point", () => {
@@ -140,13 +161,22 @@ describe("active workout", () => {
     });
 
     it("refuses an empty weight on a loaded lift (it's not 0 kg), but takes a typed 0", () => {
-      const w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), benchPress, sequentialIds());
+      const w = addExercise(
+        startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }),
+        benchPress,
+        sequentialIds(),
+      );
       const { exerciseKey, setKey } = onlySet(w);
 
       const empty = updateSet(w, exerciseKey, setKey, { weight: "", reps: "8" });
       expect(toggleSetDone(empty, exerciseKey, setKey, START)).toEqual({ ok: false, message: "Enter the weight." });
 
-      const zero = toggleSetDone(updateSet(w, exerciseKey, setKey, { weight: "0", reps: "8" }), exerciseKey, setKey, START);
+      const zero = toggleSetDone(
+        updateSet(w, exerciseKey, setKey, { weight: "0", reps: "8" }),
+        exerciseKey,
+        setKey,
+        START,
+      );
       expect(zero.ok).toBe(true);
     });
 
@@ -169,7 +199,12 @@ describe("buildFinishPayload", () => {
   /** Bench: set 1 done (60 x 8), set 2 not done. Lateral raise: nothing done. */
   function partlyDoneWorkout(doneAt = minutesLater(10)) {
     const ids = sequentialIds();
-    let w = startWorkout({ userId: "u", clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10", now: START, weightUnit: "kg" });
+    let w = startWorkout({
+      userId: "u",
+      clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10",
+      now: START,
+      weightUnit: "kg",
+    });
     w = addExercise(w, benchPress, ids);
     const bench = onlySet(w);
     w = updateSet(w, bench.exerciseKey, bench.setKey, { weight: "62,5", reps: "8" });
@@ -190,14 +225,23 @@ describe("buildFinishPayload", () => {
         startedAt: START.toISOString(),
         finishedAt: minutesLater(30).toISOString(),
         exercises: [
-          { exerciseId: benchPress.id, restSec: 180, sets: [{ reps: 8, weightKg: 62.5, completedAt: minutesLater(10).toISOString() }] },
+          {
+            exerciseId: benchPress.id,
+            restSec: 180,
+            sets: [{ reps: 8, weightKg: 62.5, completedAt: minutesLater(10).toISOString() }],
+          },
         ],
       },
     });
   });
 
   it("blocks Finish when no set is completed", () => {
-    let w = startWorkout({ userId: "u", clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10", now: START, weightUnit: "kg" });
+    let w = startWorkout({
+      userId: "u",
+      clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10",
+      now: START,
+      weightUnit: "kg",
+    });
     w = addExercise(w, benchPress, sequentialIds());
 
     expect(buildFinishPayload(w, minutesLater(30))).toEqual({
@@ -263,13 +307,21 @@ describe("finishActiveWorkout", () => {
       store.getState().toggleSetDone(e, last!);
       const live = scoreLiveWorkout(store.getState().workout!, scoringContext(scoring));
 
-      const result = finishActiveWorkout({ activeWorkout: store, outbox: createOutboxStore(memoryStorage()), now: minutesLater(40) });
+      const result = finishActiveWorkout({
+        activeWorkout: store,
+        outbox: createOutboxStore(memoryStorage()),
+        now: minutesLater(40),
+      });
       if (!result.ok) throw new Error(result.message);
       const { payload, preview } = result.value;
 
       expect(payload.exercises[0]!.sets.map((x) => x.weightKg)).toEqual([60, 100]);
       expect(preview!.sets).toEqual(
-        [live.bySet.get(first!)!, live.bySet.get(last!)!].map((x) => ({ xp: x.xp, tag: x.tag, isFlagged: x.isFlagged })),
+        [live.bySet.get(first!)!, live.bySet.get(last!)!].map((x) => ({
+          xp: x.xp,
+          tag: x.tag,
+          isFlagged: x.isFlagged,
+        })),
       );
       expect(preview!.sets.map((x) => x.tag)).toEqual(["warm_up", null]);
       // The number the player last saw on the active workout, after the daily cap.
@@ -342,17 +394,38 @@ describe("starting from a routine", () => {
     store.getState().startFromRoutine("user-1", "kg", routine, lastSets);
 
     const workout = store.getState().workout!;
-    expect(workout).toMatchObject({ name: "Push day", routineId: routine.id, clientId: testUuid(1), currentExerciseKey: workout.exercises[0]!.id });
+    expect(workout).toMatchObject({
+      name: "Push day",
+      routineId: routine.id,
+      clientId: testUuid(1),
+      currentExerciseKey: workout.exercises[0]!.id,
+    });
     expect(workout.exercises.map((e) => [e.exercise.name, e.sets.map((s) => [s.weight, s.reps, s.doneAt])])).toEqual([
-      ["Bench Press", [["65", "8", null], ["65", "8", null], ["65", "8", null]]], // 62.5 + 2.5
-      ["Pull-up", [["", "10", null], ["", "10", null]]], // never done: weight left to fill in
+      [
+        "Bench Press",
+        [
+          ["65", "8", null],
+          ["65", "8", null],
+          ["65", "8", null],
+        ],
+      ], // 62.5 + 2.5
+      [
+        "Pull-up",
+        [
+          ["", "10", null],
+          ["", "10", null],
+        ],
+      ], // never done: weight left to fill in
     ]);
   });
 
   it("links the finished workout to its routine", () => {
     const { store } = setup();
     store.getState().startFromRoutine("user-1", "kg", routine, lastSets);
-    const { exerciseKey, setKey } = { exerciseKey: store.getState().workout!.exercises[0]!.id, setKey: store.getState().workout!.exercises[0]!.sets[0]!.id };
+    const { exerciseKey, setKey } = {
+      exerciseKey: store.getState().workout!.exercises[0]!.id,
+      setKey: store.getState().workout!.exercises[0]!.sets[0]!.id,
+    };
     store.getState().toggleSetDone(exerciseKey, setKey);
 
     const payload = buildFinishPayload(store.getState().workout!, minutesLater(30));
@@ -382,7 +455,11 @@ describe("starting from a routine", () => {
 describe("weights in the player's unit", () => {
   it("types pounds and sends kilograms", () => {
     const ids = sequentialIds();
-    let w = addExercise(startWorkout({ userId: "u", clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10", now: START, weightUnit: "lb" }), benchPress, ids);
+    let w = addExercise(
+      startWorkout({ userId: "u", clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10", now: START, weightUnit: "lb" }),
+      benchPress,
+      ids,
+    );
     const { exerciseKey, setKey } = onlySet(w);
     w = updateSet(w, exerciseKey, setKey, { weight: "135", reps: "5" });
     const ticked = toggleSetDone(w, exerciseKey, setKey, minutesLater(5));
@@ -394,27 +471,52 @@ describe("weights in the player's unit", () => {
   });
 
   it("states the weight limit in the player's unit", () => {
-    let w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "lb" }), benchPress, sequentialIds());
+    let w = addExercise(
+      startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "lb" }),
+      benchPress,
+      sequentialIds(),
+    );
     const { exerciseKey, setKey } = onlySet(w);
     w = updateSet(w, exerciseKey, setKey, { weight: "1200", reps: "5" });
 
-    expect(toggleSetDone(w, exerciseKey, setKey, START)).toEqual({ ok: false, message: "Weight must be from 0 to 1102 lb." });
+    expect(toggleSetDone(w, exerciseKey, setKey, START)).toEqual({
+      ok: false,
+      message: "Weight must be from 0 to 1102 lb.",
+    });
   });
 
   it("pre-fills a lb player's next weight in pounds (135 lb -> 140 lb)", () => {
     const lastSets = new Map([[benchPress.id, [8, 8, 8].map((reps) => ({ reps, weightKg: 61.235 }))]]);
-    const w = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "lb" }), benchPress, sequentialIds(), lastSets);
+    const w = addExercise(
+      startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "lb" }),
+      benchPress,
+      sequentialIds(),
+      lastSets,
+    );
 
-    expect(w.exercises[0]!.sets.map((s) => [s.weight, s.reps])).toEqual([["140", "8"], ["140", "8"], ["140", "8"]]);
+    expect(w.exercises[0]!.sets.map((s) => [s.weight, s.reps])).toEqual([
+      ["140", "8"],
+      ["140", "8"],
+      ["140", "8"],
+    ]);
   });
 });
 
 describe("rest per exercise", () => {
-  const base = () => addExercise(startWorkout({ userId: "u", clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10", now: START, weightUnit: "kg" }), benchPress, sequentialIds());
+  const base = () =>
+    addExercise(
+      startWorkout({ userId: "u", clientId: "4f6c8f52-6a5e-4d8e-9a43-2d5a3c1b7e10", now: START, weightUnit: "kg" }),
+      benchPress,
+      sequentialIds(),
+    );
 
   it("starts from the player's preference, then the suggestion", () => {
     expect(base().exercises[0]!.restSec).toBe(180);
-    const preferred = addExercise(startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }), { ...benchPress, restPreferenceSec: 90 }, sequentialIds());
+    const preferred = addExercise(
+      startWorkout({ userId: "u", clientId: "c", now: START, weightUnit: "kg" }),
+      { ...benchPress, restPreferenceSec: 90 },
+      sequentialIds(),
+    );
     expect(preferred.exercises[0]!.restSec).toBe(90);
   });
 
@@ -456,7 +558,13 @@ describe("a workout saved by the previous app version (store v1)", () => {
             clientId: testUuid(1),
             startedAt: START.toISOString(),
             name: "",
-            exercises: [{ id: "e1", exercise: benchPress, sets: [{ id: "s1", weightKg: "62.5", reps: "8", doneAt: minutesLater(5).toISOString() }] }],
+            exercises: [
+              {
+                id: "e1",
+                exercise: benchPress,
+                sets: [{ id: "s1", weightKg: "62.5", reps: "8", doneAt: minutesLater(5).toISOString() }],
+              },
+            ],
           },
         },
       }),
@@ -512,7 +620,9 @@ describe("the app killed while a done set is being edited", () => {
     const reopened = killedMidEdit({ weight: "" });
     reopened.getState().endEditing();
     expect(firstSet(reopened).scored).toEqual({ weight: "100", reps: "8" }); // the live view keeps its ticked values
-    expect(doneSetError(firstSet(reopened), benchPress, "kg")).toBe("Enter the weight. Until then it counts as it was when ticked.");
+    expect(doneSetError(firstSet(reopened), benchPress, "kg")).toBe(
+      "Enter the weight. Until then it counts as it was when ticked.",
+    );
 
     const outbox = createOutboxStore(memoryStorage());
     const result = finishActiveWorkout({ activeWorkout: reopened, outbox, now: minutesLater(30) });
@@ -533,16 +643,26 @@ describe("the app killed while a done set is being edited", () => {
     const reopened = killedMidEdit({ weight: "105" });
     reopened.getState().pinScoring(PINNED_NEAR_CAP);
 
-    const result = finishActiveWorkout({ activeWorkout: reopened, outbox: createOutboxStore(memoryStorage()), now: minutesLater(30) });
+    const result = finishActiveWorkout({
+      activeWorkout: reopened,
+      outbox: createOutboxStore(memoryStorage()),
+      now: minutesLater(30),
+    });
     if (!result.ok) throw new Error(result.message);
 
     expect(result.value.workout.exercises[0]!.sets[0]!.scored).toEqual({ weight: "105", reps: "8" });
-    expect(result.value.preview!.setXp).toBe(scoreLiveWorkout(result.value.workout, scoringContext(PINNED_NEAR_CAP)).total);
+    expect(result.value.preview!.setXp).toBe(
+      scoreLiveWorkout(result.value.workout, scoringContext(PINNED_NEAR_CAP)).total,
+    );
   });
 });
 
 describe("the pinned scoring context (store v3)", () => {
-  const scoring = { history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }], bodyweight: { xp: 80, typed: 80 }, dailyCap: null };
+  const scoring = {
+    history: [{ exerciseId: benchPress.id, recentBest: 116.7, jumpBaseline: 116.7 }],
+    bodyweight: { xp: 80, typed: 80 },
+    dailyCap: null,
+  };
 
   it("pins once per workout: a later pin doesn't replace it", () => {
     const { store } = setup();
@@ -593,19 +713,38 @@ describe("the pinned scoring context (store v3)", () => {
     expect(upgraded).toEqual({
       ...v2Workout,
       scoring: null,
-      exercises: [{ ...v2Workout.exercises[0]!, sets: [{ ...v2Workout.exercises[0]!.sets[0]!, scored: { weight: "62.5", reps: "8" } }] }],
+      exercises: [
+        {
+          ...v2Workout.exercises[0]!,
+          sets: [{ ...v2Workout.exercises[0]!.sets[0]!, scored: { weight: "62.5", reps: "8" } }],
+        },
+      ],
     });
 
     // On next open the screen pins: a set is done, so it pins even before the history arrives.
-    const snapshot = snapshotToPin(upgraded, { history: undefined, bodyweight: { xp: 80, typed: 80 }, dailyCap: null })!;
+    const snapshot = snapshotToPin(upgraded, {
+      history: undefined,
+      bodyweight: { xp: 80, typed: 80 },
+      dailyCap: null,
+    })!;
     store.getState().pinScoring(snapshot);
-    expect(store.getState().workout!.scoring).toEqual({ history: [], bodyweight: { xp: 80, typed: 80 }, dailyCap: null });
+    expect(store.getState().workout!.scoring).toEqual({
+      history: [],
+      bodyweight: { xp: 80, typed: 80 },
+      dailyCap: null,
+    });
     expect(migrateV2(null)).toBeNull();
   });
 
   it("upgrades a v1 save all the way, unpinned", () => {
     const storage = memoryStorage();
-    const v1Workout = { userId: "user-1", clientId: testUuid(1), startedAt: START.toISOString(), name: "", exercises: [] };
+    const v1Workout = {
+      userId: "user-1",
+      clientId: testUuid(1),
+      startedAt: START.toISOString(),
+      name: "",
+      exercises: [],
+    };
     storage.setItem("levelup.active-workout", JSON.stringify({ version: 1, state: { workout: v1Workout } }));
     expect(setup(storage).store.getState().workout).toMatchObject({ weightUnit: "kg", scoring: null });
   });

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { profileSchema, type BodyweightEntry, type CreateProfileInput, type Profile, type RecordBodyweightInput } from "@levelup/shared";
+import {
+  profileSchema,
+  type BodyweightEntry,
+  type CreateProfileInput,
+  type Profile,
+  type RecordBodyweightInput,
+} from "@levelup/shared";
 import { fetchWithDeviceCache, readCached, writeCached } from "@/lib/device-cache";
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 

@@ -44,7 +44,14 @@ export type NewWorkout = {
     exerciseId: string;
     restSec?: number;
     /** Each set as logged, with what the XP scoring decided about it. */
-    sets: { reps: number; weightKg: number; completedAt?: string; isFlagged: boolean; flagReason: string | null; xpTag: string | null }[];
+    sets: {
+      reps: number;
+      weightKg: number;
+      completedAt?: string;
+      isFlagged: boolean;
+      flagReason: string | null;
+      xpTag: string | null;
+    }[];
   }[];
 };
 
@@ -196,11 +203,7 @@ export function findRecentExerciseUse(userId: string, take: number): Promise<Exe
  * last row I saw", in (startedAt, id) order. Unlike OFFSET, a workout synced late can't
  * shift the pages (no duplicates, no gaps), and every page is a quick index range scan.
  */
-export function findHistoryPage(
-  userId: string,
-  take: number,
-  after?: HistoryPosition,
-): Promise<WorkoutSummaryRow[]> {
+export function findHistoryPage(userId: string, take: number, after?: HistoryPosition): Promise<WorkoutSummaryRow[]> {
   return prisma.workout.findMany({
     where: {
       userId,
@@ -247,11 +250,17 @@ export async function findWorkoutsAround(db: Db, userId: string, weekStart: stri
   to.setUTCDate(to.getUTCDate() + 9);
   const rows = await db.workout.findMany({
     where: { userId, startedAt: { gte: from, lt: to } },
-    select: { startedAt: true, createdAt: true, exercises: { select: { sets: { select: { isFlagged: true, xpTag: true } } } } },
+    select: {
+      startedAt: true,
+      createdAt: true,
+      exercises: { select: { sets: { select: { isFlagged: true, xpTag: true } } } },
+    },
   });
   return rows.map((w) => ({
     startedAt: w.startedAt,
     savedAt: w.createdAt,
-    sets: w.exercises.flatMap((e) => e.sets.map((s) => ({ isFlagged: s.isFlagged, tag: setTagSchema.safeParse(s.xpTag).data ?? null }))),
+    sets: w.exercises.flatMap((e) =>
+      e.sets.map((s) => ({ isFlagged: s.isFlagged, tag: setTagSchema.safeParse(s.xpTag).data ?? null })),
+    ),
   }));
 }

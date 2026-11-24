@@ -28,7 +28,13 @@ const DAY = 24 * 60 * MINUTE;
 const iso = (ms: number) => new Date(ms).toISOString();
 
 // The catalog's tuning, as scoring sees it (exercise-catalog.ts).
-const BENCH: ScoringExercise = { equipment: "barbell", mechanic: "compound", repsUnit: "reps", loadFactor: 1.25, bodyweightRatio: 0 };
+const BENCH: ScoringExercise = {
+  equipment: "barbell",
+  mechanic: "compound",
+  repsUnit: "reps",
+  loadFactor: 1.25,
+  bodyweightRatio: 0,
+};
 const SQUAT: ScoringExercise = { ...BENCH, loadFactor: 1 };
 const DEADLIFT: ScoringExercise = { ...BENCH, loadFactor: 1.2 };
 
@@ -39,7 +45,7 @@ beforeEach(async () => {
 });
 
 type SetInput = { reps: number; weightKg: number };
-const times = <T,>(n: number, item: T): T[] => Array.from({ length: n }, () => item);
+const times = <T>(n: number, item: T): T[] => Array.from({ length: n }, () => item);
 
 /** A one-hour workout that started `daysAgo` days ago. */
 function workout(daysAgo: number, exercises: [slug: string, sets: SetInput[]][]): FinishWorkoutInput {
@@ -47,7 +53,8 @@ function workout(daysAgo: number, exercises: [slug: string, sets: SetInput[]][])
 }
 
 /** Noon UTC, `daysAgo` days ago: a fixed time of day, so a test can't straddle midnight. */
-const noonDaysAgo = (daysAgo: number) => Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - daysAgo, 12);
+const noonDaysAgo = (daysAgo: number) =>
+  Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - daysAgo, 12);
 const dateOf = (ms: number) => iso(ms).slice(0, 10);
 
 function workoutAt(startedAt: number, exercises: [slug: string, sets: SetInput[]][]): FinishWorkoutInput {
@@ -86,7 +93,18 @@ describe("plausibility at Finish", () => {
     await finish(user, workout(2, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
 
     // 400 kg is above the barbell compound limit (350): a typo for 40, say.
-    const { workout: saved, summary } = await finish(user, workout(1, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }, { reps: 8, weightKg: 400 }]]]));
+    const { workout: saved, summary } = await finish(
+      user,
+      workout(1, [
+        [
+          "barbell-bench-press",
+          [
+            { reps: 8, weightKg: 60 },
+            { reps: 8, weightKg: 400 },
+          ],
+        ],
+      ]),
+    );
 
     expect(await storedSets(saved.id)).toEqual([
       { xp: setXp({ reps: 8, weightKg: 60 }, 75, BENCH), isFlagged: false, flagReason: null, xpTag: null },
@@ -107,7 +125,9 @@ describe("the jump cap at Finish", () => {
     // Baseline: 60 x 8 (estimated 1RM 76 kg); the line is 95 kg; 100 x 8 is 126.7 kg.
     const line = epleyOneRepMax(60, 8) * (1 + JUMP_CAP.maxJump);
     const capped = jumpCappedXp(setXp({ reps: 8, weightKg: 100 }, 75, BENCH), line / epleyOneRepMax(100, 8));
-    expect(await storedSets(saved.id)).toEqual([{ xp: capped, isFlagged: false, flagReason: "above_history", xpTag: "above_history" }]);
+    expect(await storedSets(saved.id)).toEqual([
+      { xp: capped, isFlagged: false, flagReason: "above_history", xpTag: "above_history" },
+    ]);
   });
 
   it("doesn't let a jump-capped typo change the next honest workout's XP, tags or training day", async () => {
@@ -120,7 +140,11 @@ describe("the jump cap at Finish", () => {
       await finish(user, workout(4, [["barbell-bench-press", times(3, honest)]]));
       const second = await finish(user, workout(2, [["barbell-bench-press", [honest, honest, typo]]]));
       const third = await finish(user, workout(0, [["barbell-bench-press", times(3, honest)]]));
-      return { typoSet: (await storedSets(second.workout.id))[2]!, sets: await storedSets(third.workout.id), weeklyGoal: third.summary.weeklyGoal };
+      return {
+        typoSet: (await storedSets(second.workout.id))[2]!,
+        sets: await storedSets(third.workout.id),
+        weeklyGoal: third.summary.weeklyGoal,
+      };
     };
 
     const withTypo = await playThrough({ reps: 8, weightKg: 100 });
@@ -153,7 +177,9 @@ describe("the jump cap at Finish", () => {
     const jump = await finish(user, workout(2, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }]]]));
     // Next time, 65 x 8 (82.3 kg) beats the real best (60 x 8, 76 kg), not the capped set.
     const next = await finish(user, workout(1, [["barbell-bench-press", [{ reps: 8, weightKg: 65 }]]]));
-    const page = await request(app).get(`/v1/exercises/${ids["barbell-bench-press"]}/summary`).set("Cookie", user.cookie);
+    const page = await request(app)
+      .get(`/v1/exercises/${ids["barbell-bench-press"]}/summary`)
+      .set("Cookie", user.cookie);
 
     expect(jump.summary.prs).toEqual([]);
     expect(next.summary.prs).toEqual([expect.objectContaining({ kind: "e1rm", value: 82.3, previousValue: 76 })]);
@@ -199,7 +225,9 @@ describe("the 10-set limit and tags at Finish", () => {
     );
     // The summary sends the same, set by set.
     const summary = (await request(app).get(`/v1/workouts/${saved.id}/summary`).set("Cookie", user.cookie)).body;
-    expect(finishWorkoutResponseSchema.parse(summary).summary.sets.map((s) => [s.xp, s.tag])).toEqual(expected.sets.map((s) => [s.xp, s.tag]));
+    expect(finishWorkoutResponseSchema.parse(summary).summary.sets.map((s) => [s.xp, s.tag])).toEqual(
+      expected.sets.map((s) => [s.xp, s.tag]),
+    );
   });
 
   it("scores each exercise's sets in the order they were ticked (completedAt), as the live view does", async () => {
@@ -208,7 +236,15 @@ describe("the 10-set limit and tags at Finish", () => {
 
     // Listed heavy first, but the 40 kg set was ticked first: before any working set, a warm-up.
     // In list order it would follow a working set and be an easy set.
-    const body = workout(0, [["barbell-bench-press", [{ reps: 8, weightKg: 100 }, { reps: 5, weightKg: 40 }]]]);
+    const body = workout(0, [
+      [
+        "barbell-bench-press",
+        [
+          { reps: 8, weightKg: 100 },
+          { reps: 5, weightKg: 40 },
+        ],
+      ],
+    ]);
     const started = Date.parse(body.startedAt);
     body.exercises[0]!.sets = [
       { reps: 8, weightKg: 100, completedAt: iso(started + 20 * MINUTE) },
@@ -227,7 +263,10 @@ describe("the daily cap at Finish", () => {
   const benchSetXp = setXp({ reps: 10, weightKg: 100 }, 75, BENCH);
   const ledgerOf = async (workoutId: string) => (await storedSets(workoutId)).map((s) => s.xp);
   const heldBackOf = (workoutId: string) =>
-    prisma.workout.findUniqueOrThrow({ where: { id: workoutId }, select: { xpHeldBack: true, xpHeldBackReason: true } });
+    prisma.workout.findUniqueOrThrow({
+      where: { id: workoutId },
+      select: { xpHeldBack: true, xpHeldBackReason: true },
+    });
 
   it("counts a late-synced workout against the day it STARTED, with that day's earlier XP", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75, timeZone: "UTC" });
@@ -268,26 +307,41 @@ describe("the daily cap at Finish", () => {
   it("can't be beaten by sending two Finishes at the same moment (the profile lock)", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75, timeZone: "UTC" });
     const startedAt = noonDaysAgo(1);
-    const day = (): FinishWorkoutInput => workoutAt(startedAt, [["barbell-bench-press", HEAVY], ["barbell-back-squat", HEAVY]]);
+    const day = (): FinishWorkoutInput =>
+      workoutAt(startedAt, [
+        ["barbell-bench-press", HEAVY],
+        ["barbell-back-squat", HEAVY],
+      ]);
 
-    const responses = await Promise.all([day(), day()].map((body) => request(app).post("/v1/workouts").set("Cookie", user.cookie).send(body)));
+    const responses = await Promise.all(
+      [day(), day()].map((body) => request(app).post("/v1/workouts").set("Cookie", user.cookie).send(body)),
+    );
 
     expect(responses.map((r) => r.status)).toEqual([201, 201]);
     // One after the other: the second one counts the first one's XP.
     const raw = [BENCH, SQUAT].flatMap((tuning) => times(10, setXp({ reps: 10, weightKg: 100 }, 75, tuning)));
     const first = applyDailyCap(0, raw);
-    const second = applyDailyCap(first.awarded.reduce((a, b) => a + b, 0), raw);
+    const second = applyDailyCap(
+      first.awarded.reduce((a, b) => a + b, 0),
+      raw,
+    );
     const dayTotal = [...first.awarded, ...second.awarded].reduce((a, b) => a + b, 0);
     expect(2 * raw.reduce((a, b) => a + b, 0)).toBeGreaterThan(DAILY_XP_CAP.limit); // the case under test
     const recorded = await prisma.xpEvent.aggregate({ where: { userId: user.userId }, _sum: { amount: true } });
     expect(recorded._sum.amount).toBe(dayTotal);
     const workouts = await prisma.workout.findMany({ where: { userId: user.userId }, select: { xpHeldBack: true } });
-    expect(workouts.map((w) => w.xpHeldBack).sort((a, b) => a - b)).toEqual([first.heldBack, second.heldBack].sort((a, b) => a - b));
+    expect(workouts.map((w) => w.xpHeldBack).sort((a, b) => a - b)).toEqual(
+      [first.heldBack, second.heldBack].sort((a, b) => a - b),
+    );
   });
 
   it("returns the same held-back XP on a repeated Finish, and records nothing more", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75, timeZone: "UTC" });
-    const big = workoutAt(noonDaysAgo(1), [["barbell-bench-press", HEAVY], ["barbell-back-squat", HEAVY], ["deadlift", HEAVY]]);
+    const big = workoutAt(noonDaysAgo(1), [
+      ["barbell-bench-press", HEAVY],
+      ["barbell-back-squat", HEAVY],
+      ["deadlift", HEAVY],
+    ]);
 
     const first = await finish(user, big);
     const before = await heldBackOf(first.workout.id);
@@ -306,11 +360,22 @@ describe(`the ${XP_MAX_WORKOUT_AGE_DAYS}-day rule at Finish`, () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
     const sets = times(3, { reps: 8, weightKg: 60 });
 
-    const { workout: saved, summary } = await finish(user, workout(XP_MAX_WORKOUT_AGE_DAYS + 1, [["barbell-bench-press", sets]]));
-    expect(summary.xp).toMatchObject({ sets: 0, heldBack: { amount: 3 * setXp({ reps: 8, weightKg: 60 }, 75, BENCH), reason: "too_old" } });
+    const { workout: saved, summary } = await finish(
+      user,
+      workout(XP_MAX_WORKOUT_AGE_DAYS + 1, [["barbell-bench-press", sets]]),
+    );
+    expect(summary.xp).toMatchObject({
+      sets: 0,
+      heldBack: { amount: 3 * setXp({ reps: 8, weightKg: 60 }, 75, BENCH), reason: "too_old" },
+    });
 
     expect(await prisma.xpEvent.count({ where: { userId: user.userId } })).toBe(0);
-    expect(await prisma.workout.findUniqueOrThrow({ where: { id: saved.id }, select: { xpHeldBack: true, xpHeldBackReason: true } })).toEqual({
+    expect(
+      await prisma.workout.findUniqueOrThrow({
+        where: { id: saved.id },
+        select: { xpHeldBack: true, xpHeldBackReason: true },
+      }),
+    ).toEqual({
       xpHeldBack: 3 * setXp({ reps: 8, weightKg: 60 }, 75, BENCH),
       xpHeldBackReason: "too_old",
     });
@@ -322,7 +387,12 @@ describe(`the ${XP_MAX_WORKOUT_AGE_DAYS}-day rule at Finish`, () => {
   it("still awards XP to a workout that started just under 14 days ago", async () => {
     const user = await signUpPlayer({ bodyweightKg: 75 });
 
-    const { summary } = await finish(user, workoutAt(Date.now() - XP_MAX_WORKOUT_AGE_DAYS * DAY + 10 * MINUTE, [["barbell-bench-press", [{ reps: 8, weightKg: 60 }]]]));
+    const { summary } = await finish(
+      user,
+      workoutAt(Date.now() - XP_MAX_WORKOUT_AGE_DAYS * DAY + 10 * MINUTE, [
+        ["barbell-bench-press", [{ reps: 8, weightKg: 60 }]],
+      ]),
+    );
 
     expect(summary.xp.sets).toBe(setXp({ reps: 8, weightKg: 60 }, 75, BENCH));
   });

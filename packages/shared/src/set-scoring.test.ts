@@ -17,9 +17,27 @@ import {
   type SessionSet,
 } from "./index.js";
 
-const squat: ScoringExercise = { equipment: "barbell", mechanic: "compound", repsUnit: "reps", loadFactor: 1, bodyweightRatio: 0 };
-const bench: ScoringExercise = { equipment: "barbell", mechanic: "compound", repsUnit: "reps", loadFactor: 1.25, bodyweightRatio: 0 };
-const plank: ScoringExercise = { equipment: "bodyweight", mechanic: "isolation", repsUnit: "seconds", loadFactor: 0.35, bodyweightRatio: 0.5 };
+const squat: ScoringExercise = {
+  equipment: "barbell",
+  mechanic: "compound",
+  repsUnit: "reps",
+  loadFactor: 1,
+  bodyweightRatio: 0,
+};
+const bench: ScoringExercise = {
+  equipment: "barbell",
+  mechanic: "compound",
+  repsUnit: "reps",
+  loadFactor: 1.25,
+  bodyweightRatio: 0,
+};
+const plank: ScoringExercise = {
+  equipment: "bodyweight",
+  mechanic: "isolation",
+  repsUnit: "seconds",
+  loadFactor: 0.35,
+  bodyweightRatio: 0.5,
+};
 const exercises = new Map([
   ["squat", squat],
   ["bench", bench],
@@ -34,7 +52,13 @@ const times = (n: number, s: SessionSet) => Array.from({ length: n }, () => s);
 const score = (sets: SessionSet[], history = new Map([["squat", squatHistory]])) =>
   scoreSessionSets({ sets, exercises, history, bodyweight: { xp: 75, typed: 75 } });
 
-const warmUps = [set("squat", 5, 20), set("squat", 5, 40), set("squat", 3, 60), set("squat", 2, 70), set("squat", 1, 80)];
+const warmUps = [
+  set("squat", 5, 20),
+  set("squat", 5, 40),
+  set("squat", 3, 60),
+  set("squat", 2, 70),
+  set("squat", 1, 80),
+];
 
 describe("scoreSessionSets", () => {
   it("earns XP for all 6 working sets after 5 warm-ups (warm-ups don't count toward the 10)", () => {
@@ -159,7 +183,12 @@ describe("scoreSessionSets", () => {
       const after = score([...sixties, set("squat", 5, 100)], new Map()).sets;
 
       expect(before.map((s) => [s.xp, s.tag])).toEqual(Array(3).fill([51, null]));
-      expect(after.map((s) => [s.xp, s.tag])).toEqual([[10, "warm_up"], [10, "warm_up"], [10, "warm_up"], [85, null]]);
+      expect(after.map((s) => [s.xp, s.tag])).toEqual([
+        [10, "warm_up"],
+        [10, "warm_up"],
+        [10, "warm_up"],
+        [85, null],
+      ]);
     });
 
     it("allows at most 5 warm-ups there too, however many light sets come before the heaviest", () => {
@@ -176,7 +205,9 @@ describe("scoreSessionSets", () => {
       // Alone, the 80 is the best so far: a working set. Once 100 x 5 follows, all three are warm-ups.
       expect(before.map((s) => s.tag)).toEqual(["warm_up", "warm_up", null]);
       expect(after.slice(0, 3).map((s) => s.tag)).toEqual(["warm_up", "warm_up", "warm_up"]);
-      expect(after.slice(0, 3).reduce((sum, s) => sum + s.xp, 0)).toBeLessThan(before.reduce((sum, s) => sum + s.xp, 0));
+      expect(after.slice(0, 3).reduce((sum, s) => sum + s.xp, 0)).toBeLessThan(
+        before.reduce((sum, s) => sum + s.xp, 0),
+      );
       expect(after[3]).toMatchObject({ xp: 85, tag: null });
     });
   });
@@ -200,13 +231,19 @@ describe("scoreSessionSets", () => {
     });
 
     it("keeps the order given for sets ticked at the same moment", () => {
-      const sets = [{ ...set("squat", 8, 100), completedAt: at(0) }, { ...set("squat", 5, 60), completedAt: at(0) }];
+      const sets = [
+        { ...set("squat", 8, 100), completedAt: at(0) },
+        { ...set("squat", 5, 60), completedAt: at(0) },
+      ];
       expect(score(sets).sets.map((s) => s.tag)).toEqual([null, "easy_set"]);
     });
 
     it("finds a baseline session's heaviest set in completedAt order", () => {
       // No history. Listed 100 first, ticked last: the 60s come before the heaviest, so warm-ups.
-      const sets = [{ ...set("squat", 5, 100), completedAt: at(9) }, { ...set("squat", 5, 60), completedAt: at(1) }];
+      const sets = [
+        { ...set("squat", 5, 100), completedAt: at(9) },
+        { ...set("squat", 5, 60), completedAt: at(1) },
+      ];
       expect(score(sets, new Map()).sets.map((s) => s.tag)).toEqual([null, "warm_up"]);
     });
   });
@@ -229,7 +266,10 @@ describe("scoreSessionSets", () => {
 
     it("is left out of the session's best for the next session, but counts at the line for the jump baseline", () => {
       const { exercises: after } = score([set("squat", 8, 100), set("squat", 8, 200)]);
-      expect(after.get("squat")).toEqual({ jumpBaselineAfter: epleyOneRepMax(100, 8) * 1.25, sessionBest: epleyOneRepMax(100, 8) });
+      expect(after.get("squat")).toEqual({
+        jumpBaselineAfter: epleyOneRepMax(100, 8) * 1.25,
+        sessionBest: epleyOneRepMax(100, 8),
+      });
 
       const onlyCapped = score([set("squat", 8, 200)]).exercises.get("squat")!;
       expect(onlyCapped.sessionBest).toBeNull();
@@ -239,25 +279,42 @@ describe("scoreSessionSets", () => {
       // 50 kg dumbbells x 10, then a session with 80 typed for 50 on its last set.
       const honest = { reps: 10, weightKg: 50 };
       const week1: PastExerciseSession = { date: "2026-11-03", bodyweightKg: 75, sets: [honest, honest, honest] };
-      const typo: PastExerciseSession = { date: "2026-11-10", bodyweightKg: 75, sets: [honest, honest, { reps: 10, weightKg: 80 }] };
+      const typo: PastExerciseSession = {
+        date: "2026-11-10",
+        bodyweightKg: 75,
+        sets: [honest, honest, { reps: 10, weightKg: 80 }],
+      };
       const clean: PastExerciseSession = { ...typo, sets: [honest, honest, honest] };
       const next = times(3, set("squat", 10, 50));
-      const after = (sessions: PastExerciseSession[]) => score(next, new Map([["squat", exerciseXpHistory(sessions, squat, "2026-11-17")]])).sets;
+      const after = (sessions: PastExerciseSession[]) =>
+        score(next, new Map([["squat", exerciseXpHistory(sessions, squat, "2026-11-17")]])).sets;
 
       // The typo really was jump-capped (so it's this rule that protects the next session).
-      const typoScored = score(typo.sets.map((x) => set("squat", x.reps, x.weightKg)), new Map([["squat", exerciseXpHistory([week1], squat, "2026-11-10")]]));
+      const typoScored = score(
+        typo.sets.map((x) => set("squat", x.reps, x.weightKg)),
+        new Map([["squat", exerciseXpHistory([week1], squat, "2026-11-10")]]),
+      );
       expect(typoScored.sets[2]!.tag).toBe("above_history");
 
       const withTypo = after([week1, typo]);
       expect(withTypo).toEqual(after([week1, clean]));
-      expect(withTypo.map((s) => [s.effort, s.tag])).toEqual([[1, null], [1, null], [1, null]]);
-      expect(qualifiesAsTrainingDay({ sets: withTypo.map((s) => ({ isFlagged: s.isFlagged, tag: s.tag })) })).toBe(true);
+      expect(withTypo.map((s) => [s.effort, s.tag])).toEqual([
+        [1, null],
+        [1, null],
+        [1, null],
+      ]);
+      expect(qualifiesAsTrainingDay({ sets: withTypo.map((s) => ({ isFlagged: s.isFlagged, tag: s.tag })) })).toBe(
+        true,
+      );
     });
   });
 
   it("reports each exercise's baseline and best for the next session", () => {
     const { exercises: after } = score([set("squat", 8, 100), set("squat", 5, 110)]);
-    expect(after.get("squat")).toEqual({ jumpBaselineAfter: epleyOneRepMax(110, 5), sessionBest: epleyOneRepMax(110, 5) });
+    expect(after.get("squat")).toEqual({
+      jumpBaselineAfter: epleyOneRepMax(110, 5),
+      sessionBest: epleyOneRepMax(110, 5),
+    });
   });
 });
 
@@ -277,7 +334,14 @@ describe("exerciseXpHistory: history rebuilt from stored sessions", () => {
   // Three squat sessions, the last one far above the others (so its sets are jump-capped).
   const sessions: PastExerciseSession[] = [
     { date: "2026-08-01", bodyweightKg: 75, sets: [{ reps: 8, weightKg: 60 }] },
-    { date: "2026-10-01", bodyweightKg: 75, sets: [{ reps: 8, weightKg: 70 }, { reps: 5, weightKg: 80 }] },
+    {
+      date: "2026-10-01",
+      bodyweightKg: 75,
+      sets: [
+        { reps: 8, weightKg: 70 },
+        { reps: 5, weightKg: 80 },
+      ],
+    },
     { date: "2026-11-10", bodyweightKg: 75, sets: [{ reps: 8, weightKg: 150 }] },
   ];
 
@@ -305,10 +369,18 @@ describe("exerciseXpHistory: history rebuilt from stored sessions", () => {
 
   it("counts the bodyweight share of bodyweight exercises, and seconds for timed ones", () => {
     const pullUp = { bodyweightRatio: 1, repsUnit: "reps" as const };
-    const at80 = exerciseXpHistory([{ date: "2026-11-10", bodyweightKg: 80, sets: [{ reps: 10, weightKg: 0 }] }], pullUp, "2026-11-17");
+    const at80 = exerciseXpHistory(
+      [{ date: "2026-11-10", bodyweightKg: 80, sets: [{ reps: 10, weightKg: 0 }] }],
+      pullUp,
+      "2026-11-17",
+    );
     expect(at80.jumpBaseline).toBeCloseTo(epleyOneRepMax(80, 10));
 
-    const hold = exerciseXpHistory([{ date: "2026-11-10", bodyweightKg: 80, sets: [{ reps: 90, weightKg: 0 }] }], plank, "2026-11-17");
+    const hold = exerciseXpHistory(
+      [{ date: "2026-11-10", bodyweightKg: 80, sets: [{ reps: 90, weightKg: 0 }] }],
+      plank,
+      "2026-11-17",
+    );
     expect(hold).toEqual({ recentBest: 90, jumpBaseline: 90 });
   });
 

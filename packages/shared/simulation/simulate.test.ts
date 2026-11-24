@@ -11,9 +11,15 @@ import { sessionSetXp, simulate } from "./simulate.js";
 // these tests check that the simulation PLAYS the rules correctly, not what they're worth.
 
 const SQUAT = SIM_EXERCISES["barbell-back-squat"];
-const sets = (n: number, reps: number, kg: number, slug: PlannedExercise["slug"] = "barbell-back-squat"): PlannedExercise => ({ slug, sets: n, reps, kg });
+const sets = (
+  n: number,
+  reps: number,
+  kg: number,
+  slug: PlannedExercise["slug"] = "barbell-back-squat",
+): PlannedExercise => ({ slug, sets: n, reps, kg });
 const squat = (kg: number) => [sets(1, 8, kg)];
-const xp = (reps: number, weightKg: number, bodyweightKg = 75, exercise = SQUAT) => setXp({ reps, weightKg }, bodyweightKg, exercise);
+const xp = (reps: number, weightKg: number, bodyweightKg = 75, exercise = SQUAT) =>
+  setXp({ reps, weightKg }, bodyweightKg, exercise);
 
 describe("sessionSetXp", () => {
   it("uses the shared set formula", () => {
@@ -84,19 +90,35 @@ describe("simulate", () => {
   it("applies the daily cap exactly as applyDailyCap does", () => {
     // 30 hard sets over three lifts (10 each, so none is beyond the 10-set limit): a day
     // well above the daily limit.
-    const day: PlannedExercise[] = [sets(10, 10, 100), sets(10, 10, 100, "barbell-bench-press"), sets(10, 10, 100, "deadlift")];
+    const day: PlannedExercise[] = [
+      sets(10, 10, 100),
+      sets(10, 10, 100, "barbell-bench-press"),
+      sets(10, 10, 100, "deadlift"),
+    ];
     const bigDay = simulate({ ...twiceAWeek, trainingDays: [0], sessions: [day] }, 1);
-    const perSet = day.flatMap((d) => Array.from({ length: d.sets }, () => xp(d.reps, d.kg, 75, SIM_EXERCISES[d.slug])));
+    const perSet = day.flatMap((d) =>
+      Array.from({ length: d.sets }, () => xp(d.reps, d.kg, 75, SIM_EXERCISES[d.slug])),
+    );
     const capped = applyDailyCap(0, perSet);
 
     expect(capped.heldBack).toBeGreaterThan(0);
-    expect(bigDay).toMatchObject({ setXp: capped.awarded.reduce((a, b) => a + b, 0), heldBackXp: capped.heldBack, cappedDays: 1 });
+    expect(bigDay).toMatchObject({
+      setXp: capped.awarded.reduce((a, b) => a + b, 0),
+      heldBackXp: capped.heldBack,
+      cappedDays: 1,
+    });
   });
 
   it("never flags, jump-caps or limits a set of the honest player types, and every session is a training day", () => {
     for (const player of SIM_PLAYERS.filter((p) => !p.cheat)) {
       const r = simulate(player, player.weeks);
-      expect({ player: player.name, flagged: r.flaggedSets, capped: r.jumpCappedSets, beyond: r.beyondLimitSets, notTrainingDays: r.notTrainingDays }).toEqual({
+      expect({
+        player: player.name,
+        flagged: r.flaggedSets,
+        capped: r.jumpCappedSets,
+        beyond: r.beyondLimitSets,
+        notTrainingDays: r.notTrainingDays,
+      }).toEqual({
         player: player.name,
         flagged: 0,
         capped: 0,
@@ -112,7 +134,11 @@ describe("simulate", () => {
     for (const player of SIM_PLAYERS.filter((p) => !p.cheat)) {
       for (const logsWarmUps of [undefined, true] as const) {
         const r = simulate({ ...player, logsWarmUps }, player.weeks);
-        expect({ player: player.name, logsWarmUps, cappedDays: r.cappedDays }).toEqual({ player: player.name, logsWarmUps, cappedDays: 0 });
+        expect({ player: player.name, logsWarmUps, cappedDays: r.cappedDays }).toEqual({
+          player: player.name,
+          logsWarmUps,
+          cappedDays: 0,
+        });
       }
     }
   });
@@ -124,9 +150,9 @@ describe("simulate", () => {
     const ramp = xp(5, 40) + xp(3, 60) + xp(2, 80);
     expect(warm.setXp).toBeGreaterThan(plain.setXp);
     expect(warm.setXp - plain.setXp).toBeLessThan(ramp); // warm-ups earn far less than at full effort
-    expect(simulate({ ...twiceAWeek, sessions: [[sets(3, 10, 20, "dumbbell-curl")]], logsWarmUps: true }, 1).setXp).toBe(
-      simulate({ ...twiceAWeek, sessions: [[sets(3, 10, 20, "dumbbell-curl")]] }, 1).setXp,
-    );
+    expect(
+      simulate({ ...twiceAWeek, sessions: [[sets(3, 10, 20, "dumbbell-curl")]], logsWarmUps: true }, 1).setXp,
+    ).toBe(simulate({ ...twiceAWeek, sessions: [[sets(3, 10, 20, "dumbbell-curl")]] }, 1).setXp);
   });
 
   it("doesn't count a session of only warm-ups as a training day", () => {

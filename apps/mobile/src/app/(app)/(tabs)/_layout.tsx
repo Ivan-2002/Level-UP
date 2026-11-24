@@ -14,7 +14,9 @@ export default function TabsLayout() {
   const t = useTheme();
   const tab = (title: string, icon: IconName) => ({
     title,
-    tabBarIcon: ({ focused }: { focused: boolean }) => <Icon name={icon} size={22} color={focused ? t.colors.primary : t.colors.inkMuted} />,
+    tabBarIcon: ({ focused }: { focused: boolean }) => (
+      <Icon name={icon} size={22} color={focused ? t.colors.primary : t.colors.inkMuted} />
+    ),
     tabBarLabel: ({ focused }: { focused: boolean }) => (
       <Text variant={focused ? "captionStrong" : "caption"} tone={focused ? "ink" : "inkMuted"}>
         {title}

@@ -22,7 +22,14 @@ beforeEach(async () => {
 /** XP earned earlier (a ledger row and the cached total), so the next workout starts from it. */
 async function giveXp(user: TestUser, amount: number) {
   await prisma.xpEvent.create({
-    data: { userId: user.userId, amount, source: "streak_milestone", sourceId: randomUUID(), earnedOn: new Date("2026-01-05"), createdAt: new Date(Date.now() - 60 * MINUTE) },
+    data: {
+      userId: user.userId,
+      amount,
+      source: "streak_milestone",
+      sourceId: randomUUID(),
+      earnedOn: new Date("2026-01-05"),
+      createdAt: new Date(Date.now() - 60 * MINUTE),
+    },
   });
   await prisma.profile.update({ where: { userId: user.userId }, data: { totalXp: { increment: amount } } });
 }
@@ -43,7 +50,12 @@ async function finishBench(user: TestUser) {
       clientId: randomUUID(),
       startedAt: iso(startedAt),
       finishedAt: iso(startedAt + 60 * MINUTE),
-      exercises: [{ exerciseId: ids["barbell-bench-press"]!, sets: [1, 2, 3].map((n) => ({ reps: 8, weightKg: 60, completedAt: iso(startedAt + n * 5 * MINUTE) })) }],
+      exercises: [
+        {
+          exerciseId: ids["barbell-bench-press"]!,
+          sets: [1, 2, 3].map((n) => ({ reps: 8, weightKg: 60, completedAt: iso(startedAt + n * 5 * MINUTE) })),
+        },
+      ],
     });
   expect(res.status, res.text).toBe(201);
   return finishWorkoutResponseSchema.parse(res.body).summary;

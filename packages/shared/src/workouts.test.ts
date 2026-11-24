@@ -35,10 +35,23 @@ function issueMessages(input: unknown) {
 describe("exerciseSchema", () => {
   it("still parses an exercise cached before the plausibility overrides existed", () => {
     const cachedBeforeMilestone5 = {
-      id: EXERCISE_ID, name: "Back Squat", muscleGroup: "Quadriceps", bodyPart: "legs", equipment: "barbell", repsUnit: "reps",
-      mechanic: "compound", suggestedRestSec: 180, loadFactor: 1, bodyweightRatio: 0, isCustom: false, restPreferenceSec: null,
+      id: EXERCISE_ID,
+      name: "Back Squat",
+      muscleGroup: "Quadriceps",
+      bodyPart: "legs",
+      equipment: "barbell",
+      repsUnit: "reps",
+      mechanic: "compound",
+      suggestedRestSec: 180,
+      loadFactor: 1,
+      bodyweightRatio: 0,
+      isCustom: false,
+      restPreferenceSec: null,
     };
-    expect(exerciseSchema.parse(cachedBeforeMilestone5)).toMatchObject({ maxPlausibleWeightKg: null, maxPlausibleReps: null });
+    expect(exerciseSchema.parse(cachedBeforeMilestone5)).toMatchObject({
+      maxPlausibleWeightKg: null,
+      maxPlausibleReps: null,
+    });
   });
 });
 
@@ -50,7 +63,8 @@ describe("reps limits by unit", () => {
   });
 
   it("lets the schema through up to the largest limit of any unit (the server checks the unit next)", () => {
-    const withReps = (reps: number) => workout({ exercises: [{ exerciseId: EXERCISE_ID, sets: [{ reps, weightKg: 0 }] }] });
+    const withReps = (reps: number) =>
+      workout({ exercises: [{ exerciseId: EXERCISE_ID, sets: [{ reps, weightKg: 0 }] }] });
     expect(issueMessages(withReps(REPS_MAX_ANY_UNIT))).toEqual([]);
     expect(issueMessages(withReps(REPS_MAX_ANY_UNIT + 1))).toEqual(["Reps must be at most 600."]);
   });
@@ -104,12 +118,20 @@ describe("exerciseXpHistoryListSchema", () => {
   const item = { exerciseId: "0195f3a0-0000-7000-8000-000000000001", recentBest: 116.7, jumpBaseline: 116.7 };
 
   it("still reads a response saved before the daily cap fields, keeping its history (no cap data)", () => {
-    expect(exerciseXpHistoryListSchema.parse({ items: [item] })).toEqual({ items: [item], dailyCap: null, today: null });
+    expect(exerciseXpHistoryListSchema.parse({ items: [item] })).toEqual({
+      items: [item],
+      dailyCap: null,
+      today: null,
+    });
   });
 
   it("reads the daily cap and today's XP", () => {
     const today = { date: "2026-11-18", setXp: 1200, clientIds: ["0195f3a0-0000-7000-8000-0000000000aa"] };
-    const parsed = exerciseXpHistoryListSchema.parse({ items: [], dailyCap: { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 }, today });
+    const parsed = exerciseXpHistoryListSchema.parse({
+      items: [],
+      dailyCap: { limit: 3100, bandRate: 0.25, ceilingMultiple: 2 },
+      today,
+    });
     expect(parsed.today).toEqual(today);
     expect(parsed.dailyCap?.limit).toBe(3100);
   });

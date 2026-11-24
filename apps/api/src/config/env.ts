@@ -11,15 +11,16 @@ if (existsSync(rootEnvPath)) {
 
 // Describe every setting the API needs. If one is missing or wrong,
 // the server refuses to start with a clear message instead of failing later.
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.string().url(),
-  // Signs session cookies/tokens. Anyone who knows it can forge logins: keep it secret.
-  BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters"),
-  // The public URL of this API (Better Auth builds links and checks origins with it).
-  BETTER_AUTH_URL: z.string().url(),
-})
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    PORT: z.coerce.number().int().positive().default(3000),
+    DATABASE_URL: z.string().url(),
+    // Signs session cookies/tokens. Anyone who knows it can forge logins: keep it secret.
+    BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters"),
+    // The public URL of this API (Better Auth builds links and checks origins with it).
+    BETTER_AUTH_URL: z.string().url(),
+  })
   // Safety net: under test, the API refuses to start unless it's pointed at a database whose
   // name ends in "_test". Tests truncate every table, so this makes it impossible for
   // a misconfigured test run to wipe the dev database.

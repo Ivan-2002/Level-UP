@@ -5,7 +5,10 @@ import { backoffDelay, classifyFailure, createOutboxProcessor, type OutboxStore 
 
 /** Mimics the app's ApiError: `status` is null when the server never answered. */
 class FakeApiError extends Error {
-  constructor(public readonly status: number | null, message = `HTTP ${status}`) {
+  constructor(
+    public readonly status: number | null,
+    message = `HTTP ${status}`,
+  ) {
     super(message);
   }
 }
@@ -52,7 +55,15 @@ function setup(script: Record<string, unknown[]> = {}) {
     onSynced,
     onNeedsAttention,
   });
-  return { store, processor, sent, timers, onSynced, onNeedsAttention, item: (id: string) => store.getState().items.find((i) => i.clientId === id) };
+  return {
+    store,
+    processor,
+    sent,
+    timers,
+    onSynced,
+    onNeedsAttention,
+    item: (id: string) => store.getState().items.find((i) => i.clientId === id),
+  };
 }
 
 describe("classifyFailure: retry or stop", () => {
@@ -148,7 +159,9 @@ describe("outbox processor", () => {
   });
 
   it("stops on a 4xx and marks the workout as needing attention, without retrying", async () => {
-    const { store, processor, timers, item } = setup({ a: [new FakeApiError(400, "A workout can last at most 6 hours.")] });
+    const { store, processor, timers, item } = setup({
+      a: [new FakeApiError(400, "A workout can last at most 6 hours.")],
+    });
     enqueue(store, "a");
 
     await processor.flush();

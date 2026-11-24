@@ -14,7 +14,12 @@ jest.mock("expo-sqlite/kv-store", () => {
   };
 });
 
-const numbers = { parse: (data: unknown) => { if (!Array.isArray(data)) throw new Error("not a list"); return data as number[]; } };
+const numbers = {
+  parse: (data: unknown) => {
+    if (!Array.isArray(data)) throw new Error("not a list");
+    return data as number[];
+  },
+};
 const offline = () => Promise.reject(new ApiError("Can't reach the API", null));
 
 describe("fetchWithDeviceCache", () => {

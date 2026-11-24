@@ -51,7 +51,12 @@ export default function Home() {
             <SyncStatus userId={userId} />
             {/* Milestone 6: the avatar and this bar move together to the top of Home. */}
             {profile ? <LevelCard profile={profile} /> : null}
-            <Button label="Log bodyweight" variant="secondary" icon="bodyweight" onPress={() => router.push("/log-bodyweight")} />
+            <Button
+              label="Log bodyweight"
+              variant="secondary"
+              icon="bodyweight"
+              onPress={() => router.push("/log-bodyweight")}
+            />
           </>
         ) : null}
 

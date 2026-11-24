@@ -97,7 +97,11 @@ export const fontFiles = {
 
 type TypeStyle = Pick<TextStyle, "fontFamily" | "fontSize" | "lineHeight">;
 
-const face = (fontFamily: string, fontSize: number, lineHeight: number): TypeStyle => ({ fontFamily, fontSize, lineHeight });
+const face = (fontFamily: string, fontSize: number, lineHeight: number): TypeStyle => ({
+  fontFamily,
+  fontSize,
+  lineHeight,
+});
 
 export const type = {
   // Display (Sora). The first four are tokens.json's; "value" is the design's stat tile number.
