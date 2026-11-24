@@ -1,10 +1,10 @@
 # Milestone 6 plan: the stickman avatar
 
-_Status: **proposal, waiting for review** (2026-11-24). No Milestone 6 code until it's approved. Once approved, the rules move into `docs/ARCHITECTURE.md` (Avatar prototype, data model, decision log) and this file is deleted._
+_Status: **approved with changes** (review of 2026-11-24, answers and changes A to H below). The next commit moves these rules into `docs/ARCHITECTURE.md` and deletes this file; this version is kept in history so the review's changes can be seen as a diff._
 
 The decisions Ivan already made (art approach, look, contract, pure drawing function, UI preview, Home hero, level-up animation) are recorded in `docs/ARCHITECTURE.md`. This file proposes what those decisions left open.
 
-All numbers below come from a prototype that runs the simulated players (`packages/shared/simulation/players.ts`) through the real shared scoring (`scoreSessionSets`). PR 6a turns it into a permanent table in `pnpm --filter @levelup/shared sim`, with tests.
+All numbers below come from a prototype that runs the simulated players (`packages/shared/simulation/players.ts`) through the real shared scoring (`scoreSessionSets`). The prototype isn't kept: **PR 6a's `pnpm --filter @levelup/shared sim` must reproduce the tables in sections 1 and 2** (weeks to 0.25 / 0.5 / 0.9, and the decay table), and its report names any difference (review G).
 
 ---
 
@@ -38,6 +38,7 @@ development = start + (1 − start) × p   // start = starting shape (section 3)
 ```
 
 - **Saturating twice:** per week (volume beyond about 20 hard sets adds almost nothing) and over time (the closer to 1, the slower).
+- **Drawn front-loaded (review A).** The rule isn't sped up; instead `avatarShape` maps development to size with a front-loaded curve, size ∝ development^0.6 (the exponent tuned with the preview). So 0 to 0.25 covers 44% of a muscle's growth, and a beginner's 14 weeks to 0.25 is a visibly large change. A test pins that the mapping is monotonic and that 0 is still lines only. The UI preview shows a "first 12 weeks" strip, the simulated intermediate's weekly values, to judge whether the early change is visible.
 - **Visible from the first session:** at development 0 a part is a single line, and above 0 it's an outlined shape. So the first session that trains a part turns its line into a (thin) muscle. That's the early change a beginner sees, even though the number is small (0.02 to 0.04).
 - **The current week counts as it fills up**, so a part grows as soon as a workout is saved, and the summary can show it.
 - Constants (`DEVELOPMENT` in `packages/shared/src/development.ts`): rate 0.04, half-dose 8 sets. Tuned with the simulation and the beta like every XP constant.
@@ -146,83 +147,120 @@ start = 0.5 × clamp((r − 0.6) / 0.8, 0, 1)    // r 0.6 → 0, r 1.0 → 0.25,
 
 ```ts
 developmentSchema = z.object({ chest, back, shoulders, arms, core, legs }) // each z.number().min(0).max(1)
-avatarLookSchema  = z.object({ development, stage: z.string().nullable(), lean: z.number().min(0).max(1), expression: z.enum(["neutral", "proud"]).optional() })
+faceSchema = z.object({ eyes, brows, mouth, hair, skinTone })             // each a preset key; see section 6
+avatarStageSchema += { extras: z.array(z.string()).default([]) }          // cumulative, from avatar_stage.extras
 avatarResponseSchema = z.object({
   stage: avatarStageSchema.nullable(),
-  stages: z.array(avatarStageSchema),   // all five, so the level-up screen can draw the OLD stage from Home
+  stages: z.array(avatarStageSchema),   // all of them, so the level-up screen can draw the OLD stage from Home
   development: developmentSchema,
   lean: z.number(),                      // 0 until the endurance milestone
-  parts: z.record(bodyPartSchema, z.object({ lastTrainedOn: z.string().nullable() })), // for "untrained for 3 weeks" hints
+  parts: z.record(bodyPartSchema, z.object({ lastTrainedOn: z.string().nullable() })),
 })
 ```
 
-**Endpoints** (all under `/v1`, all additive; no `/v2` needed):
+**The avatar contract** (review 3 and H; the component's input, not an API type): `development`, `extras: string[]` (instead of the stage key: the app draws the extras it knows and ignores unknown ones), `lean`, `face` and an optional `expression`. The stage name is used only for the screen-reader label. Never a level.
 
-- **New `GET /v1/avatar`**, served by the progression module (it owns the ledger and the growth rule; modules own rules, not URL prefixes). It returns `avatarResponseSchema`, evaluated at the player's local today. The app caches it on the phone per player (like the profile) and refetches it when a workout syncs.
-- **Finish summary and `GET /v1/workouts/:id/summary`** gain `avatar: { before: development, after: development }`, `default(null)`. "Before" is the ledger rows created before this workout's rows and "after" includes them, both evaluated at the workout's local day. So a repeated Finish returns the same numbers (the ledger-order rule the summary already follows). `stage: { before, after }` already exists.
-- **The profile is unchanged** (it keeps `stage`). Development isn't added to it because `users → avatar` already exists and `progression → users`. Putting a ledger rule into the profile would make `users` depend on `progression`, a cycle. Development also changes on every Finish and with the calendar, while the profile rarely changes, so separate caching suits it.
+**Endpoints** (all under `/v1`, all additive):
 
-**Database** (Prisma migrations):
+- **New `GET /v1/avatar`** (approved), served by the progression module. The app caches it per player and refetches it when a workout syncs.
+- **Finish summary and `GET /v1/workouts/:id/summary`** gain `avatar: { before, after }` (`default(null)`), evaluated at the workout's local day in ledger order, so a repeated Finish returns the same numbers.
+- **The profile** keeps `stage` (now with `extras`) and gains `face` in 6e. Development stays off the profile (the users → progression cycle).
 
-1. PR 6a: `xp_event.stimulus NUMERIC(5,3) NOT NULL DEFAULT 0`, with a CHECK that `workout_set` rows are between 0 and 1. Backfill from `workout_set.xp_tag`: no tag, above_history and timed_limit 1; easy_set 0.4; anything else 0 (pre-launch test data only).
-2. PR 6d: the `body_part_start` table (primary key user_id + body_part, cascades from user).
+**Database:**
+
+1. 6a: `xp_event.stimulus NUMERIC(5,3) NOT NULL DEFAULT 0` (CHECK 0 to 1 for `workout_set` rows; backfill from `workout_set.xp_tag`). `avatar_stage.extras TEXT[] NOT NULL DEFAULT '{}'`, filled cumulatively by the migration: Rookie `{}`, Regular `{wristbands}`, Athlete `{wristbands,outfit}`, Champion `{wristbands,outfit,headband}`, Legend `{wristbands,outfit,headband,cape}`.
+2. 6d: `body_part_start (user_id, body_part, start, window_ends_on)`.
+3. 6e: `profile.face JSONB NOT NULL DEFAULT '{}'`, validated by the shared `faceSchema` on write.
 
 ---
 
-## 5. Phases (one PR each)
+## 5. Phases (one PR each), in this order (review B)
 
-The drawing PR (6b) doesn't depend on 6a, so it can go first if you'd rather judge the look before the rules.
+### 6b. Drawing and preview (first)
+
+- Pure functions in `apps/mobile/src/components/`: `avatar-shape.ts` (`avatarShape(development, lean)`, with the front-loaded size mapping), `avatar-face.ts` (presets, `resolveFace`, the face drawn with the expression) and `avatar-extras.ts` (`extrasShape(shape, extras)`: the outfit follows the body's numbers). Tests: 0 is lines only; parts are independent; each is monotonic; the size mapping is monotonic; the head never changes; `lean` 0 changes nothing; no face preset changes the head or leaves it; unknown face keys and unknown extras fall back or are ignored.
+- `Avatar` renders the contract. The look: outline in `ink` at every stage; Legend's cape is `purpleSoft` with a `purple` outline (review 4); core at 0 is drawn as a normal narrow waist (review 5).
+- UI preview "Avatar" section:
+  - a slider per part, a stage picker (the cumulative extras the 6a migration will insert), and an expression toggle;
+  - **the face: the default and one alternative per feature, with toggles** (no picker);
+  - 220 px, and 40 px as a full body and a head-and-shoulders crop side by side (review 11);
+  - the "first 12 weeks" strip (review A);
+  - shown in both themes.
+- **Done when:** the tests pass, and Ivan approves the look on a phone at both sizes in both themes, including stick legs under a developed upper body, and chooses between the full body and the crop at 40 px.
 
 ### 6a. Rules, API and simulation
 
-- Shared: `development.ts` (constants, `setStimulus`, `developmentOn(days, start, today)`), the avatar contract schemas. Unit tests: monotonic in dose, saturating, grace, a straight-line decline to the start at 365 days, the current week counts.
-- Simulation: `bodyPart` on `SIM_EXERCISES` (the API test that checks the copy against the catalog also checks it), a development table (weeks to 0.25 / 0.5 / 0.9, decay) in `sim`, and assertions (warm-ups change nothing, untrained parts stay at 0, the fastest growth is bounded).
-- API: the `stimulus` migration and backfill; Finish writes stimulus; `GET /v1/avatar`; `avatar.before/after` on the summaries; the performance test.
-- `dev:grant-xp` gains `--part <part> --sets <n> --on <date>` (a backdated `dev_grant` row with body part and stimulus, with the same local-only refusal), to stage shapes on a phone.
-- **Done when:** an integration test shows a trained part growing, untrained parts staying at 0 after a `dev_grant` to level 20, and a part with only rows from 8 months ago at less than half its value. The summary's before/after is identical on a repeated Finish. `sim` prints the development table.
-
-### 6b. Drawing and preview
-
-- `avatarShape(development, lean)` in `apps/mobile/src/components/avatar/` returns numbers. The extras are a second pure function (`extrasShape(shape, stage)`), so the outfit fits any body. The tests are the decided ones: 0 means lines only, parts are independent, each is monotonic, the head never changes. Also `lean` 0 changes nothing.
-- The `Avatar` component renders the contract, at two sizes. The screen-reader label comes from the stage name ("Your avatar, Regular stage").
-- The UI preview gets an Avatar section: a slider per part (`@react-native-community/slider`, which is in Expo Go), a stage picker, an expression toggle, both themes and both sizes side by side.
-- **Done when:** the shape tests pass, and Ivan has approved the look on a phone at 40 px and 220 px in both themes, including stick legs under a developed upper body.
+- Everything in the original 6a: `development.ts`, the `stimulus` and `extras` migrations, Finish writing stimulus, `GET /v1/avatar`, `avatar.before/after`, the performance test, `dev:grant-xp --part --sets --on`.
+- **Property test (review C):** over random histories (random days, parts and stimulus, crossing week boundaries and the end of the grace period), adding a set with stimulus > 0 never lowers any part's development on any day.
+- **`sim` reproduces this plan's tables (review G)** and the PR reports any difference.
+- **Done when:** as before (a trained part grows, untrained parts stay at 0 after a `dev_grant` to level 20, a part with only rows from 8 months ago is below half its value, the summary is identical on a repeated Finish), plus the property test and the reproduced tables.
 
 ### 6c. Home, level-up and summary
 
-- Home hero (avatar, username, level and bar, not a Card; "Welcome back," removed), from `useAvatar`, which also works offline from the phone's copy. Create character shows the Rookie at all zeros.
-- Level-up: on a stage change, draw the old stage, then the new extras pop in (Reanimated, staggered, about 600 ms) with the proud expression. Reduce motion draws the final state.
-- Summary: one line per part that grew ("Legs +3%"), from `avatar.before/after`.
-- **Done when (the roadmap's three checks, on a phone):** `dev:grant-xp` across 4, 10, 15 and 20 shows each stage's extras appear; a level-20 grant with no training keeps stick limbs; a part trained only 8 months ago (backdated grant) looks visibly thinner than one trained this week.
+- Home hero, `useAvatar`, and the level-up's extras animation, as before.
+- **Summary (review D):** a part's line appears only when it grew by at least 1 point (0.01), and the card is left out when no part did. Wording that doesn't read as a body measurement: a heading "Your avatar grew", then one row per part, "Legs" with a small bar that fills from before to after (the `purple` progress colour, as XP uses), and no percentages. Screen readers hear "Legs grew."
+- **Done when:** the roadmap's three checks on a phone (extras at each stage level with `dev:grant-xp`, stick limbs at level 20 with no training, a part trained only 8 months ago visibly thinner).
 
 ### 6d. Starting shape
 
-- `startingShape` in shared, with benchmarks from the simulation. Finish writes `body_part_start` while a part's window is open; `developmentOn` uses it.
-- **Done when:** the simulated intermediate starts at about 0.25 per trained part, the advanced players at about 0.5, and beginners at 0. Flagged and jump-capped sets can't raise it. The level is unchanged.
+- As before, plus **the window line on Home (review E):** while any part's window is open, one line under the hero: "Setting your starting shape from your lifts: 9 days left" (the latest open window's days left; gone when every trained part's window has closed). It's here and not in 6c because the windows only exist from 6d.
+- **Done when:** as before, plus the Home line appears for a new account and disappears after 14 days.
+
+### 6e. Face picker (after 6c)
+
+- The **Customize screen**, whose first section is "Face". It opens from the avatar on Home and is embedded in Create character. When the deferred cosmetics arrive (the `cosmetic` table), the same screen gains earned items next to the free ones.
+- `profile.face` (above), `PATCH /v1/profile/face` (or the existing profile update), validated by `faceSchema`; the app draws `resolveFace(profile.face)`.
+- The presets from section 6, each previewed live on the avatar.
+- **Done when:** a player picks a face on Create character and changes it later from Home; an unknown key from a newer app falls back to the default on an older one; no preset overflows the head at 40 px.
 
 ---
 
-## 6. Room for endurance (no endurance code now)
+## 6. The face (added by Ivan, H)
 
-Nothing in the data or the contract rules out an endurance look:
+- **Slot in the contract now:** `face: { eyes, brows, mouth, hair, skinTone }`, each a preset key with a default. Unknown keys fall back to the default, so an older app never breaks.
+- **Identity, not progress:** chosen by the player, free, editable any time. It never comes from level or stage; stage extras stay earned.
+- **`expression` stays system-driven** (neutral; proud on the level-up; later others) and modifies the chosen face (the brow angle and the mouth). It isn't a player choice.
+- **The head stays the same size.** Every preset is drawn inside the head circle, which is checked by a test, so nothing changes or overflows it at 40 px.
+- **skinTone** is an optional fill for the head and hands; the default is today's outline look (filled with the background). A few tones, and no gendered preset sets. The tones are new colour tokens in `theme/tokens.ts`, the only place colours live. On a filled head, the eyes, brows and mouth are drawn in a feature colour picked per tone (at least 3:1 against it, added to `contrast.test.ts`), because `ink` is near-white in the dark theme. The outline stays `ink`.
+- **Stored as slot + key** (`{ "hair": "short", "brows": "flat" }`): the same shape the `cosmetic` table will use (slot, key), so a free preset can later become a cosmetic row with an always-unlocked rule without a data migration. Basic hairstyles are free face presets; special hairstyles can be unlockable cosmetics later, in the same `hair` slot.
+- **Proposed presets** (the default first; finalised in 6e with the preview):
 
-- The contract already has `lean`. `avatarShape(development, lean)` takes it, and a test pins that `lean` 0 draws exactly today's figure.
-- `stimulus` means "growth stimulus", not "lifting effort". A run can write leg stimulus the same way, from its own effort rule (pace against recent pace).
-- Stamina becomes its own dose: rows from an endurance source, fed into a sibling pure function, which maps to `lean`. Body parts and `stimulus` don't have to change. `xp_event.body_part` is already nullable.
-- `GET /v1/avatar` sends `lean` already (always 0), so older apps won't need a new field when it starts moving.
+| Slot | Presets |
+| --- | --- |
+| eyes | dot, round, sleepy, narrow |
+| brows | none, flat, arched, thick |
+| mouth | smile, line, grin, smirk |
+| hair | none (the classic bald stickman), short, side part, curly, buzz |
+| skinTone | none (outline only), tone 1 to tone 5 (light to dark) |
+
+6b draws the defaults and ONE alternative per slot (round eyes, flat brows, grin, short hair, one tone), with toggles in the preview.
 
 ---
 
-## 7. Open questions for Ivan
+## 7. Room for endurance (no endurance code now)
 
-1. **Growth from hard sets (a new `stimulus` column) instead of raw XP.** This rewords "body shape comes only from body-part XP" to "only from the body-part rows of the XP ledger". I recommend it (section 1's table is the reason). The alternative without a new column is dividing each row's XP by the player's own typical set XP; it works, but it's harder to explain and test.
-2. **Development on its own endpoint, not on the profile** (the dependency cycle in section 4). Is one more request on Home acceptable? It runs in parallel and is cached on the phone.
-3. **Stage extras as data.** Today the app maps a stage key to its extras in code. I recommend an `extras` column on `avatar_stage` (e.g. `["wristbands","outfit"]`, cumulative), so a new stage or extra needs no release (CLAUDE.md rule 6), and unknown extras are ignored by older apps. The contract would then carry the extras list as well as, or instead of, the key. Rive takes booleans per extra just as easily.
-4. **Legend's glow replacement.** I recommend a cape filled `purpleSoft` with a `purple` outline (purple means progress, and a stage is progress) and a small star clasp, and no glow. Alternative: Legend's whole figure outlined in `purple` instead of `ink`. That's easier to spot at 40 px in a leaderboard, but it's the only stage that changes the line colour.
-5. **Core for almost nobody.** 7 of the 8 honest simulated players never log a core exercise, so most players' waists would be a line forever. I recommend drawing core 0 as a narrow waist that reads as normal rather than as missing, and, later, giving squats and deadlifts a small secondary stimulus (e.g. 0.3 to core) through a new exercise field. Not in Milestone 6.
-6. **Speed.** At rate 0.04, a regular 3×/week player reaches about 0.8 after one year and 0.95 after two, then barely changes. If the avatar should keep visibly growing in year 3, 0.03 stretches every number in section 1 by about a third.
-7. **Muscle memory.** After a year off, regrowth is as fast as the first time. Real regrowth is faster. One rule would cover it (double rate while below the previous peak), but I'd wait for the beta.
-8. **One hard set every 14 days keeps a part's shape** (it resets the grace period). That's harmless while the avatar is cosmetic. Revisit before development becomes an avatar-event stat (for example, maintenance needs 2 or more hard sets a week).
-9. **Development measures training, not strength.** The competition plan lists "strength per body part (Milestone 6 development values)" as an event stat. With hard-set growth, a beginner who trains consistently matches an advanced lifter's development. That's good for avatar-stat events and wrong for strength rankings, which should use relative estimated 1RM (the starting-shape ratio) instead. To settle in the competition design, not now.
-10. **No sex or strength-standard input.** The starting shape compares everyone with one benchmark per part, so a woman who is advanced for her sex would usually calibrate at intermediate or lower. I recommend accepting this for the MVP (it affects only the starting shape, capped at 0.5) and noting it for the beta. Alternatives: an optional "compare me with" setting, or lower benchmarks for everyone.
-11. **40 px.** Full body with thicker strokes (my default), or a head-and-shoulders crop for leaderboard rows? Easiest to decide with the preview's side-by-side sizes in 6b.
+Unchanged: the contract has `lean` (a test pins that 0 draws today's figure), `stimulus` means "growth stimulus" and not lifting effort, stamina becomes its own dose mapped to `lean`, and `GET /v1/avatar` sends `lean` already. The face and the extras are independent of it.
+
+---
+
+## 8. Answers to the open questions (review, 2026-11-24)
+
+1. Growth from hard sets with `xp_event.stimulus`: **approved**, with the reworded rule "shape comes only from the body-part rows of the ledger".
+2. `GET /v1/avatar` as its own endpoint: **approved**.
+3. Extras as data: **approved**. `Avatar` takes `extras: string[]` (cumulative, from `avatar_stage.extras`) instead of the stage key; the stage name is only for the screen-reader label; unknown extras are ignored.
+4. Legend: a cape with a `purpleSoft` fill and a `purple` outline, no glow; the figure's outline stays `ink` at every stage.
+5. Core at 0 drawn as a normal narrow waist: **approved**. Secondary stimulus later, not in Milestone 6.
+6. Rate stays 0.04.
+7, 8, 10: deferred to the beta (follow-ups below).
+9. One line in the competition section: development measures consistent training and isn't the strength stat for strength rankings (those use relative estimated 1RM).
+11. Decided in 6b with the preview (full body and head-and-shoulders crop at 40 px, side by side).
+
+### Follow-ups for the beta
+
+- **Muscle memory** (7): faster regrowth while below a part's previous peak. Decide with real return-from-break data.
+- **Token maintenance** (8): one hard set every 14 days keeps a part's shape. Revisit before development becomes an avatar-event stat (for example, needing 2 or more hard sets a week).
+- **Sex and strength standards in the starting shape** (10): one benchmark per part calibrates most women lower. Options for the beta: an optional "compare me with" setting, or lower benchmarks for everyone.
+
+### Milestone 7 note (review F)
+
+Editing or deleting a set recalculates that part's starting shape **only while its window is open**; a closed window stays frozen. Correction rows carry a signed `stimulus`, like their signed XP.
