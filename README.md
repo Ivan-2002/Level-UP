@@ -17,3 +17,11 @@ pnpm --filter api dev:grant-xp <email> <amount>
 - The XP goes through the ledger like any other gain: one `xp_event` row with source `dev_grant` (outside the daily cap), plus the cached total. To find or remove test XP later, look for `source = 'dev_grant'`.
 - It writes to the database in `DATABASE_URL` (the repo-root `.env`), and **refuses to run when `NODE_ENV` is `production` or when `DATABASE_URL`'s host isn't local** (`localhost`, `127.0.0.1` or the Docker Compose service `db`), so a `.env` pointed at a hosted database can't be granted XP by mistake.
 - The app shows the new level (and the level-up screen) the next time it loads the profile: open Home, or pull the app to the foreground.
+
+### Formatting and `git blame`
+
+Formatting is Prettier's (`pnpm format` writes it; settings in `.prettierrc.json`, skipped files in `.prettierignore`). The commit that first formatted the whole repo is listed in `.git-blame-ignore-revs`, so `git blame` skips it and still shows who last changed each line's meaning. GitHub does this on its own; locally, run once per clone:
+
+```sh
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```

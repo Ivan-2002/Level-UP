@@ -1,0 +1,8 @@
+# Commits that `git blame` skips, so a line is credited to the change that last
+# changed its meaning, not to a commit that only reformatted it.
+# GitHub's blame view reads this file automatically. Locally, run once per clone:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Add only commits that change formatting and nothing else, with their full hash.
+
+# style: format the whole repo with Prettier
+5f7484ff8a5241f753e661a4b14a88eaf2af8eab
