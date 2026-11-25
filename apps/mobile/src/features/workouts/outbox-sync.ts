@@ -52,6 +52,7 @@ export function useOutboxSync(userId: string | undefined): void {
         void queryClient.invalidateQueries({ queryKey: ["exercise-summary"] }); // last time, PRs, the trend
         void queryClient.invalidateQueries({ queryKey: ["xp-history"] }); // its bests are now in the server's copy
         void queryClient.invalidateQueries({ queryKey: ["profile"] }); // total XP and the level
+        void queryClient.invalidateQueries({ queryKey: ["avatar"] }); // body-part development
       },
       // Rejected for good: refetch the server's history, so nothing built on this
       // workout's bests is kept (xp-history.ts already leaves it out of the replay).

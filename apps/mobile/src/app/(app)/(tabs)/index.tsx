@@ -1,21 +1,20 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
+import { AvatarHero } from "@/features/avatar/AvatarHero";
 import { SystemCheckCard } from "@/features/health/SystemCheckCard";
 import { useProfile } from "@/features/profile/use-profile";
-import { LevelCard } from "@/features/progress/LevelCard";
 import { useLevelUpPrompt } from "@/features/progress/use-celebration";
 import { WeeklyGoalCard } from "@/features/progress/WeeklyGoalCard";
 import { StartOrResumeWorkout, SyncStatus } from "@/features/workouts/HomeWorkoutCards";
 import { Button } from "@/components/Button";
-import { Text } from "@/components/Text";
 import { createStyles } from "@/theme/use-theme";
 
-// Temporary home: start/resume a workout, sync status and the level bar; in development
-// builds also the system check and the UI preview. Milestone 6 adds the avatar (with the
-// level bar, at the top); before the beta Sign out moves to a settings screen
+// Home: the avatar hero (the avatar, the username and the level bar) leads; below it the
+// weekly goal, start/resume a workout and the sync status; in development builds also the
+// system check and the UI preview. Before the beta Sign out moves to a settings screen
 // (docs/ARCHITECTURE.md, roadmap).
 export default function Home() {
   const { data: session } = authClient.useSession();
@@ -33,22 +32,13 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View>
-          <Text variant="label" tone="inkMuted">
-            Welcome back,
-          </Text>
-          <Text variant="display" accessibilityRole="header">
-            {profile?.username ?? "Player"}
-          </Text>
-        </View>
+        {userId && profile ? <AvatarHero userId={userId} profile={profile} /> : null}
 
         {userId ? (
           <>
             <WeeklyGoalCard userId={userId} />
             <StartOrResumeWorkout userId={userId} />
             <SyncStatus userId={userId} />
-            {/* Milestone 6: the avatar and this bar move together to the top of Home. */}
-            {profile ? <LevelCard profile={profile} /> : null}
             <Button
               label="Log bodyweight"
               variant="secondary"
