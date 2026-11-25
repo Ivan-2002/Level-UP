@@ -3,3 +3,4 @@
 export * from "./exercises.js";
 export * from "./players.js";
 export * from "./simulate.js";
+export * from "./development.js";

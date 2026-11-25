@@ -9,6 +9,8 @@ import {
 } from "../src/weekly-goal.js";
 import { xpForLevel } from "../src/index.js";
 import { applyDailyCap, type DailyCapResult } from "../src/xp-limits.js";
+import { setStimulus } from "../src/development.js";
+import type { BodyPart } from "../src/workouts.js";
 import { SIM_EXERCISES } from "./exercises.js";
 import { WARM_UP_RAMP, type PlannedExercise, type Session, type SimPlayer } from "./players.js";
 
@@ -47,10 +49,14 @@ export type SimResult = {
   heldBackXp: number;
   /** Set XP of every training day before the daily cap, with its day (for trying other limits). */
   days: { day: number; xp: number }[];
+  /** Each training day's growth stimulus per body part (setStimulus), dated by its local day: what development is walked from. */
+  stimulus: { day: string; bodyPart: BodyPart; stimulus: number }[];
 };
 
 /** Sign-up on a Monday morning (UTC), so the first week is a normal goal week, not a warm-up. */
 const SIGN_UP = new Date("2026-01-05T07:00:00Z");
+/** The simulation's first day ("YYYY-MM-DD", a Monday): week w is the 7 days from here + 7w. */
+export const SIM_FIRST_DAY = SIGN_UP.toISOString().slice(0, 10);
 const TIME_ZONE = "UTC";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -97,6 +103,7 @@ export function simulate(
       notTrainingDays: 0,
       firstWeekSessionXp: [],
       days: [],
+      stimulus: [],
     },
     baselines: new Map(),
     histories: new Map(),
@@ -155,14 +162,21 @@ function playSession(state: SimState, week: number, day: number, strength: numbe
     xp: xpBodyweightOnDate(state.bodyweights, startedAt, { signedUpAt: SIGN_UP.toISOString() }),
     typed: bodyweightOnDate(state.bodyweights, startedAt),
   };
-  const { setXps, flagged, jumpCapped, beyondLimit, qualifies } = scoreSession(session, strength, bodyweight, {
-    baselines: state.baselines,
-    histories: state.histories,
-    today: startedAt,
-    warmUps: state.player.logsWarmUps === true,
-  });
+  const { setXps, flagged, jumpCapped, beyondLimit, qualifies, stimulus } = scoreSession(
+    session,
+    strength,
+    bodyweight,
+    {
+      baselines: state.baselines,
+      histories: state.histories,
+      today: startedAt,
+      warmUps: state.player.logsWarmUps === true,
+    },
+  );
   const dayXp = setXps.reduce((a, b) => a + b, 0);
   totals.days.push({ day, xp: dayXp });
+  const localDay = startedAt.slice(0, 10); // the simulation plays in UTC
+  for (const [bodyPart, value] of stimulus) totals.stimulus.push({ day: localDay, bodyPart, stimulus: value });
   // One session a day, so nothing was awarded earlier that day.
   const capped = state.capDay(setXps);
   totals.flaggedSets += flagged;
@@ -226,7 +240,15 @@ function scoreSession(
     today: string;
     warmUps?: boolean;
   },
-): { setXps: number[]; flagged: number; jumpCapped: number; beyondLimit: number; qualifies: boolean } {
+): {
+  setXps: number[];
+  flagged: number;
+  jumpCapped: number;
+  beyondLimit: number;
+  qualifies: boolean;
+  /** The session's summed stimulus per body part. */
+  stimulus: Map<BodyPart, number>;
+} {
   const sets: SessionSet[] = session.flatMap((planned) => {
     const set = setAtStrength(planned, strength);
     const working = Array.from({ length: planned.sets }, () => ({ exerciseId: planned.slug, ...set }));
@@ -258,6 +280,10 @@ function scoreSession(
     jumpCapped: score.sets.filter((s) => s.flagReason === "above_history").length,
     beyondLimit: score.sets.filter((s) => s.tag === "beyond_set_limit").length,
     qualifies: qualifiesAsTrainingDay({ sets: score.sets }),
+    stimulus: score.sets.reduce((byPart, scored, i) => {
+      const part = SIM_EXERCISES[sets[i]!.exerciseId as keyof typeof SIM_EXERCISES].bodyPart;
+      return byPart.set(part, (byPart.get(part) ?? 0) + setStimulus(scored));
+    }, new Map<BodyPart, number>()),
   };
 }
 
