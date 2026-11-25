@@ -2,6 +2,7 @@ import Svg, { Circle, G, Line, Path, Polyline } from "react-native-svg";
 import { useTheme } from "@/theme/use-theme";
 import { palettes, SKIN_TONES, type ColorScheme } from "@/theme/tokens";
 import { extrasShape } from "./avatar-extras";
+import { drawnDevelopment } from "./avatar-growth";
 import { curvePath, DEFAULT_FACE, faceShape, hairPath, type Expression, type Face } from "./avatar-face";
 import {
   avatarShape,
@@ -26,9 +27,14 @@ import {
 //   face         the player's chosen presets (identity)
 //   stamina      the earned endurance stat; always 0 for now (nothing draws it yet)
 //   expression   chosen by the app (proud on the level-up), bends the chosen face
+// Development goes through drawnDevelopment (the front-loading) first, here and nowhere
+// else, so the renderer below (and a Rive file later) maps it linearly.
 // All geometry comes from pure functions (avatar-shape, avatar-face, avatar-extras); this
 // component only draws it: lines in ink, shapes filled with the background, so a bulging
 // muscle covers the line behind it.
+
+/** The cape's fill: `purple` at this opacity, outlined in `purple` (6c review). */
+export const CAPE_FILL_OPACITY = 0.38;
 
 export type AvatarLook = {
   development: Development;
@@ -66,7 +72,8 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
   const current = useTheme().colors;
   const c = scheme ? palettes[scheme] : current;
 
-  const shape = avatarShape(look.development, look.stamina);
+  // The front-loading step (avatar-growth.ts), once, before the renderer, which sizes linearly.
+  const shape = avatarShape(drawnDevelopment(look.development), look.stamina);
   const extras = extrasShape(shape, look.extras);
   const face = faceShape(look.face, look.expression);
   const skin = face.skinTone ? SKIN_TONES[face.skinTone] : null;
@@ -98,8 +105,18 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
       accessibilityRole="image"
       accessibilityLabel={stageName ? `Your avatar, ${stageName} stage` : "Your avatar"}
     >
+      {/* Behind everything else: the legs and arms are drawn over it, so it never hides them.
+          Purple at CAPE_FILL_OPACITY reads in both themes (purpleSoft was barely lighter than
+          the dark background). */}
       {extras.cape ? (
-        <Path d={extras.cape} fill={c.purpleSoft} stroke={c.purple} strokeWidth={sw} strokeLinejoin="round" />
+        <Path
+          d={extras.cape}
+          fill={c.purple}
+          fillOpacity={CAPE_FILL_OPACITY}
+          stroke={c.purple}
+          strokeWidth={sw}
+          strokeLinejoin="round"
+        />
       ) : null}
 
       {shape.legs.map((l, i) => limb(l, `leg${i}`))}
@@ -133,6 +150,7 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
           {...line}
         />
       ) : null}
+      {extras.clasp ? <Path d={extras.clasp} fill={c.purple} stroke={c.purple} strokeWidth={sw * 0.5} /> : null}
       {shape.arms.map((l, i) => limb(l, `arm${i}`))}
       {shape.deltoids.map((d, i) => (
         <Path key={i} d={deltoidPath(d)} {...outlined} />

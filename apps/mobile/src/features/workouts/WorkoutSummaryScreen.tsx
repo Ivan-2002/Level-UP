@@ -24,6 +24,7 @@ import type { ActiveWorkout } from "./active-workout";
 import { formatElapsed, plural } from "./format";
 import type { SavedPreview } from "./live-workout";
 import {
+  avatarGrewLines,
   compareCount,
   compareDuration,
   compareVolume,
@@ -38,6 +39,7 @@ import {
   volumeText,
   xpLines,
   type GapExplanation,
+  type GrewLine,
   type XpLine,
 } from "./summary-view";
 
@@ -114,6 +116,7 @@ export function WorkoutSummaryScreen() {
         ) : (
           <PreviewXp preview={last.preview} levelBefore={last.levelBefore} failed={failed} />
         )}
+        {summary ? <AvatarGrew lines={avatarGrewLines(summary.avatar)} /> : null}
 
         <View style={styles.tiles}>
           <StatTile
@@ -211,6 +214,44 @@ function XpCard({ summary, preview }: { summary: FinishSummary; preview: SavedPr
         ) : null}
       </View>
       {gap ? <GapNote gap={gap} /> : null}
+    </View>
+  );
+}
+
+/**
+ * "Your avatar grew": each part this workout grew by at least 1 point, by name, with a bar
+ * from before (purple) to after (ice, the colour the level bar gives this workout's gain).
+ * No numbers: it's the avatar's progress, not a body measurement. Nothing when no part grew.
+ */
+function AvatarGrew({ lines }: { lines: GrewLine[] }) {
+  const styles = useStyles();
+  if (lines.length === 0) return null;
+  return (
+    <View style={styles.prs}>
+      <Text variant="heading">Your avatar grew</Text>
+      <Card style={styles.grewCard}>
+        {lines.map((line) => (
+          <View
+            key={line.part}
+            style={styles.grewRow}
+            accessible
+            accessibilityLabel={line.first ? `${line.name}: first muscle` : `${line.name} grew`}
+          >
+            <View style={styles.grewName}>
+              <Text variant="bodyStrong">{line.name}</Text>
+              {line.first ? (
+                <Text variant="caption" tone="purple">
+                  First muscle
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.grewTrack}>
+              <View style={[styles.grewBefore, { width: `${line.before * 100}%` }]} />
+              <View style={[styles.grewGained, { width: `${(line.after - line.before) * 100}%` }]} />
+            </View>
+          </View>
+        ))}
+      </Card>
     </View>
   );
 }
@@ -475,6 +516,19 @@ const useStyles = createStyles((t) => ({
   breakdownRow: { flexDirection: "row", justifyContent: "space-between" },
   tiles: { flexDirection: "row", gap: t.space[2] },
   prs: { gap: t.space[3] },
+  grewCard: { gap: t.space[3] },
+  grewRow: { flexDirection: "row", alignItems: "center", gap: t.space[3] },
+  grewName: { width: 104 },
+  grewTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.purpleSoft,
+    overflow: "hidden",
+    flexDirection: "row",
+  },
+  grewBefore: { height: 6, backgroundColor: t.colors.purple },
+  grewGained: { height: 6, backgroundColor: t.colors.ice },
   prCard: { padding: 0, gap: 0 },
   prRow: {
     flexDirection: "row",

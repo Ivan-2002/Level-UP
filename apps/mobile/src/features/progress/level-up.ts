@@ -1,4 +1,5 @@
-import type { AvatarStage, Profile } from "@levelup/shared";
+import { stageForLevel, type AvatarStage, type Profile } from "@levelup/shared";
+import type { AvatarLook } from "@/components/Avatar";
 import type { createCelebrationStore } from "@/stores/celebration-store";
 
 // When to show the level-up screen, and remembering that it was shown.
@@ -89,10 +90,60 @@ export function levelUpText(levelUp: LevelUp): LevelUpText {
   };
 }
 
+export type LevelUpMotion = {
+  level: "zoom" | "none";
+  avatar: "grow" | "none";
+  /** A new stage: the old look first, then a crossfade to the new extras. */
+  stage: "reveal" | "none";
+};
+
 /**
- * How the level-up screen moves. With "reduce motion" on, nothing scales, grows or slides:
- * everything is drawn in its final state at once.
+ * How the level-up screen moves. With "reduce motion" on, nothing scales, grows, slides or
+ * fades: everything is drawn in its final state at once (the new extras, proud).
  */
-export function levelUpMotion(reduceMotion: boolean): { level: "zoom" | "none"; avatar: "grow" | "none" } {
-  return reduceMotion ? { level: "none", avatar: "none" } : { level: "zoom", avatar: "grow" };
+export function levelUpMotion(reduceMotion: boolean): LevelUpMotion {
+  return reduceMotion
+    ? { level: "none", avatar: "none", stage: "none" }
+    : { level: "zoom", avatar: "grow", stage: "reveal" };
+}
+
+/** When the old look crossfades to the new one: after the avatar has risen into place. */
+export const STAGE_REVEAL_DELAY_MS = 1100;
+export const STAGE_REVEAL_FADE_MS = 450;
+
+/**
+ * Whether the level-up screen can take its snapshot of the avatar: it has data (a copy saved
+ * on the phone, or the server's answer), or the first request failed (offline with nothing
+ * saved: lines only, rather than waiting through the retries).
+ */
+export function avatarReady(query: { data: unknown; isFetched: boolean; failureCount: number }): boolean {
+  return query.data !== undefined || query.isFetched || query.failureCount > 0;
+}
+
+export type LevelUpLooks = {
+  /** The look before this level-up (the old stage's extras, neutral); null when there's nothing new to reveal. */
+  from: AvatarLook | null;
+  /** The final look: the stage's extras, proud. */
+  to: AvatarLook;
+};
+
+/**
+ * What the level-up screen draws (docs/ARCHITECTURE.md: "when the stage changes, it
+ * animates from the old look to the new one"). The body (development) is the player's in
+ * both: a level never changes the shape, only the extras.
+ * - `to`: the new stage's extras (the profile's stage: the one the headline names), proud.
+ * - `from`: only when the stage changed AND its extras differ: the extras of the stage at
+ *   the last level celebrated, from GET /v1/avatar's `stages`. Without `stages` (never
+ *   loaded on this phone) it's null and the screen draws the final look straight away.
+ */
+export function levelUpLooks(
+  levelUp: LevelUp,
+  player: AvatarLook,
+  stages: readonly AvatarStage[] | undefined,
+): LevelUpLooks {
+  const to: AvatarLook = { ...player, extras: levelUp.newStage?.extras ?? player.extras, expression: "proud" };
+  if (!levelUp.newStage || !stages) return { from: null, to };
+  const oldExtras = stageForLevel(stages, levelUp.from)?.extras ?? [];
+  const same = oldExtras.length === to.extras.length && oldExtras.every((e, i) => e === to.extras[i]);
+  return { from: same ? null : { ...player, extras: oldExtras, expression: "neutral" }, to };
 }

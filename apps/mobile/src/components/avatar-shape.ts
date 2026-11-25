@@ -76,20 +76,12 @@ const HIP_Y = 122;
 const FOOT_Y = 192;
 
 /**
- * Size is front-loaded: a part's muscles grow with development^FRONT_LOAD, so the first
- * quarter of development (0 to 0.25) already draws 44% of the full size. The rule (weeks
- * of training to reach 0.25) isn't sped up; the drawing makes the early change visible.
- * Tuned with the UI preview's "first 12 weeks" strip.
+ * Sizes are LINEAR in the development avatarShape is given. The front-loading
+ * (development^FRONT_LOAD) is applied before this, by the Avatar component
+ * (avatar-growth.ts), so every renderer maps its inputs the same way.
+ *
+ * Sizes just above 0 (the first visible muscle) and at 1, per measurement.
  */
-export const FRONT_LOAD = 0.6;
-
-/** 0 → 0, 1 → 1, monotonic, steep at the start. */
-export function growth(development: number): number {
-  const d = clamp01(development);
-  return d === 0 ? 0 : d ** FRONT_LOAD;
-}
-
-/** Sizes at growth 0+ (the first visible muscle) and at growth 1, per measurement. */
 const SIZE = {
   shoulderHalf: [9, 28], // back: half the torso's top width (the V-taper)
   pecDepth: [4, 13], // chest: how far below the top the pec line curves
@@ -101,12 +93,19 @@ const SIZE = {
   calf: [4, 10],
 } as const;
 
+/**
+ * How far each thigh's flat inner edge stays from the centre line, at least: the two edges
+ * are then 2 × this apart, more than the thickest outline (strokeFor's minimum, 3), so
+ * there's always a gap between the thighs.
+ */
+export const THIGH_CLEARANCE = 2.5;
+
 /** The size for a part's development: undefined at 0 (no muscle, just the line). */
 function size(key: keyof typeof SIZE, development: number): number | undefined {
-  const g = growth(development);
-  if (g === 0) return undefined;
+  const d = clamp01(development);
+  if (d === 0) return undefined;
   const [min, max] = SIZE[key];
-  return min + (max - min) * g;
+  return min + (max - min) * d;
 }
 
 /** Half the waist when the torso is a shape: core at 0 is a narrow waist, not a point. */
@@ -180,8 +179,15 @@ export function avatarShape(development: Development, stamina = 0): AvatarShape 
           return { cx: arm.joints[0]!.x + side * deltoidR * 0.45, cy: SHOULDER_Y + 2, r: deltoidR, side };
         });
 
-  // Legs start together on the stick body, and at the hips when there's a waist.
-  const hipX = torsoIsShape ? waistHalf(d.core) * 0.55 : 0;
+  // Legs start together on the stick body, and at the hips when there's a waist. Once the
+  // legs have muscle the hips are at least wide enough that the thighs' flat inner edges
+  // never meet (6c review: on a stick torso both thighs started at one point and crossed).
+  const calfSize = size("calf", d.legs);
+  const legFlat = calfSize === undefined ? 0 : Math.max(1.5, calfSize * 0.45);
+  const hipX = Math.max(
+    torsoIsShape ? waistHalf(d.core) * 0.55 : 0,
+    calfSize === undefined ? 0 : legFlat + THIGH_CLEARANCE,
+  );
   const legs = ([-1, 1] as const).map((side) => {
     const hip = { x: CX + side * hipX, y: HIP_Y };
     const knee = { x: hip.x + side * 9, y: 158 };
@@ -190,7 +196,7 @@ export function avatarShape(development: Development, stamina = 0): AvatarShape 
     const calf = size("calf", d.legs);
     if (thigh === undefined || calf === undefined) return { joints: [hip, knee, foot], muscles: [] };
     const kneeWidth = calf * 0.65;
-    const flatWidth = Math.max(1.5, calf * 0.45);
+    const flatWidth = legFlat;
     return {
       joints: [hip, knee, foot],
       muscles: [

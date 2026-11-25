@@ -4,13 +4,12 @@ import {
   bulgeWidth,
   cropFor,
   deltoidPath,
-  FRONT_LOAD,
-  growth,
   HEAD,
   limbPath,
   muscleEdges,
   MUSCLE_SAMPLES,
   pecPath,
+  strokeFor,
   ZERO_DEVELOPMENT,
   type AvatarShape,
   type Development,
@@ -125,27 +124,7 @@ describe("stamina (reserved for the earned endurance look)", () => {
   });
 });
 
-describe("growth: the front-loaded size mapping", () => {
-  it("is 0 at 0 and 1 at 1", () => {
-    expect(growth(0)).toBe(0);
-    expect(growth(1)).toBe(1);
-  });
-
-  it("is monotonic", () => {
-    let previous = growth(0);
-    for (let d = 0.001; d <= 1; d += 0.001) {
-      const g = growth(d);
-      expect(g).toBeGreaterThan(previous);
-      previous = g;
-    }
-  });
-
-  it("front-loads: the first quarter of development draws well over a quarter of the size", () => {
-    expect(FRONT_LOAD).toBeLessThan(1);
-    expect(growth(0.25)).toBeCloseTo(0.25 ** FRONT_LOAD, 10);
-    expect(growth(0.25)).toBeGreaterThan(0.4);
-  });
-
+describe("development 0 (sizes are linear; the front-loading is avatar-growth.ts)", () => {
   it("keeps 0 as lines only: any development above 0 draws a muscle, 0 draws none", () => {
     expect(avatarShape(withPart("arms", 0)).arms[0].muscles).toEqual([]);
     expect(avatarShape(withPart("arms", 0.001)).arms[0].muscles).toHaveLength(2);
@@ -250,5 +229,38 @@ describe("cropFor", () => {
     expect(cropFor(65)).toBe("full");
     expect(cropFor(220)).toBe("full");
     expect(cropFor(40, "full")).toBe("full"); // the caller can still ask (the UI preview does)
+  });
+});
+
+describe("the thighs never overlap", () => {
+  /** The gap between the left leg's rightmost edge point and the right leg's leftmost, per muscle. */
+  const gaps = (shape: AvatarShape) =>
+    [0, 1].map((i) => {
+      const left = muscleEdges(shape.legs[0].muscles[i]!);
+      const right = muscleEdges(shape.legs[1].muscles[i]!);
+      const maxLeft = Math.max(...[...left.bulging, ...left.flat].map((p) => p.x));
+      const minRight = Math.min(...[...right.bulging, ...right.flat].map((p) => p.x));
+      return minRight - maxLeft;
+    });
+
+  it("on a stick torso (chest, back and core 0) with developed legs: the hips spread, no crossing at the crotch", () => {
+    for (let legs = 0.01; legs <= 1.0001; legs += 0.01) {
+      const shape = avatarShape({ ...ZERO_DEVELOPMENT, legs, arms: 0.5 });
+      expect(shape.torso.kind).toBe("line");
+      for (const gap of gaps(shape)) expect(gap).toBeGreaterThan(strokeFor(1000)); // wider than the thickest outline
+    }
+  });
+
+  it("on any body: random developments, including a narrow waist with big legs", () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const d = { ...randomDevelopment(seed), legs: 0.01 + (seed % 100) / 101 };
+      for (const gap of gaps(avatarShape(d))) expect(gap).toBeGreaterThan(strokeFor(1000));
+    }
+    for (const gap of gaps(avatarShape({ ...ZERO_DEVELOPMENT, chest: 0.5, legs: 1 }))) expect(gap).toBeGreaterThan(3);
+  });
+
+  it("stick legs still start together on the Rookie (the classic stickman)", () => {
+    const rookie = avatarShape(ZERO_DEVELOPMENT);
+    expect(rookie.legs[0].joints[0]).toEqual(rookie.legs[1].joints[0]);
   });
 });
