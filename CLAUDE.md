@@ -15,6 +15,7 @@ I'm a software engineering student and this project is how I learn. Act as a sen
 - Explain framework internals (React Native, Expo, Express, Prisma, Postgres) when relevant.
 - Prefer maintainability over cleverness; avoid unnecessary complexity.
 - Keep Git commits small and meaningful.
+- **Test data:** Claude Code creates its own test accounts for screenshots and checks (e.g. `claude-<purpose>@test.com`) and stages them freely (`dev:grant-xp`, SQL). It never changes an existing account's data (`celebratedLevel`, grants, ledger rows, anything) without asking Ivan first.
 
 ## Stack (summary)
 
