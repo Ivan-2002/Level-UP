@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stageForLevel, type AvatarStage } from "./avatar.js";
 
-const stage = (key: string, levelRequired: number): AvatarStage => ({ key, name: key, levelRequired });
+const stage = (key: string, levelRequired: number): AvatarStage => ({ key, name: key, levelRequired, extras: [] });
 // Out of order on purpose: the rule mustn't depend on how the rows come back.
 const STAGES = [
   stage("athlete", 10),

@@ -1,6 +1,6 @@
 import { homeLevel } from "./level-card";
 
-const REGULAR = { key: "regular", name: "Regular", levelRequired: 4 };
+const REGULAR = { key: "regular", name: "Regular", levelRequired: 4, extras: ["wristbands"] };
 
 describe("homeLevel", () => {
   it("shows the level, the stage and the server's progress through the level", () => {

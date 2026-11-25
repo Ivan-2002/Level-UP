@@ -21,6 +21,7 @@ export * from "./xp-limits.js";
 export * from "./set-scoring.js";
 export * from "./levels.js";
 export * from "./avatar.js";
+export * from "./development.js";
 
 /** Response of GET /health. */
 export type HealthResponse = {

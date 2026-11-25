@@ -3,8 +3,8 @@ import { createCelebrationStore } from "@/stores/celebration-store";
 import { memoryStorage } from "@/test/fixtures";
 import { createCelebrationSync, levelUpMotion, levelUpText, pendingLevelUp } from "./level-up";
 
-const REGULAR: AvatarStage = { key: "regular", name: "Regular", levelRequired: 4 };
-const ATHLETE: AvatarStage = { key: "athlete", name: "Athlete", levelRequired: 10 };
+const REGULAR: AvatarStage = { key: "regular", name: "Regular", levelRequired: 4, extras: ["wristbands"] };
+const ATHLETE: AvatarStage = { key: "athlete", name: "Athlete", levelRequired: 10, extras: ["wristbands", "outfit"] };
 
 function profile(level: number, celebratedLevel: number | null, stage: AvatarStage | null): Profile {
   return {
