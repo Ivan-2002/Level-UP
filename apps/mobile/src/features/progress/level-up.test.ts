@@ -3,7 +3,14 @@ import { createCelebrationStore } from "@/stores/celebration-store";
 import { memoryStorage } from "@/test/fixtures";
 import { DEFAULT_FACE } from "@/components/avatar-face";
 import type { AvatarLook } from "@/components/Avatar";
-import { createCelebrationSync, levelUpLooks, levelUpMotion, levelUpText, pendingLevelUp } from "./level-up";
+import {
+  avatarReady,
+  createCelebrationSync,
+  levelUpLooks,
+  levelUpMotion,
+  levelUpText,
+  pendingLevelUp,
+} from "./level-up";
 
 const REGULAR: AvatarStage = { key: "regular", name: "Regular", levelRequired: 4, extras: ["wristbands"] };
 const ATHLETE: AvatarStage = { key: "athlete", name: "Athlete", levelRequired: 10, extras: ["wristbands", "outfit"] };
@@ -170,5 +177,17 @@ describe("levelUpLooks", () => {
     expect(levelUpLooks({ from: 9, to: 10, newStage: ATHLETE }, player, undefined).from).toBeNull();
     const bare: AvatarStage = { ...ATHLETE, extras: ["wristbands"] };
     expect(levelUpLooks({ from: 9, to: 10, newStage: bare }, player, [ROOKIE, REGULAR, bare]).from).toBeNull();
+  });
+});
+
+describe("avatarReady (when the level-up screen snapshots the avatar)", () => {
+  it("waits while nothing is saved and the first request hasn't answered", () => {
+    expect(avatarReady({ data: undefined, isFetched: false, failureCount: 0 })).toBe(false);
+  });
+
+  it("is ready with a saved copy, an answer, or a first failure (offline: no waiting through retries)", () => {
+    expect(avatarReady({ data: {}, isFetched: false, failureCount: 0 })).toBe(true);
+    expect(avatarReady({ data: undefined, isFetched: true, failureCount: 0 })).toBe(true);
+    expect(avatarReady({ data: undefined, isFetched: false, failureCount: 1 })).toBe(true);
   });
 });

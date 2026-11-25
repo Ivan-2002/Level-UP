@@ -13,7 +13,15 @@ import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { Text } from "@/components/Text";
 import { createStyles } from "@/theme/use-theme";
-import { levelUpLooks, levelUpMotion, levelUpText, STAGE_REVEAL_DELAY_MS, STAGE_REVEAL_FADE_MS } from "./level-up";
+import {
+  avatarReady,
+  levelUpLooks,
+  levelUpMotion,
+  levelUpText,
+  STAGE_REVEAL_DELAY_MS,
+  STAGE_REVEAL_FADE_MS,
+  type LevelUpLooks,
+} from "./level-up";
 import { celebrationSync, levelUpClosed, usePendingLevelUp } from "./use-celebration";
 
 /**
@@ -34,12 +42,17 @@ export function LevelUpScreen() {
   const { data: profile } = useProfile(userId);
   const pending = usePendingLevelUp(userId, profile);
   const [levelUp] = useState(pending);
-  const { data: avatar } = useAvatar(userId);
-  // A snapshot too: a refetch landing mid-animation mustn't redraw the figure.
-  const [looks] = useState(() => (levelUp ? levelUpLooks(levelUp, playerLook(avatar, profile), avatar?.stages) : null));
+  const avatarQuery = useAvatar(userId);
+  // The figure is a snapshot too, so a refetch landing mid-animation can't redraw it. It's
+  // taken once the avatar is known (avatarReady), not on the first render: right after
+  // signing in on a phone nothing is saved yet, and a snapshot then drew lines only.
+  const [looks, setLooks] = useState<LevelUpLooks | null>(null);
+  if (!looks && levelUp && avatarReady(avatarQuery)) {
+    setLooks(levelUpLooks(levelUp, playerLook(avatarQuery.data, profile), avatarQuery.data?.stages));
+  }
   const motion = levelUpMotion(useReducedMotion());
   const reveals = !!looks?.from && motion.stage === "reveal";
-  const [revealed, setRevealed] = useState(!reveals);
+  const [revealed, setRevealed] = useState(false);
   const styles = useStyles();
   const avatarHeight = levelUpAvatarHeight(useWindowDimensions().height);
   const text = levelUp ? levelUpText(levelUp) : null;
@@ -56,23 +69,27 @@ export function LevelUpScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     // After the screen's transition, or iOS may drop the announcement.
     const timer = setTimeout(() => AccessibilityInfo.announceForAccessibility(text.announcement), 600);
-    // The new stage's extras appear once the figure has risen into place.
-    const reveal = reveals
-      ? setTimeout(() => {
-          setRevealed(true);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        }, STAGE_REVEAL_DELAY_MS)
-      : undefined;
     return () => {
       clearTimeout(timer);
-      clearTimeout(reveal);
       levelUpClosed();
     };
     // Runs once: levelUp is a snapshot taken on the first render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!levelUp || !text || !looks) return null;
+  // The new stage's extras appear once the figure has risen into place (timed from when it's drawn).
+  useEffect(() => {
+    if (!reveals) return;
+    const reveal = setTimeout(() => {
+      setRevealed(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }, STAGE_REVEAL_DELAY_MS);
+    return () => clearTimeout(reveal);
+  }, [reveals]);
+
+  if (!levelUp || !text) return null;
+  const showFinal = revealed || !reveals;
+  const box = { width: avatarWidthFor(avatarHeight), height: avatarHeight };
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -93,30 +110,33 @@ export function LevelUpScreen() {
           ) : null}
         </View>
 
-        {/* Decoration: the headline already says everything. */}
-        <Animated.View
-          entering={motion.avatar === "grow" ? FadeInUp.delay(250).springify().damping(16) : undefined}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={styles.avatar}
-        >
-          {/* Two layers in one box: the old look fades out as the new one fades in. */}
-          <View style={{ width: avatarWidthFor(avatarHeight), height: avatarHeight }}>
-            {!revealed && looks.from ? (
-              <Animated.View exiting={FadeOut.duration(STAGE_REVEAL_FADE_MS)} style={StyleSheet.absoluteFill}>
-                <Avatar look={looks.from} height={avatarHeight} />
-              </Animated.View>
-            ) : null}
-            {revealed ? (
-              <Animated.View
-                entering={reveals ? FadeIn.duration(STAGE_REVEAL_FADE_MS) : undefined}
-                style={StyleSheet.absoluteFill}
-              >
-                <Avatar look={looks.to} height={avatarHeight} />
-              </Animated.View>
-            ) : null}
-          </View>
-        </Animated.View>
+        {/* Decoration: the headline already says everything. Its box is kept while the avatar loads. */}
+        {!looks ? <View style={box} /> : null}
+        {looks ? (
+          <Animated.View
+            entering={motion.avatar === "grow" ? FadeInUp.delay(250).springify().damping(16) : undefined}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={styles.avatar}
+          >
+            {/* Two layers in one box: the old look fades out as the new one fades in. */}
+            <View style={box}>
+              {!showFinal && looks.from ? (
+                <Animated.View exiting={FadeOut.duration(STAGE_REVEAL_FADE_MS)} style={StyleSheet.absoluteFill}>
+                  <Avatar look={looks.from} height={avatarHeight} />
+                </Animated.View>
+              ) : null}
+              {showFinal ? (
+                <Animated.View
+                  entering={reveals ? FadeIn.duration(STAGE_REVEAL_FADE_MS) : undefined}
+                  style={StyleSheet.absoluteFill}
+                >
+                  <Avatar look={looks.to} height={avatarHeight} />
+                </Animated.View>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
       </View>
 
       <View style={styles.footer}>

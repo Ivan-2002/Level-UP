@@ -111,6 +111,15 @@ export function levelUpMotion(reduceMotion: boolean): LevelUpMotion {
 export const STAGE_REVEAL_DELAY_MS = 1100;
 export const STAGE_REVEAL_FADE_MS = 450;
 
+/**
+ * Whether the level-up screen can take its snapshot of the avatar: it has data (a copy saved
+ * on the phone, or the server's answer), or the first request failed (offline with nothing
+ * saved: lines only, rather than waiting through the retries).
+ */
+export function avatarReady(query: { data: unknown; isFetched: boolean; failureCount: number }): boolean {
+  return query.data !== undefined || query.isFetched || query.failureCount > 0;
+}
+
 export type LevelUpLooks = {
   /** The look before this level-up (the old stage's extras, neutral); null when there's nothing new to reveal. */
   from: AvatarLook | null;
