@@ -1,7 +1,9 @@
 import type { AvatarStage, Profile } from "@levelup/shared";
 import { createCelebrationStore } from "@/stores/celebration-store";
 import { memoryStorage } from "@/test/fixtures";
-import { createCelebrationSync, levelUpMotion, levelUpText, pendingLevelUp } from "./level-up";
+import { DEFAULT_FACE } from "@/components/avatar-face";
+import type { AvatarLook } from "@/components/Avatar";
+import { createCelebrationSync, levelUpLooks, levelUpMotion, levelUpText, pendingLevelUp } from "./level-up";
 
 const REGULAR: AvatarStage = { key: "regular", name: "Regular", levelRequired: 4, extras: ["wristbands"] };
 const ATHLETE: AvatarStage = { key: "athlete", name: "Athlete", levelRequired: 10, extras: ["wristbands", "outfit"] };
@@ -129,7 +131,44 @@ describe("levelUpText", () => {
 
 describe("levelUpMotion", () => {
   it("draws everything in its final state when reduce motion is on", () => {
-    expect(levelUpMotion(true)).toEqual({ level: "none", avatar: "none" });
-    expect(levelUpMotion(false)).toEqual({ level: "zoom", avatar: "grow" });
+    expect(levelUpMotion(true)).toEqual({ level: "none", avatar: "none", stage: "none" });
+    expect(levelUpMotion(false)).toEqual({ level: "zoom", avatar: "grow", stage: "reveal" });
+  });
+});
+
+describe("levelUpLooks", () => {
+  const ROOKIE: AvatarStage = { key: "rookie", name: "Rookie", levelRequired: 1, extras: [] };
+  const STAGES = [ROOKIE, REGULAR, ATHLETE];
+  const player: AvatarLook = {
+    development: { chest: 0.4, back: 0.4, shoulders: 0.2, arms: 0.3, core: 0, legs: 0 },
+    extras: ["wristbands", "outfit"], // the (possibly older) look Home drew
+    face: DEFAULT_FACE,
+    stamina: 0,
+    expression: "neutral",
+  };
+
+  it("a new stage: from the old stage's extras (neutral) to the new stage's (proud), the same body", () => {
+    const looks = levelUpLooks({ from: 9, to: 10, newStage: ATHLETE }, player, STAGES);
+    expect(looks.from).toEqual({ ...player, extras: ["wristbands"], expression: "neutral" });
+    expect(looks.to).toEqual({ ...player, extras: ["wristbands", "outfit"], expression: "proud" });
+  });
+
+  it("several stages at once start from the stage at the last level celebrated", () => {
+    const looks = levelUpLooks({ from: 3, to: 10, newStage: ATHLETE }, player, STAGES);
+    expect(looks.from?.extras).toEqual([]);
+    expect(looks.to.extras).toEqual(["wristbands", "outfit"]);
+  });
+
+  it("no new stage: nothing to reveal, the player's look, proud", () => {
+    expect(levelUpLooks({ from: 5, to: 6, newStage: null }, player, STAGES)).toEqual({
+      from: null,
+      to: { ...player, expression: "proud" },
+    });
+  });
+
+  it("stages never loaded on this phone, or a stage that adds no extra: the final look straight away", () => {
+    expect(levelUpLooks({ from: 9, to: 10, newStage: ATHLETE }, player, undefined).from).toBeNull();
+    const bare: AvatarStage = { ...ATHLETE, extras: ["wristbands"] };
+    expect(levelUpLooks({ from: 9, to: 10, newStage: bare }, player, [ROOKIE, REGULAR, bare]).from).toBeNull();
   });
 });
