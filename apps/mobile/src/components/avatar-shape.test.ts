@@ -4,8 +4,6 @@ import {
   bulgeWidth,
   cropFor,
   deltoidPath,
-  FRONT_LOAD,
-  growth,
   HEAD,
   limbPath,
   muscleEdges,
@@ -125,27 +123,7 @@ describe("stamina (reserved for the earned endurance look)", () => {
   });
 });
 
-describe("growth: the front-loaded size mapping", () => {
-  it("is 0 at 0 and 1 at 1", () => {
-    expect(growth(0)).toBe(0);
-    expect(growth(1)).toBe(1);
-  });
-
-  it("is monotonic", () => {
-    let previous = growth(0);
-    for (let d = 0.001; d <= 1; d += 0.001) {
-      const g = growth(d);
-      expect(g).toBeGreaterThan(previous);
-      previous = g;
-    }
-  });
-
-  it("front-loads: the first quarter of development draws well over a quarter of the size", () => {
-    expect(FRONT_LOAD).toBeLessThan(1);
-    expect(growth(0.25)).toBeCloseTo(0.25 ** FRONT_LOAD, 10);
-    expect(growth(0.25)).toBeGreaterThan(0.4);
-  });
-
+describe("development 0 (sizes are linear; the front-loading is avatar-growth.ts)", () => {
   it("keeps 0 as lines only: any development above 0 draws a muscle, 0 draws none", () => {
     expect(avatarShape(withPart("arms", 0)).arms[0].muscles).toEqual([]);
     expect(avatarShape(withPart("arms", 0.001)).arms[0].muscles).toHaveLength(2);

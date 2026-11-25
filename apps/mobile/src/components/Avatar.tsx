@@ -2,6 +2,7 @@ import Svg, { Circle, G, Line, Path, Polyline } from "react-native-svg";
 import { useTheme } from "@/theme/use-theme";
 import { palettes, SKIN_TONES, type ColorScheme } from "@/theme/tokens";
 import { extrasShape } from "./avatar-extras";
+import { drawnDevelopment } from "./avatar-growth";
 import { curvePath, DEFAULT_FACE, faceShape, hairPath, type Expression, type Face } from "./avatar-face";
 import {
   avatarShape,
@@ -26,6 +27,8 @@ import {
 //   face         the player's chosen presets (identity)
 //   stamina      the earned endurance stat; always 0 for now (nothing draws it yet)
 //   expression   chosen by the app (proud on the level-up), bends the chosen face
+// Development goes through drawnDevelopment (the front-loading) first, here and nowhere
+// else, so the renderer below (and a Rive file later) maps it linearly.
 // All geometry comes from pure functions (avatar-shape, avatar-face, avatar-extras); this
 // component only draws it: lines in ink, shapes filled with the background, so a bulging
 // muscle covers the line behind it.
@@ -66,7 +69,8 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
   const current = useTheme().colors;
   const c = scheme ? palettes[scheme] : current;
 
-  const shape = avatarShape(look.development, look.stamina);
+  // The front-loading step (avatar-growth.ts), once, before the renderer, which sizes linearly.
+  const shape = avatarShape(drawnDevelopment(look.development), look.stamina);
   const extras = extrasShape(shape, look.extras);
   const face = faceShape(look.face, look.expression);
   const skin = face.skinTone ? SKIN_TONES[face.skinTone] : null;

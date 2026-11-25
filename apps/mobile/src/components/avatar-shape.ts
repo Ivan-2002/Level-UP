@@ -76,20 +76,12 @@ const HIP_Y = 122;
 const FOOT_Y = 192;
 
 /**
- * Size is front-loaded: a part's muscles grow with development^FRONT_LOAD, so the first
- * quarter of development (0 to 0.25) already draws 44% of the full size. The rule (weeks
- * of training to reach 0.25) isn't sped up; the drawing makes the early change visible.
- * Tuned with the UI preview's "first 12 weeks" strip.
+ * Sizes are LINEAR in the development avatarShape is given. The front-loading
+ * (development^FRONT_LOAD) is applied before this, by the Avatar component
+ * (avatar-growth.ts), so every renderer maps its inputs the same way.
+ *
+ * Sizes just above 0 (the first visible muscle) and at 1, per measurement.
  */
-export const FRONT_LOAD = 0.6;
-
-/** 0 → 0, 1 → 1, monotonic, steep at the start. */
-export function growth(development: number): number {
-  const d = clamp01(development);
-  return d === 0 ? 0 : d ** FRONT_LOAD;
-}
-
-/** Sizes at growth 0+ (the first visible muscle) and at growth 1, per measurement. */
 const SIZE = {
   shoulderHalf: [9, 28], // back: half the torso's top width (the V-taper)
   pecDepth: [4, 13], // chest: how far below the top the pec line curves
@@ -103,10 +95,10 @@ const SIZE = {
 
 /** The size for a part's development: undefined at 0 (no muscle, just the line). */
 function size(key: keyof typeof SIZE, development: number): number | undefined {
-  const g = growth(development);
-  if (g === 0) return undefined;
+  const d = clamp01(development);
+  if (d === 0) return undefined;
   const [min, max] = SIZE[key];
-  return min + (max - min) * g;
+  return min + (max - min) * d;
 }
 
 /** Half the waist when the torso is a shape: core at 0 is a narrow waist, not a point. */
