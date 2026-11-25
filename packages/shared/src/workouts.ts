@@ -17,6 +17,15 @@ import { flagReasonSchema, setTagSchema } from "./xp-codes.js";
 export const BODY_PARTS = ["chest", "back", "shoulders", "arms", "core", "legs"] as const;
 export const bodyPartSchema = z.enum(BODY_PARTS);
 export type BodyPart = z.infer<typeof bodyPartSchema>;
+/** Shown to the player ("Legs"). A Record, so a new part can't be added without its name. */
+export const BODY_PART_NAMES: Record<BodyPart, string> = {
+  chest: "Chest",
+  back: "Back",
+  shoulders: "Shoulders",
+  arms: "Arms",
+  core: "Core",
+  legs: "Legs",
+};
 
 export const EQUIPMENT = ["barbell", "dumbbell", "machine", "cable", "bodyweight", "kettlebell"] as const;
 export const equipmentSchema = z.enum(EQUIPMENT);

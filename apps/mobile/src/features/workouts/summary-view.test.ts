@@ -1,7 +1,9 @@
 import { JUMP_CAP_TEXT } from "@levelup/shared";
 import { benchPress, plank, pullUp, sequentialIds } from "@/test/fixtures";
 import { addExercise, startWorkout, toggleSetDone, updateSet } from "./active-workout";
+import { growth } from "@/components/avatar-growth";
 import {
+  avatarGrewLines,
   compareCount,
   compareDuration,
   compareVolume,
@@ -418,5 +420,35 @@ describe("explainGap (server set XP vs the estimate saved at Finish)", () => {
         ]),
       )?.lines,
     ).toEqual([{ text: "Re-scored on the server", amount: 40, amountText: "+40 XP" }]);
+  });
+});
+
+describe('avatarGrewLines (the summary\'s "Your avatar grew")', () => {
+  const ZERO = { chest: 0, back: 0, shoulders: 0, arms: 0, core: 0, legs: 0 };
+
+  it("lists only the parts that grew at least 1 point, in body-part order, by name", () => {
+    const lines = avatarGrewLines({
+      before: { ...ZERO, chest: 0.337, legs: 0.337, arms: 0.5 },
+      after: { ...ZERO, chest: 0.3469, legs: 0.362, arms: 0.5 },
+    });
+    expect(lines.map((l) => l.name)).toEqual(["Legs"]); // chest +0.0099 isn't a point
+  });
+
+  it("counts exactly 1 point, which as a float subtraction is 0.00999…", () => {
+    expect(0.11 - 0.1).toBeLessThan(0.01);
+    expect(avatarGrewLines({ before: { ...ZERO, back: 0.1 }, after: { ...ZERO, back: 0.11 } })).toHaveLength(1);
+  });
+
+  it("nothing when no part grew a point, or without the server's numbers", () => {
+    expect(avatarGrewLines({ before: { ...ZERO, legs: 0.852 }, after: { ...ZERO, legs: 0.857 } })).toEqual([]);
+    expect(avatarGrewLines(null)).toEqual([]);
+  });
+
+  it("the bar shows the drawn size (front-loaded), and marks a part's first muscle", () => {
+    const [legs] = avatarGrewLines({ before: ZERO, after: { ...ZERO, legs: 0.037 } });
+    expect(legs).toEqual({ part: "legs", name: "Legs", before: 0, after: growth(0.037), first: true });
+    expect(legs!.after).toBeGreaterThan(0.1); // a visible bar, where 0.037 would be a sliver
+    const [again] = avatarGrewLines({ before: { ...ZERO, legs: 0.337 }, after: { ...ZERO, legs: 0.362 } });
+    expect(again).toMatchObject({ before: growth(0.337), after: growth(0.362), first: false });
   });
 });

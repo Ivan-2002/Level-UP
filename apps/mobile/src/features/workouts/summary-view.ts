@@ -1,16 +1,20 @@
 import {
+  BODY_PART_NAMES,
+  BODY_PARTS,
   formatWeight,
   JUMP_CAP_TEXT,
   liftedKg,
   setTagText,
   toDisplayWeight,
   volumeKg,
+  type BodyPart,
   type Exercise,
   type FinishSummary,
   type LevelStatus,
   type WeightUnit,
   type WorkoutDetail,
 } from "@levelup/shared";
+import { growth } from "@/components/avatar-growth";
 import { parseSet, type ActiveWorkout } from "./active-workout";
 import type { SavedPreview } from "./live-workout";
 import { formatSet } from "./format";
@@ -299,4 +303,33 @@ export function explainGap(preview: SavedPreview, summary: Pick<FinishSummary, "
     if (group && group.amount !== 0) lines.push(line(texts[key]!(group.count), group.amount));
   }
   return result(lines);
+}
+
+// --- "Your avatar grew" -----------------------------------------------------------------
+
+export type GrewLine = {
+  part: BodyPart;
+  /** "Legs". Only the part's name: no numbers, so it never reads as a body measurement. */
+  name: string;
+  /** The bar, as the avatar draws the part (growth(), the front-loading): before and after this workout, 0 to 1. */
+  before: number;
+  after: number;
+  /** The part had no muscle before: this workout drew its first one. */
+  first: boolean;
+};
+
+/**
+ * The parts this workout grew by at least 1 point (0.01 of development), in BODY_PARTS
+ * order; none when nothing did (most single workouts on a well-trained part). Compared in
+ * whole ten-thousandths (the server's rounding), so 0.10 → 0.11 counts: as floats it's
+ * 0.00999…. The bars use the DRAWN size, so a bar moves as much as the avatar does.
+ */
+export function avatarGrewLines(avatar: FinishSummary["avatar"]): GrewLine[] {
+  if (!avatar) return [];
+  return BODY_PARTS.flatMap((part) => {
+    const before = avatar.before[part];
+    const after = avatar.after[part];
+    if (Math.round(after * 10_000) - Math.round(before * 10_000) < 100) return [];
+    return [{ part, name: BODY_PART_NAMES[part], before: growth(before), after: growth(after), first: before === 0 }];
+  });
 }
