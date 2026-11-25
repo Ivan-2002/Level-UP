@@ -147,18 +147,27 @@ function historiesFrom(
   return histories;
 }
 
-export type SetXpAward = { setId: string; amount: number; bodyPart: BodyPart };
+/** One set's award: its XP after the day's limits, its body part, and its growth stimulus (setStimulus). */
+export type SetXpAward = { setId: string; amount: number; bodyPart: BodyPart; stimulus: number };
 
 /**
- * Records XP for completed sets and adds it to the cached total, inside the caller's
- * transaction (Finish). Zero-XP sets get no ledger row. `earnedOn`: the local day the
+ * Records XP and growth stimulus for completed sets and adds the XP to the cached total,
+ * inside the caller's transaction (Finish). Zero-XP sets get no ledger row, so they grow
+ * nothing either (a workout synced too late, or sets past the daily ceiling). `earnedOn`: the local day the
  * workout started ("YYYY-MM-DD"), the daily cap's day.
  */
 export async function awardSetXp(db: Db, userId: string, awards: SetXpAward[], earnedOn: string): Promise<number> {
   const earning = awards.filter((a) => a.amount > 0);
   await repo.insertSetXpEvents(
     db,
-    earning.map((a) => ({ userId, amount: a.amount, sourceId: a.setId, bodyPart: a.bodyPart, earnedOn })),
+    earning.map((a) => ({
+      userId,
+      amount: a.amount,
+      sourceId: a.setId,
+      bodyPart: a.bodyPart,
+      earnedOn,
+      stimulus: a.stimulus,
+    })),
   );
   const earned = earning.reduce((sum, a) => sum + a.amount, 0);
   if (earned > 0) await usersService.addTotalXp(db, userId, earned);
@@ -196,4 +205,32 @@ export async function grantDevXp(userId: string, amount: number): Promise<number
     await repo.insertBonusXpEvent(tx, { userId, amount, source: "dev_grant", sourceId: randomUUID(), earnedOn });
     return usersService.addTotalXp(tx, userId, amount);
   });
+}
+
+/**
+ * DEVELOPMENT ONLY: backdated training for one body part, to see the avatar grow and shrink
+ * on a phone without months of workouts (`pnpm --filter api dev:grant-xp <email> --part legs`).
+ * One dev_grant row a week for `weeks` weeks, the last one on `until` (a local day), each
+ * with `setsPerWeek` of stimulus (hard sets) and no XP: development only, never the level.
+ * Refuses like grantDevXp. Returns the days written.
+ */
+export async function grantDevTraining(
+  userId: string,
+  training: { bodyPart: BodyPart; setsPerWeek: number; weeks: number; until: string },
+): Promise<string[]> {
+  const refusal = devToolRefusal(env);
+  if (refusal) throw new Error(refusal);
+  const { bodyPart, setsPerWeek, weeks, until } = training;
+  if (!(setsPerWeek > 0) || !Number.isInteger(weeks) || weeks < 1)
+    throw new Error("sets must be above 0 and weeks a whole number from 1.");
+  const last = Date.parse(`${until}T00:00:00Z`);
+  if (Number.isNaN(last)) throw new Error("until must be a date (YYYY-MM-DD).");
+  const days = Array.from({ length: weeks }, (_, w) =>
+    new Date(last - (weeks - 1 - w) * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  );
+  await repo.insertDevTraining(
+    prisma,
+    days.map((earnedOn) => ({ userId, sourceId: randomUUID(), bodyPart, earnedOn, stimulus: setsPerWeek })),
+  );
+  return days;
 }

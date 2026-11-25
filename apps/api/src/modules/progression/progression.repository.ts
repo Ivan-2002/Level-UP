@@ -4,7 +4,15 @@ import type { BodyPart, XpSource } from "../../generated/prisma/client.js";
 // The only file that queries the xp_event ledger.
 
 /** `earnedOn`: the player's local calendar day ("YYYY-MM-DD") the XP belongs to. */
-export type NewXpEvent = { userId: string; amount: number; sourceId: string; bodyPart: BodyPart; earnedOn: string };
+export type NewXpEvent = {
+  userId: string;
+  amount: number;
+  sourceId: string;
+  bodyPart: BodyPart;
+  earnedOn: string;
+  /** The set's growth stimulus (its effort, 0 to 1): what avatar development is walked from. */
+  stimulus: number;
+};
 
 const toDate = (day: string) => new Date(`${day}T00:00:00Z`); // a Postgres DATE
 
@@ -34,6 +42,19 @@ export async function insertBonusXpEvent(
     skipDuplicates: true,
   });
   return count === 1;
+}
+
+/**
+ * DEVELOPMENT ONLY (dev:grant-xp --part): backdated training for one body part, one dev_grant
+ * row per day given, carrying stimulus and no XP. The stimulus CHECK leaves dev_grant open.
+ */
+export async function insertDevTraining(
+  db: Db,
+  rows: { userId: string; sourceId: string; bodyPart: BodyPart; earnedOn: string; stimulus: number }[],
+): Promise<void> {
+  await db.xpEvent.createMany({
+    data: rows.map((r) => ({ ...r, amount: 0, source: "dev_grant" as const, earnedOn: toDate(r.earnedOn) })),
+  });
 }
 
 /** Bonus XP recorded for a week, by source. */

@@ -5,6 +5,7 @@ import { applyDailyCap, JUMP_CAP } from "../src/xp-limits.js";
 import { SIM_EXERCISES } from "./exercises.js";
 import { SIM_PLAYERS, type PlannedExercise, type SimPlayer } from "./players.js";
 import { sessionSetXp, simulate } from "./simulate.js";
+import { decayRow, developmentPlayers, developmentRows, returningLegs } from "./development.js";
 
 // The simulation's numbers end up in the decision log, so the simulation itself is tested.
 // Expected values come from the shared rules (setXp, applyDailyCap), not re-done by hand:
@@ -164,5 +165,46 @@ describe("simulate", () => {
 
   it("is deterministic", () => {
     expect(simulate(twiceAWeek, 10)).toEqual(simulate(twiceAWeek, 10));
+  });
+});
+
+describe("body-part development (Milestone 6, the tables in docs/ARCHITECTURE.md)", () => {
+  const byName = (prefix: string) => developmentPlayers().find((p) => p.name.startsWith(prefix))!;
+  const rows = (prefix: string) => Object.fromEntries(developmentRows(byName(prefix)).map((r) => [r.part, r]));
+
+  it("reproduces the plan's weeks to 0.25 / 0.5 / 0.9 for the intermediate and the beginner", () => {
+    const intermediate = rows("Intermediate");
+    expect(Object.values(intermediate.legs!.weeksTo)).toEqual([8, 19, 62]);
+    expect(Object.values(intermediate.chest!.weeksTo)).toEqual([11, 26, 85]);
+    expect(intermediate.legs!.afterOneYear).toBeCloseTo(0.86, 2);
+    const beginner = rows("Beginner");
+    expect(Object.values(beginner.chest!.weeksTo)).toEqual([14, 33, 108]);
+    expect(Object.values(beginner.arms!.weeksTo)).toEqual([19, 44, 146]);
+  });
+
+  it("relative, not absolute: the light 60 kg lifter grows exactly like the intermediate (same hard sets)", () => {
+    expect(developmentRows(byName("Light"))).toEqual(developmentRows(byName("Intermediate")));
+  });
+
+  it("untrained parts stay at the start: the intermediate's core and the leg-skipper's legs", () => {
+    expect(rows("Intermediate").core!.afterTwoYears).toBe(0);
+    expect(rows("Skips legs").legs!.afterTwoYears).toBe(0);
+  });
+
+  it("logging warm-ups changes nothing", () => {
+    for (const prefix of ["Beginner", "Intermediate", "Advanced (90"]) {
+      const player = byName(prefix);
+      expect(developmentRows({ ...player, logsWarmUps: true }, 120)).toEqual(developmentRows(player, 120));
+    }
+  });
+
+  it("shrinks as planned: a few weeks off cost a little, a year off goes back to the start", () => {
+    expect(decayRow(2).change).toBeCloseTo(-0.006, 3);
+    expect(decayRow(4).change).toBeCloseTo(-0.046, 3);
+    expect(decayRow(12).change).toBeCloseTo(-0.205, 3);
+    expect(decayRow(26).change).toBeCloseTo(-0.484, 3);
+    expect(decayRow(52).after).toBe(0);
+    const back = returningLegs();
+    expect(back.after17Weeks).toBeCloseTo(0.471, 3);
   });
 });

@@ -100,20 +100,20 @@ enum WeightUnit {
 }
 
 model Profile {
-  userId     String     @id
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  username   String     @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
-  weightUnit WeightUnit @default(kg)
+  userId          String     @id
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username        String     @unique @db.Citext // case-insensitive: "IvanLifts" and "ivanlifts" are the same name
+  weightUnit      WeightUnit @default(kg)
   // IANA zone from the phone ("Africa/Johannesburg"). Weeks run Monday to Sunday and
   // training days count in this zone. The app updates it when the phone's zone changes.
-  timeZone   String     @default("UTC")
-  totalXp    Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
+  timeZone        String     @default("UTC")
+  totalXp         Int        @default(0) // cached sum of the XP ledger (added in Milestone 5)
   // The highest level the player has seen celebrated (the level-up screen), on any phone.
   // Only ever goes up, and never past the real level: a level lowered by a correction
   // (Milestone 7) isn't celebrated again on the way back up.
-  celebratedLevel Int @default(1)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  celebratedLevel Int        @default(1)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   @@map("profile")
 }
@@ -388,6 +388,11 @@ model XpEvent {
   // the daily cap's day), or for a bonus the day the workout that earned it started (else
   // the week's Monday). createdAt is only when the server received it.
   earnedOn  DateTime  @db.Date
+  // The set's growth stimulus for its body part (its effort, 0 to 1; Milestone 6): what
+  // avatar development is walked from. A CHECK in the migration keeps workout_set rows in
+  // 0..1 and weekly/streak bonus rows at 0; dev_grant and Milestone 7's correction rows
+  // (signed) are left open.
+  stimulus  Decimal   @default(0) @db.Decimal(5, 3)
   createdAt DateTime  @default(now())
 
   // The same gain can never be recorded twice, even if Finish is sent again.
@@ -452,10 +457,13 @@ model UserAchievement {
 // ---------------------------------------------------------------------------
 
 model AvatarStage {
-  // Stable id ("regular"); also the key the app draws the stage's extras from (Milestone 6).
-  key           String @id
+  // Stable id ("regular"). The app draws `extras`, not the key (Milestone 6).
+  key           String   @id
   name          String // shown to the player: "Regular"
-  levelRequired Int    @unique
+  levelRequired Int      @unique
+  // The extras this stage draws, cumulative (Legend has all four): data, not code. The app
+  // draws the ones it knows and ignores the rest.
+  extras        String[] @default([])
 
   @@map("avatar_stage")
 }

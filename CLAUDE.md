@@ -43,6 +43,7 @@ I'm a software engineering student and this project is how I learn. Act as a sen
 - Milestone 5 (Progression) is done (PRs #5, #6 and #7): effort-based XP with warm-ups, the jump cap, the daily cap and the bodyweight limit (`pnpm --filter @levelup/shared sim` for the balancing simulation); the live XP view, the server's summary with the gap explanation, avatar stages as data, the celebrated level on the account, the Home level bar and the level-up screen; tested on a phone (4f). `pnpm --filter api dev:grant-xp <email> <amount>` adds test XP locally.
 - Prettier is enforced (`printWidth` 120): `pnpm format` writes it, `pnpm format:check` runs in CI and `pnpm check`. `.git-blame-ignore-revs` hides the format commit from `git blame`.
 - Milestone 6 (stickman avatar) is planned and reviewed: the rules are in `docs/ARCHITECTURE.md` ("Avatar prototype"; roadmap for the phases). Order: 6b drawing and preview, 6a rules + API + simulation, 6c Home and level-up, 6d starting shape, 6e face picker.
+- 6b (drawing and preview, PR #11) is merged. 6a (rules, API and simulation) is on `feat/avatar-development`: `xp_event.stimulus`, `GET /v1/avatar`, the summary's `avatar.before/after`, the development tables in `pnpm --filter @levelup/shared sim`, and `pnpm --filter api dev:grant-xp <email> --part legs` for backdated training.
 - A pre-commit hook (`simple-git-hooks`) runs `pnpm typecheck && pnpm lint`; tests run in CI and `pnpm check`.
 
 See the roadmap in `docs/ARCHITECTURE.md`.

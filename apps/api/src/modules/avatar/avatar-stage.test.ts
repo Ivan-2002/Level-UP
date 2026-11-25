@@ -11,8 +11,8 @@ import { app, seedExercises, signUpPlayer, type TestUser } from "../../test/help
 
 const MINUTE = 60_000;
 const iso = (ms: number) => new Date(ms).toISOString();
-const ROOKIE = { key: "rookie", name: "Rookie", levelRequired: 1 };
-const REGULAR = { key: "regular", name: "Regular", levelRequired: 4 };
+const ROOKIE = { key: "rookie", name: "Rookie", levelRequired: 1, extras: [] };
+const REGULAR = { key: "regular", name: "Regular", levelRequired: 4, extras: ["wristbands"] };
 
 let ids: Record<string, string>;
 beforeEach(async () => {
@@ -70,6 +70,17 @@ describe("avatar stages", () => {
       ["Athlete", 10],
       ["Champion", 15],
       ["Legend", 20],
+    ]);
+  });
+
+  it("carry their extras as data, cumulative (Legend has all four)", async () => {
+    const rows = await prisma.avatarStage.findMany({ orderBy: { levelRequired: "asc" } });
+    expect(rows.map((r) => [r.key, r.extras])).toEqual([
+      ["rookie", []],
+      ["regular", ["wristbands"]],
+      ["athlete", ["wristbands", "outfit"]],
+      ["champion", ["wristbands", "outfit", "headband"]],
+      ["legend", ["wristbands", "outfit", "headband", "cape"]],
     ]);
   });
 
