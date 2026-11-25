@@ -6,7 +6,7 @@ import { setNow } from "../../lib/clock.js";
 import { prisma } from "../../lib/prisma.js";
 import { app, signUpPlayer } from "../../test/helpers.js";
 import * as usersService from "../users/users.service.js";
-import { grantDevXp, setXpOnDay } from "./progression.service.js";
+import { grantDevTraining, grantDevXp, setXpOnDay } from "./progression.service.js";
 
 // grantDevXp: test XP for development (`pnpm --filter api dev:grant-xp`), through the ledger
 // like any other gain, with its own source so it never passes for earned XP.
@@ -56,6 +56,43 @@ describe("grantDevXp", () => {
     }
     await expect(grantDevXp(user.userId, 0)).rejects.toThrow(/positive whole number/);
     await expect(grantDevXp(user.userId, 1.5)).rejects.toThrow(/positive whole number/);
+    expect(await prisma.xpEvent.count()).toBe(0);
+  });
+});
+
+describe("grantDevTraining (dev:grant-xp --part)", () => {
+  it("writes one backdated row a week for the part, with stimulus and no XP, so the avatar grows and the level doesn't", async () => {
+    const user = await signUpPlayer({ timeZone: "UTC" });
+    setNow("2026-11-24T10:00:00Z");
+    const days = await grantDevTraining(user.userId, {
+      bodyPart: "legs",
+      setsPerWeek: 12,
+      weeks: 3,
+      until: "2026-11-24",
+    });
+    expect(days).toEqual(["2026-11-10", "2026-11-17", "2026-11-24"]);
+
+    const rows = await prisma.xpEvent.findMany({ where: { userId: user.userId }, orderBy: { earnedOn: "asc" } });
+    expect(rows.map((r) => [r.source, r.amount, r.bodyPart, Number(r.stimulus)])).toEqual(
+      days.map(() => ["dev_grant", 0, "legs", 12]),
+    );
+    const avatar = (await request(app).get("/v1/avatar").set("Cookie", user.cookie)).body;
+    expect(avatar.development.legs).toBeGreaterThan(0);
+    expect(avatar.development.chest).toBe(0);
+    expect((await request(app).get("/v1/profile").set("Cookie", user.cookie)).body.totalXp).toBe(0);
+  });
+
+  it("refuses against a hosted database", async () => {
+    const user = await signUpPlayer();
+    const saved = { ...env };
+    try {
+      env.DATABASE_URL = "postgresql://levelup:secret@db.example-host.com:5432/levelup_test";
+      await expect(
+        grantDevTraining(user.userId, { bodyPart: "legs", setsPerWeek: 12, weeks: 1, until: "2026-11-24" }),
+      ).rejects.toThrow(/not a local database/);
+    } finally {
+      Object.assign(env, saved);
+    }
     expect(await prisma.xpEvent.count()).toBe(0);
   });
 });

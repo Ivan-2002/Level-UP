@@ -78,6 +78,16 @@ export async function lockGoalContext(db: Db, userId: string): Promise<{ timeZon
   return context;
 }
 
+/**
+ * What the avatar is evaluated from: the player's total XP (their level and stage) and time
+ * zone (their local today). Throws ProfileNotFound (404) without a character, like getProfile.
+ */
+export async function avatarContext(userId: string): Promise<{ totalXp: number; timeZone: string }> {
+  const row = await repo.findProfileByUserId(userId);
+  if (!row) throw new AppError("not_found", "ProfileNotFound", "You haven't created your character yet.");
+  return { totalXp: row.totalXp, timeZone: row.timeZone };
+}
+
 /** The player's time zone (UTC if they have no profile). */
 export async function timeZoneOf(userId: string): Promise<string> {
   return (await repo.findTimeZone(userId)) ?? "UTC";

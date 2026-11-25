@@ -10,6 +10,7 @@ import {
   levelStatus,
   liftedKg,
   localDate,
+  setStimulus,
   setTagSchema,
   volumeKg,
   type Exercise,
@@ -18,6 +19,7 @@ import {
   type FinishWorkoutResponse,
   type ListWorkoutsQuery,
   type RecordBook,
+  type ScoredSet,
   type WorkoutDetail,
   type WorkoutPage,
 } from "@levelup/shared";
@@ -26,6 +28,7 @@ import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import * as avatarService from "../avatar/avatar.service.js";
 import * as exercisesService from "../exercises/exercises.service.js";
+import * as developmentService from "../progression/development.service.js";
 import * as progressionService from "../progression/progression.service.js";
 import * as weeklyGoalService from "../progression/weekly-goal.service.js";
 import * as routinesService from "../routines/routines.service.js";
@@ -113,7 +116,12 @@ export async function finishWorkout(userId: string, input: FinishWorkoutInput): 
         })),
       });
 
-      await progressionService.awardSetXp(tx, userId, setXpAwards(row, exercises, score.awardedXp), earnedOn);
+      await progressionService.awardSetXp(
+        tx,
+        userId,
+        setXpAwards(row, exercises, score.awardedXp, score.sets),
+        earnedOn,
+      );
       // Rolls the weeks over and, if this workout meets this week's goal, pays the bonus.
       await weeklyGoalService.syncWeeklyGoal(tx, userId, {
         now: now(),
@@ -191,12 +199,17 @@ function assertRepsFitExercises(input: FinishWorkoutInput, exercises: Map<string
   }
 }
 
-/** The ledger awards: each saved set (in the order logged) with the XP it was awarded. */
-function setXpAwards(row: repo.WorkoutDetailRow, exercises: Map<string, Exercise>, awardedXp: number[]) {
+/** The ledger awards: each saved set (in the order logged) with its XP and its growth stimulus. */
+function setXpAwards(
+  row: repo.WorkoutDetailRow,
+  exercises: Map<string, Exercise>,
+  awardedXp: number[],
+  scored: ScoredSet[],
+) {
   const saved = row.exercises.flatMap((we) =>
     we.sets.map((s) => ({ setId: s.id, bodyPart: exerciseOf(exercises, we.exerciseId).bodyPart })),
   );
-  return saved.map((s, i) => ({ ...s, amount: awardedXp[i]! }));
+  return saved.map((s, i) => ({ ...s, amount: awardedXp[i]!, stimulus: setStimulus(scored[i]!) }));
 }
 
 /** Rest times the PLAYER chose. If an exercise appears twice, the later choice wins. */
@@ -271,6 +284,12 @@ async function buildSummary(
       statusAfter: levelStatus(totalBefore + total),
     },
     stage: await avatarService.stagesAt(levelFromXp(totalBefore), levelFromXp(totalBefore + total)),
+    // Development just before and after, on the workout's day, in ledger order (repeats match).
+    avatar: await developmentService.workoutDevelopment(userId, {
+      setIds: sets.map((s) => s.id),
+      savedAt: row.createdAt,
+      startedAt: row.startedAt,
+    }),
     // Codes as stored; one the contract doesn't know (written by a newer server) reads as null.
     sets: sets.map((s) => ({
       setId: s.id,
