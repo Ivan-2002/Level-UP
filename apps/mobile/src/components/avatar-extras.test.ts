@@ -1,4 +1,4 @@
-import { extrasShape, KNOWN_EXTRAS, knownExtras } from "./avatar-extras";
+import { CAPE_ABOVE_KNEE, extrasShape, KNOWN_EXTRAS, knownExtras, SHORTS_HEM_Y } from "./avatar-extras";
 import { avatarShape, ZERO_DEVELOPMENT } from "./avatar-shape";
 
 const stick = avatarShape(ZERO_DEVELOPMENT);
@@ -36,5 +36,24 @@ describe("extras", () => {
     const capeOnly = extrasShape(strong, ["cape"]);
     expect(capeOnly.cape).toEqual(extrasShape(strong, KNOWN_EXTRAS).cape);
     expect(capeOnly.outfit).toBeNull();
+  });
+
+  /** Every y coordinate in a path (all its commands take x y pairs). */
+  const ys = (d: string) => (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number).filter((_, i) => i % 2 === 1);
+
+  it.each([
+    ["stick", stick],
+    ["developed", strong],
+  ] as const)("the cape ends above the knees on a %s body, so the legs below are never behind it", (_, body) => {
+    const cape = extrasShape(body, ["cape"]).cape!;
+    const knee = body.legs[0].joints[1]!.y;
+    expect(Math.max(...ys(cape))).toBeLessThanOrEqual(knee - CAPE_ABOVE_KNEE);
+  });
+
+  it("the shorts' hem is above the thigh's bulge, so they never hide the legs' development", () => {
+    const thigh = strong.legs[0].muscles[0]!;
+    const peakY = thigh.from.y + (thigh.to.y - thigh.from.y) * thigh.peak;
+    expect(SHORTS_HEM_Y).toBeLessThan(peakY);
+    expect(Math.max(...ys(extrasShape(strong, ["outfit"]).outfit!.shorts))).toBeLessThanOrEqual(SHORTS_HEM_Y);
   });
 });

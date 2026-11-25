@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, StyleSheet, View } from "react-native";
+import { AccessibilityInfo, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeInUp, FadeOut, ZoomIn, useReducedMotion } from "react-native-reanimated";
 import { router } from "expo-router";
@@ -7,9 +7,9 @@ import * as Haptics from "expo-haptics";
 import { authClient } from "@/lib/auth-client";
 import { useProfile } from "@/features/profile/use-profile";
 import { playerLook } from "@/features/avatar/avatar-look";
+import { avatarWidthFor, levelUpAvatarHeight } from "@/features/avatar/avatar-sizes";
 import { useAvatar } from "@/features/avatar/use-avatar";
 import { Avatar } from "@/components/Avatar";
-import { VIEWBOX } from "@/components/avatar-shape";
 import { Button } from "@/components/Button";
 import { Text } from "@/components/Text";
 import { createStyles } from "@/theme/use-theme";
@@ -41,6 +41,7 @@ export function LevelUpScreen() {
   const reveals = !!looks?.from && motion.stage === "reveal";
   const [revealed, setRevealed] = useState(!reveals);
   const styles = useStyles();
+  const avatarHeight = levelUpAvatarHeight(useWindowDimensions().height);
   const text = levelUp ? levelUpText(levelUp) : null;
 
   useEffect(() => {
@@ -100,10 +101,10 @@ export function LevelUpScreen() {
           style={styles.avatar}
         >
           {/* Two layers in one box: the old look fades out as the new one fades in. */}
-          <View style={styles.stack}>
+          <View style={{ width: avatarWidthFor(avatarHeight), height: avatarHeight }}>
             {!revealed && looks.from ? (
               <Animated.View exiting={FadeOut.duration(STAGE_REVEAL_FADE_MS)} style={StyleSheet.absoluteFill}>
-                <Avatar look={looks.from} height={AVATAR_HEIGHT} />
+                <Avatar look={looks.from} height={avatarHeight} />
               </Animated.View>
             ) : null}
             {revealed ? (
@@ -111,7 +112,7 @@ export function LevelUpScreen() {
                 entering={reveals ? FadeIn.duration(STAGE_REVEAL_FADE_MS) : undefined}
                 style={StyleSheet.absoluteFill}
               >
-                <Avatar look={looks.to} height={AVATAR_HEIGHT} />
+                <Avatar look={looks.to} height={avatarHeight} />
               </Animated.View>
             ) : null}
           </View>
@@ -125,14 +126,11 @@ export function LevelUpScreen() {
   );
 }
 
-const AVATAR_HEIGHT = 180;
-
 const useStyles = createStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.bg },
   content: { flex: 1, alignItems: "center", justifyContent: "center", gap: t.space[6], padding: t.space[4] },
   headline: { alignItems: "center", gap: t.space[2] },
   level: { textAlign: "center" },
   avatar: { alignItems: "center" },
-  stack: { width: (AVATAR_HEIGHT * VIEWBOX.width) / VIEWBOX.height, height: AVATAR_HEIGHT },
   footer: { padding: t.space[4] },
 }));

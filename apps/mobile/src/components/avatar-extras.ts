@@ -26,6 +26,12 @@ export function knownExtras(extras: readonly string[]): Extra[] {
   return KNOWN_EXTRAS.filter((e) => extras.includes(e));
 }
 
+/** How far above the knees the cape's sides end, and how far past the shoulders it flares. */
+export const CAPE_ABOVE_KNEE = 6;
+const CAPE_FLARE = 9;
+/** The shorts' hem: hips are at y 122, the thigh's bulge peaks at about y 135. */
+export const SHORTS_HEM_Y = 132;
+
 export function extrasShape(shape: AvatarShape, extras: readonly string[]): ExtrasShape {
   const has = new Set<string>(knownExtras(extras));
   const cx = HEAD.cx;
@@ -35,14 +41,19 @@ export function extrasShape(shape: AvatarShape, extras: readonly string[]): Extr
   const shoulderHalf = torso.kind === "shape" ? torso.shoulderHalf : 12;
   const waistHalf = torso.kind === "shape" ? torso.waistHalf : 8;
 
+  // The cape ends ABOVE the knees and flares only a little (6c review): behind the legs a
+  // long, wide cape filled the space around them, so thin and developed legs looked alike.
+  // From the knees down the legs are always on the plain background.
   let cape: string | null = null;
   if (has.has("cape")) {
     const h = shoulderHalf;
+    const knee = Math.min(shape.legs[0].joints[1]!.y, shape.legs[1].joints[1]!.y);
+    const hemSide = knee - CAPE_ABOVE_KNEE;
     cape = path([
       `M ${cx - h} ${top + 2}`,
       `L ${cx + h} ${top + 2}`,
-      `L ${cx + h + 20} 178`,
-      `Q ${cx} 168 ${cx - h - 20} 178`,
+      `L ${cx + h + CAPE_FLARE} ${hemSide}`,
+      `Q ${cx} ${hemSide - 8} ${cx - h - CAPE_FLARE} ${hemSide}`,
       "Z",
     ]);
   }
@@ -66,10 +77,12 @@ export function extrasShape(shape: AvatarShape, extras: readonly string[]): Extr
       `L ${cx - half(yBottom)} ${yBottom}`,
       "Z",
     ]);
-    // Shorts: from the waist to mid-thigh, as wide as the thighs (or a minimum on stick legs).
+    // Shorts: from the waist to the upper thigh, as wide as the thighs (or a minimum on stick
+    // legs). The hem sits ABOVE the thigh's bulge (which peaks about 35% down from the hip),
+    // so the shorts never hide how developed the legs are (6c review).
     const thigh = shape.legs[0].muscles[0]?.halfWidth ?? 3;
     const w = waistHalf + 1;
-    const hem = 144;
+    const hem = SHORTS_HEM_Y;
     const legHem = (side: -1 | 1) => {
       const hip = shape.legs[side === -1 ? 0 : 1].joints[0]!;
       const knee = shape.legs[side === -1 ? 0 : 1].joints[1]!;
