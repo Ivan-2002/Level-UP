@@ -33,6 +33,9 @@ import {
 // component only draws it: lines in ink, shapes filled with the background, so a bulging
 // muscle covers the line behind it.
 
+/** The cape's fill: `purple` at this opacity, outlined in `purple` (6c review). */
+export const CAPE_FILL_OPACITY = 0.38;
+
 export type AvatarLook = {
   development: Development;
   extras: readonly string[];
@@ -102,8 +105,18 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
       accessibilityRole="image"
       accessibilityLabel={stageName ? `Your avatar, ${stageName} stage` : "Your avatar"}
     >
+      {/* Behind everything else: the legs and arms are drawn over it, so it never hides them.
+          Purple at CAPE_FILL_OPACITY reads in both themes (purpleSoft was barely lighter than
+          the dark background). */}
       {extras.cape ? (
-        <Path d={extras.cape} fill={c.purpleSoft} stroke={c.purple} strokeWidth={sw} strokeLinejoin="round" />
+        <Path
+          d={extras.cape}
+          fill={c.purple}
+          fillOpacity={CAPE_FILL_OPACITY}
+          stroke={c.purple}
+          strokeWidth={sw}
+          strokeLinejoin="round"
+        />
       ) : null}
 
       {shape.legs.map((l, i) => limb(l, `leg${i}`))}
@@ -137,6 +150,7 @@ export function Avatar({ look = ROOKIE_LOOK, height = 140, crop, stageName, sche
           {...line}
         />
       ) : null}
+      {extras.clasp ? <Path d={extras.clasp} fill={c.purple} stroke={c.purple} strokeWidth={sw * 0.5} /> : null}
       {shape.arms.map((l, i) => limb(l, `arm${i}`))}
       {shape.deltoids.map((d, i) => (
         <Path key={i} d={deltoidPath(d)} {...outlined} />

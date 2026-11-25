@@ -11,8 +11,10 @@ export const KNOWN_EXTRAS = ["wristbands", "outfit", "headband", "cape"] as cons
 export type Extra = (typeof KNOWN_EXTRAS)[number];
 
 export type ExtrasShape = {
-  /** Drawn BEHIND the body. */
+  /** Drawn BEHIND the body (legs and arms in front). */
   cape: string | null;
+  /** The cape's star clasp, drawn over the collar. */
+  clasp: string | null;
   /** Drawn over the torso and thighs, under the arms. */
   outfit: { top: string; shorts: string } | null;
   /** Drawn over the forearms. */
@@ -26,9 +28,11 @@ export function knownExtras(extras: readonly string[]): Extra[] {
   return KNOWN_EXTRAS.filter((e) => extras.includes(e));
 }
 
-/** How far above the knees the cape's sides end, and how far past the shoulders it flares. */
-export const CAPE_ABOVE_KNEE = 6;
-const CAPE_FLARE = 9;
+/** Where the cape's sides end, as a share of the way from the knee to the foot (mid-calf). */
+export const CAPE_HEM_DOWN_CALF = 0.5;
+/** How far past the shoulders the cape flares at its hem, on each side. */
+export const CAPE_FLARE = 22;
+const CLASP_RADIUS = 4.5;
 /** The shorts' hem: hips are at y 122, the thigh's bulge peaks at about y 135. */
 export const SHORTS_HEM_Y = 132;
 
@@ -41,21 +45,28 @@ export function extrasShape(shape: AvatarShape, extras: readonly string[]): Extr
   const shoulderHalf = torso.kind === "shape" ? torso.shoulderHalf : 12;
   const waistHalf = torso.kind === "shape" ? torso.waistHalf : 8;
 
-  // The cape ends ABOVE the knees and flares only a little (6c review): behind the legs a
-  // long, wide cape filled the space around them, so thin and developed legs looked alike.
-  // From the knees down the legs are always on the plain background.
+  // The cape (Legend): from the shoulders to mid-calf, flaring well past the shoulders on
+  // both sides. It's drawn BEHIND the legs and arms, so it never hides how developed they
+  // are (6c review: a short cape was nearly invisible, and length never hid the legs).
   let cape: string | null = null;
+  let clasp: string | null = null;
   if (has.has("cape")) {
     const h = shoulderHalf;
-    const knee = Math.min(shape.legs[0].joints[1]!.y, shape.legs[1].joints[1]!.y);
-    const hemSide = knee - CAPE_ABOVE_KNEE;
+    const leg = shape.legs[0].joints;
+    const hemSide = leg[1]!.y + (leg[2]!.y - leg[1]!.y) * CAPE_HEM_DOWN_CALF;
+    // The sides billow out just below the shoulders (curved, not straight), so the cape
+    // shows beside the arms in the 40 px head-and-shoulders crop too.
+    const billowY = top + 26;
     cape = path([
       `M ${cx - h} ${top + 2}`,
       `L ${cx + h} ${top + 2}`,
-      `L ${cx + h + CAPE_FLARE} ${hemSide}`,
-      `Q ${cx} ${hemSide - 8} ${cx - h - CAPE_FLARE} ${hemSide}`,
+      `Q ${cx + h + CAPE_FLARE} ${billowY} ${cx + h + CAPE_FLARE} ${hemSide}`,
+      `Q ${cx} ${hemSide - 6} ${cx - h - CAPE_FLARE} ${hemSide}`,
+      `Q ${cx - h - CAPE_FLARE} ${billowY} ${cx - h} ${top + 2}`,
       "Z",
     ]);
+    // A small star clasp at the collar (the plan's Legend detail), over the neck line.
+    clasp = star(cx, top + 3, CLASP_RADIUS);
   }
 
   let outfit: ExtrasShape["outfit"] = null;
@@ -134,7 +145,17 @@ export function extrasShape(shape: AvatarShape, extras: readonly string[]): Extr
     };
   }
 
-  return { cape, outfit, wristbands, headband };
+  return { cape, clasp, outfit, wristbands, headband };
+}
+
+/** A five-pointed star centred on (x, y), point up. */
+function star(x: number, y: number, r: number): string {
+  const points = Array.from({ length: 10 }, (_, i) => {
+    const radius = i % 2 === 0 ? r : r * 0.45;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    return `${x + radius * Math.cos(angle)} ${y + radius * Math.sin(angle)}`;
+  });
+  return path([`M ${points[0]}`, ...points.slice(1).map((p) => `L ${p}`), "Z"]);
 }
 
 /** A band across a bone: a rectangle `halfWidth` either side of it. */
