@@ -5,8 +5,10 @@ import { env } from "../config/env.js";
 import { devToolRefusal } from "../lib/dev-only.js";
 import { now } from "../lib/clock.js";
 import { prisma } from "../lib/prisma.js";
+import * as developmentService from "../modules/progression/development.service.js";
 import * as progressionService from "../modules/progression/progression.service.js";
 import * as usersService from "../modules/users/users.service.js";
+import { developmentLine } from "./development-line.js";
 
 // DEVELOPMENT ONLY. Two ways to stage a test account without weeks of workouts:
 //
@@ -22,6 +24,8 @@ import * as usersService from "../modules/users/users.service.js";
 // It writes to the database in DATABASE_URL (the repo-root .env), and refuses to run when
 // NODE_ENV is production or DATABASE_URL isn't local (localhost, 127.0.0.1 or the Compose
 // service "db"). The app shows the change the next time it loads the profile or the avatar.
+// After either grant it prints every body part's development as of the player's today: the
+// values GET /v1/avatar returns (the same service call), for phone checks without curl.
 
 const refusal = devToolRefusal(env);
 if (refusal) {
@@ -64,6 +68,7 @@ try {
     console.log(
       `Granted ${amount} XP to ${email}: ${total} XP in total, level ${levelBefore} -> ${levelFromXp(total)}.`,
     );
+    console.log(developmentLine((await developmentService.avatarOf(userId)).development)); // XP alone grows nothing
   } else {
     const args = trainingArgs.safeParse({ email: parsed.positionals[0], ...parsed.values });
     if (!args.success || parsed.positionals.length !== 1) throw new Error(USAGE);
@@ -75,6 +80,7 @@ try {
     console.log(
       `Granted ${part} training to ${email}: ${sets} hard sets a week for ${weeks} weeks, ${days[0]} to ${days.at(-1)}.`,
     );
+    console.log(developmentLine((await developmentService.avatarOf(userId)).development));
   }
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
